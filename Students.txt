@@ -7,7 +7,7 @@
 
 20200490F	Bustos Ttito, José Fabricio
 
-20230114B	Castillo Solorzano Piero David
+"Castillo Solorzano Piero David" <piero.castillo.s@uni.pe>
 
 20232209K	Diaz Pariacuri Cristian Brayan 
 
