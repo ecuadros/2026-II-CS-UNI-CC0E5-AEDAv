@@ -15,7 +15,7 @@
 
 20194028H	Gabriel Gerardo Yarlequé Ramos
 
-20170325B	Luna Bueno Aldo
+"Luna Bueno Aldo" <alunab@uni.pe>
 
 "Pachas Mariluz José Emiliano" <jose.pachas.m@uni.pe>,
 
