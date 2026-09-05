@@ -1,5 +1,5 @@
 
-00000000A   "Cuadros Vargas Ernesto" <ecuadros@spc.org.pe>
+00000000A   "Cuadros Vargas Ernesto" <ecuadros@spc.org.pe> 
 
 20232066E	Balbuena Salvador Kevin
 
