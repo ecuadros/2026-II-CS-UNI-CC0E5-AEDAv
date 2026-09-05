@@ -29,4 +29,4 @@
 
 20200570J	Vega Soldevilla Miguel Angel
 
-20184065H	Violeta Estrella Piero Alexis
+"Violeta Estrella Piero Alexis" <piero.violeta.e@uni.pe>
