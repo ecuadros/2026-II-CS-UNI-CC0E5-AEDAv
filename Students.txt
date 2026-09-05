@@ -17,7 +17,7 @@
 
 20170325B	Luna Bueno Aldo
 
-20204118D	Pachas Mariluz José Emiliano
+"Pachas Mariluz José Emiliano" <jose.pachas.m@uni.pe>,
 
 20185508K	Portillo Delgado Hannu
 
