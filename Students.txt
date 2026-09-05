@@ -9,7 +9,7 @@
 
 20230114B	Castillo Solorzano Piero David
 
-20232209K	Diaz Pariacuri Cristian Brayan 
+"Diaz Pariacuri Cristian Brayan" <cristian.diaz.p@uni.pe>
 
 20221346A	Flores Alberca, Ángel Aarón
 
