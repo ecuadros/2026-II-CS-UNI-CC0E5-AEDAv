@@ -25,7 +25,7 @@
 
 20220043E	Sanchez Vega Andre Alvaro
 
-20182177C	Unda Miguel Carlos Sinai
+"Unda Miguel Carlos Sinai" <cundam@uni.pe>
 
 20200570J	Vega Soldevilla Miguel Angel
 
