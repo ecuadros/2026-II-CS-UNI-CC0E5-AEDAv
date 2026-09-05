@@ -9,9 +9,9 @@
 
 20230114B	Castillo Solorzano Piero David
 
-20232209K	Diaz Pariacuri Cristian Brayan 
+20232209K	Diaz Pariacuri Cristian Brayan
 
-20221346A	Flores Alberca, Ángel Aarón
+"Flores Alberca, Ángel Aarón" <a.flores.a@uni.pe>
 
 20194028H	Gabriel Gerardo Yarlequé Ramos
 
