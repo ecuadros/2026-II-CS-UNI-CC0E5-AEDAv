@@ -5,7 +5,7 @@
 
 20192188H	Barrios Millones Charly Alberth
 
-20200490F	Bustos Ttito, José Fabricio
+"Bustos Ttito, José Fabricio" <jose.bustos.t@uni.pe>
 
 20230114B	Castillo Solorzano Piero David
 
