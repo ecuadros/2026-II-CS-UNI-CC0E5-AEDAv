@@ -39,7 +39,7 @@ void InsertElements(Container &container,
 }
 
 template <typename Container>
-void TestContainer(Container &container,
+void TestWriteContainer(Container &container,
                     const vector<pair<typename Container::value_type, Ref>> &values,
                     const string &filename) {
     InsertElements(container, values);
@@ -61,6 +61,19 @@ void TestContainer(Container &container,
     cout << container << endl;
 }
 
+template <typename Container>
+void TestReadContainer(Container &container,
+                    const string &filename) {
+    ifstream ifs(filename);
+    if (!ifs) return;
+
+    container.read(ifs);
+    cout << "Container after using read() from file: ";
+    container.write(cout);
+    cout << endl;
+    ifs.close();
+}
+
 // Prueba los recorridos del Container hacia adelante (begin/end) y hacia
 // atras (rbegin/rend) solamente, imprimiendo los elementos en cada sentido.
 template <typename Container>
@@ -77,19 +90,21 @@ void TestTraversal(Container &container) {
 }
 
 void DemoVector() {
-    // Dejamos los archivos vacios para que TestContainer acumule (append)
+    // Dejamos los archivos vacios para que TestWriteContainer acumule (append)
     // el estado del container tras cada paso
     ofstream("vector.txt", ios::trunc).close();
 
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
     Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
+    Vector<VectorAscTraits<TX>> vec2;
+    TestWriteContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
+    TestReadContainer(vec2, "vector.txt");
     TestTraversal(vec);
 
     ofstream("vector_str.txt", ios::trunc).close();
     Vector<VectorAscTraits<string>> strVec;
-    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
+    TestWriteContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
 }
 
