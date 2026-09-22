@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
+#include <utility>
 using namespace std;
 
 template <typename T>
@@ -173,6 +174,7 @@ public:
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
         // Implementation for reading vector from stream
+        //is >>
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x

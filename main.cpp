@@ -7,7 +7,8 @@ using namespace std;
 // Compilar asi: make
 // Ejecutar asi: ./main
 int main() {
-    DemoVector();
-    DemoRaceCondition();
+    //DemoVector();
+    //DemoRaceCondition();
+    DemoVector2();
     return 0;
 }
