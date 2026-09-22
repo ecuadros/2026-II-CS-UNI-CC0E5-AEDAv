@@ -176,8 +176,27 @@ public:
 
     // TODO: implementar la lectura de un vector desde un stream
     istream& read(istream& is) {
-        // Implementation for reading vector from stream
+        char c;
+        is >> c; // [
+
+        while (is >> c && c != ']') {
+            value_type value;
+            Ref ref;
+            // (
+            is >> value;
+            is >> c; // ,
+            is >> ref;
+            is >> c; // )
+
+            push_back(value, ref);
+
+            is >> c; // , or ]
+            if (c == ']')
+                break;
+        }
+        return is;
     }
+
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
     // Variadic template to allow passing additional arguments to the function
