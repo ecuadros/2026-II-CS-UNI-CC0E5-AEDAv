@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
+#include "../foreach.h"
 using namespace std;
 
 template <typename T>
@@ -48,6 +49,12 @@ public:
         return os;
     }
 };
+
+template <typename Node>
+void writeNode(Node &node, ostream &os, size_t &count){
+    if (count++ > 0) os << ",";
+    os << node;
+}
 
 template <typename T>
 struct VectorAscTraits {
@@ -109,6 +116,7 @@ public:
 
     // Move assignment operator
     Vector& operator=(Vector&& other) noexcept {
+        clear();
         m_data     = std::exchange(other.m_data, nullptr);
         m_size     = std::exchange(other.m_size, 0);
         m_capacity = std::exchange(other.m_capacity, 0);
@@ -161,30 +169,64 @@ public:
     // Persistencia
     ostream &write(ostream &os){
         // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
-        lock_guard<mutex> lock(m_mutex);
         os << "[";
+        size_t count = 0;
+        ApplyFunction(writeNode<Node>, os, count);
+        /*
         for (size_t i = 0; i < size()-1; ++i)
             os << m_data[i] << ",";
         if (size() > 0)
             os << m_data[size()-1];
+        */
         return os << "]";
     }
 
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
         // Implementation for reading vector from stream
+        char ch;
+        if (!(is >> ch) || ch != '['){
+            return is;
+        }
+
+        is >> ch;
+        if(ch == ']') return is;
+        is.putback(ch);
+
+        while (ch != ']'){
+            value_type val;
+            Ref ref;
+            char paren_izq, paren_der, coma;
+
+            is >> paren_izq >> val >> coma >> ref >> paren_der;
+            if (!is || paren_izq != '(' || coma != ',' || paren_der != ')') {
+                return is;
+            }
+            push_back(val, ref);
+            is >> ch;
+            
+            if(ch != ','){
+                return is;
+            }
+        }
+        
+        return is;
     }
+
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
     // Variadic template to allow passing additional arguments to the function
     // Iterator Level #0
     template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
+    void ApplyFunction(Func func, Args&&... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
+        ::ApplyFunction(*this, func, std::forward<Args>(args)...);
+        /*
         for (size_t i = 0; i < size(); ++i) {
             func(m_data[i], args...);
         }
+        */
     }
 };
 
