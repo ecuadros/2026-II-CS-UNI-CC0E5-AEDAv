@@ -5,6 +5,8 @@
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
 #include <utility>
+#include <sstream>
+#include "../foreach.h"
 using namespace std;
 
 template <typename T>
@@ -172,9 +174,15 @@ public:
     }
 
     // TODO: implementar la lectura de un vector desde un stream
-    istream &read(istream &is){
-        // Implementation for reading vector from stream
-        //is >>
+    void read(istream &is){
+        value_type m_value;
+        Ref m_ref;
+        string str;
+        getline(is, str);
+        stringstream ss(str);
+        while (ss >> m_value >> m_ref) {
+            push_back(m_value, m_ref);
+        }
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
@@ -184,9 +192,10 @@ public:
     void ApplyFunction(Func func, Args... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
+        ::ApplyFunction(this, func, args...);
+        /*for (size_t i = 0; i < size(); ++i) {
             func(m_data[i], args...);
-        }
+            }*/
     }
 };
 

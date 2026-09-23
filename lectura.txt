@@ -1,0 +1,2 @@
+0 10 1 11 2 12 3 13 4 14
+Un 0 modelo 1 para 2 armar 3 pero 4 nunca 5 para 6 desarmar 7

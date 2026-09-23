@@ -141,24 +141,17 @@ void DemoRaceCondition() {
 
 void DemoVector2() {
 
-    //Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    Vector<VectorAscTraits<TX>> vec();
-    for (Ref i = 0; i < 10;  i++) vec.push_back(i, i*i);
-    ofstream of("ejemplo.txt", ios::app);
-    vec.write(of);
-    of << endl;
-    of.close();
-
-    /*
+    ifstream ifs("lectura.txt");
+    Vector<VectorAscTraits<TX>> vec;
+    vec.read(ifs);
+    ifs.close();
     // Impresion usando write()
     cout << "Container using write(): ";
-    container.write(cout);
+    vec.write(cout);
     cout << endl;
 
-    // Escritura hacia un archivo, en modo append para acumular cada estado
-    // (el archivo se deja vacio una vez al inicio, ver DemoVector)
-    ofstream of(filename, ios::app);
-    container.write(of);
-    of << endl;
-    of.close();*/
+    /*vec.ApplyFunction(AddX<TX>, 4);
+    cout << "Container Add 4: ";
+    vec.write(cout);
+    cout << endl;*/
 }
