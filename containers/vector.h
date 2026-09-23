@@ -109,9 +109,12 @@ public:
 
     // Move assignment operator
     Vector& operator=(Vector&& other) noexcept {
-        m_data     = std::exchange(other.m_data, nullptr);
-        m_size     = std::exchange(other.m_size, 0);
-        m_capacity = std::exchange(other.m_capacity, 0);
+        if (this != &other) {
+            clear();
+            m_data     = std::exchange(other.m_data, nullptr);
+            m_size     = std::exchange(other.m_size, 0);
+            m_capacity = std::exchange(other.m_capacity, 0);
+        }
         return *this;
     }
 
