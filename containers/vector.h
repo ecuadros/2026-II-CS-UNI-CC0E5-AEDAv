@@ -189,6 +189,30 @@ public:
             func(m_data[i], args...);
         }
     }
+    template <typename Func, typename... Args>
+    Node& FirstThat(Func func, Args... args) {
+        lock_guard<mutex> lock(m_mutex);
+        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
+        for (size_t i = 0; i < size(); ++i)
+            if( func(m_data[i], args...) )
+                return m_data[i];
+    }
+    // template<typename Callable, typename... Args>
+    // decltype(auto) call(Callable func, Args&&... args)
+    // {
+    //     if constexpr(is_void_v<invoke_result_t<Callable, Args...>>)
+    //     { //cout << "Function is returning: void!" << endl;
+    //     invoke(forward<Callable>(func), forward<Args>(args)...);
+    //     //...  // do something before we return
+    //     return;
+    //     }
+    //     else // return type is not void:
+    //     { auto ret = invoke(forward<Callable>(func), forward<Args>(args)...);
+    //     //cout << "Function is returning: " << type_name<decltype(ret)>() << endl;
+    //     //...  // do something (with ret) before we return
+    //     return ret;
+    //     }
+    // }
 };
 
 template <typename T>
