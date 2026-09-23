@@ -2,8 +2,10 @@
 #define __VECTOR_H__
 #include <mutex>
 #include <initializer_list>
+#include <utility>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
+#include "../foreach.h"
 using namespace std;
 
 template <typename T>
@@ -109,6 +111,7 @@ public:
 
     // Move assignment operator
     Vector& operator=(Vector&& other) noexcept {
+        clear();
         m_data     = std::exchange(other.m_data, nullptr);
         m_size     = std::exchange(other.m_size, 0);
         m_capacity = std::exchange(other.m_capacity, 0);
@@ -161,17 +164,41 @@ public:
     // Persistencia
     ostream &write(ostream &os){
         // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
-        lock_guard<mutex> lock(m_mutex);
+        
         os << "[";
-        for (size_t i = 0; i < size()-1; ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
+        size_t i=0;
+        ApplyFunction([&](Node &node){ 
+            if (i++ > 0) os <<", ";
+            os << node;
+        });
         return os << "]";
     }
 
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
+        clear();
+        char ch;
+        if(!(is >> ch)|| ch != '[') return is;
+
+        is >> ch;
+        if (ch == ']') return is;
+        is.putback(ch);
+        while (is >> ch && ch != ']') {
+            value_type val;
+            Ref ref;
+            char coma, paren_der;
+
+            if (is >> val >> coma >> ref >> paren_der) {
+                push_back(val, ref);
+            } else {
+                break;
+            }
+
+            is >> ch;
+            if (ch == ']') break;
+        }
+        return is;
+
         // Implementation for reading vector from stream
     }
     // Aplicarle una funcion a cada elemento.
@@ -179,12 +206,10 @@ public:
     // Variadic template to allow passing additional arguments to the function
     // Iterator Level #0
     template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
+    void ApplyFunction(Func func, Args&&... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
-            func(m_data[i], args...);
-        }
+       ::ApplyFunction(begin(), end(), func, std::forward<Args>(args)...);
     }
 };
 

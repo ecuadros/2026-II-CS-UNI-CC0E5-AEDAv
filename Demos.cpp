@@ -76,6 +76,18 @@ void TestTraversal(Container &container) {
     cout << "]" << endl;
 }
 
+template <typename Container>
+void TestReadContainer(Container &container, const string &filename) {
+    ifstream ifs(filename);
+    if (!ifs) return;
+
+    container.read(ifs);
+    cout << "Vector leido desde " << filename << ": ";
+    container.write(cout);
+    cout << endl;
+    ifs.close();
+}
+
 void DemoVector() {
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
@@ -85,6 +97,10 @@ void DemoVector() {
     // el constructor initializer_list arma el Vector inicial de una vez
     Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
+    
+    Vector<VectorAscTraits<TX>> vec_leido;
+    TestReadContainer(vec_leido, "vector.txt");
+    
     TestTraversal(vec);
 
     ofstream("vector_str.txt", ios::trunc).close();
