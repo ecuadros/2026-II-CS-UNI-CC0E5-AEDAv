@@ -87,6 +87,13 @@ void DemoVector() {
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
 
+    // Leemos un vector desde vector.txt
+    ifstream in("vector.txt");
+    Vector<VectorAscTraits<TX>> vecRead;
+    in >> vecRead;
+    in.close();
+    cout << "Container using read(): " << vecRead << endl;
+
     ofstream("vector_str.txt", ios::trunc).close();
     Vector<VectorAscTraits<string>> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");

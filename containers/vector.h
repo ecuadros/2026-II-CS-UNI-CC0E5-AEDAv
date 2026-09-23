@@ -2,7 +2,9 @@
 #define __VECTOR_H__
 #include <mutex>
 #include <initializer_list>
+#include <assert.h>
 #include "GeneralIterator.h"
+#include "../foreach.h"
 #include "../types.h" // Ref
 using namespace std;
 
@@ -48,6 +50,17 @@ public:
         return os;
     }
 };
+
+template<typename Node>
+void writeNode(Node &node, ostream &os, bool &init) {
+    if (!init) {
+        os << ",";
+    }
+    os << node;
+    // solo necesito separar luego del primer elemento
+    init = false;
+}
+
 
 template <typename T>
 struct VectorAscTraits {
@@ -161,25 +174,41 @@ public:
     // Persistencia
     ostream &write(ostream &os){
         // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
-        lock_guard<mutex> lock(m_mutex);
+        bool init = true;
         os << "[";
-        for (size_t i = 0; i < size()-1; ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
+        ApplyFunction(writeNode<Node>, os, init);
         return os << "]";
     }
 
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
         // Implementation for reading vector from stream
+        // si nosotros leemos de la forma [(,)]
+        char chr;
+        is >> chr;
+        assert(chr == '[');
+        value_type value_e;
+        Ref ref;
+
+        while (is >> chr and chr == '(') {
+            // (valor1, referencia1),(valor2, referencia2) ...
+            is >> value_e;
+            is >> chr;
+            is >> ref;
+            is >> chr;
+            push_back(value_e, ref);
+            is >> chr;
+            // si termina en ]
+            if (chr == ']') break;
+        }
+        return is;
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
     // Variadic template to allow passing additional arguments to the function
     // Iterator Level #0
     template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
+    void ApplyFunction(Func func, Args&&... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
         for (size_t i = 0; i < size(); ++i) {
