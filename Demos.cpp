@@ -91,6 +91,15 @@ void DemoVector() {
     Vector<VectorAscTraits<string>> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
+
+    // Prueba de lectura (read / operator>>)
+    ifstream infile("vector.txt");
+    Vector< VectorAscTraits< TX > > readVec;
+    infile >> readVec;
+    infile.close();
+
+    cout << "Container after read() from vector.txt: ";
+    cout << readVec << endl;
 }
 
 // Insertamos muchos elementos (generados en un loop, no a mano)

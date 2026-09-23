@@ -173,6 +173,23 @@ public:
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
         // Implementation for reading vector from stream
+        clear();
+
+        char ch;
+        is >> ch; 
+
+        while (is >> ch && ch != ']') {
+            if (ch == '(') {
+                value_type val;
+                Ref ref;
+                char comma, close_paren;
+
+                is >> val >> comma >> ref >> close_paren;
+                push_back(val, ref);
+            }
+        }
+
+        return is;
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
