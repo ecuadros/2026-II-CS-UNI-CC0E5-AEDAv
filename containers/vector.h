@@ -4,6 +4,8 @@
 #include <initializer_list>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
+#include <utility>
+#include "../foreach.h"
 using namespace std;
 
 template <typename T>
@@ -162,17 +164,78 @@ public:
     ostream &write(ostream &os){
         // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
         lock_guard<mutex> lock(m_mutex);
-        os << "[";
-        for (size_t i = 0; i < size()-1; ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
-        return os << "]";
+        os<<"[";
+        bool first = true;
+        //funcion implementada ApplyFuntion con begin y end
+        ::ApplyFunction(
+            begin(),
+            end(),
+            [&os, &first](const auto& node){
+                if(!first){
+                    os<<",";
+                   
+                }
+                os<<node;
+                first= false;
+            }
+        );
+        return os<<"]";
     }
 
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
         // Implementation for reading vector from stream
+        //limpiamos el vector
+        clear();
+        char c;
+        value_type value;
+        Ref ref;
+        is>>c;
+        //condicional para verificar sino encontramos '['
+        if(c!='['){
+            is.setstate(ios::failbit);
+            return is;
+        }
+        is>>ws;
+        //si encontramos '[' estamos el vector vacio
+        if(is.peek()==']'){
+            is.get();
+            return is;
+        }
+        //mientras existan elementos 
+        while(is){
+            is>>c;
+            if(c!='('){
+                is.setstate(ios::failbit);
+                return is;
+            }
+            is>>value;
+            is>>c;
+             if (c != ',') {
+            is.setstate(ios::failbit);
+            return is;
+        }
+        is >> ref;
+        is >> c;
+        if (c != ')') {
+            is.setstate(ios::failbit);
+            return is;
+        }
+        push_back(value, ref);
+        is >> c;
+
+        if (c == ']') {
+            break;
+        }
+        if (c != ',') {
+            is.setstate(ios::failbit);
+            return is;
+        }
+
+
+
+        }
+        return is;
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
@@ -182,9 +245,13 @@ public:
     void ApplyFunction(Func func, Args... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
-            func(m_data[i], args...);
-        }
+        
+       ::ApplyFunction(
+        begin(),
+        end(),
+        func,
+        args...
+    );
     }
 };
 
