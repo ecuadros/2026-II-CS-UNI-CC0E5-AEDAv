@@ -190,12 +190,15 @@ public:
         }
     }
     template <typename Func, typename... Args>
-    Node& FirstThat(Func func, Args... args) {
+    Node* FirstThat(Func func, Args... args) {
         lock_guard<mutex> lock(m_mutex);
-        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i)
-            if( func(m_data[i], args...) )
-                return m_data[i];
+        Node *found = nullptr;
+        ::ApplyFunction(*this, [&](Node& n){
+            if (!found && func(n, args...)) {
+                found = &n;
+            }
+        });
+        return found;
     }
     // template<typename Func, typename... Args>
     // decltype(auto) call(Func func, Args&&... args)
