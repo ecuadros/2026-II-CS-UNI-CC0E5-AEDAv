@@ -76,6 +76,13 @@ void TestTraversal(Container &container) {
     cout << "]" << endl;
 }
 
+template<typename Container, typename Func, typename... Args>
+void TestFunction(Container &container, Func func, Args&&... args) {
+    container.ApplyFunction(func, args...);
+    container.write(cout);
+    cout << endl;
+}
+
 void DemoVector() {
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
@@ -84,13 +91,17 @@ void DemoVector() {
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
     Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
-    TestTraversal(vec);
+    cout << "Container using write(): ";
+    vec.write(cout);
+    cout << "\n";
+    vec.ApplyFunction(AddX, 4);
+    // TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
+    // TestTraversal(vec);
 
     ofstream("vector_str.txt", ios::trunc).close();
     Vector<VectorAscTraits<string>> strVec;
-    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
-    TestTraversal(strVec);
+    // TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
+    // TestTraversal(strVec);
 }
 
 // Insertamos muchos elementos (generados en un loop, no a mano)

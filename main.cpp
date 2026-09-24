@@ -8,6 +8,6 @@ using namespace std;
 // Ejecutar asi: ./main
 int main() {
     DemoVector();
-    DemoRaceCondition();
+    //DemoRaceCondition();
     return 0;
 }

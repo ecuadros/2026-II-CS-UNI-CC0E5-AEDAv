@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
+#include "../foreach.h"
 using namespace std;
 
 template <typename T>
@@ -185,9 +186,10 @@ public:
     void ApplyFunction(Func func, Args... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
-            func(m_data[i], args...);
-        }
+        ::ApplyFunction(begin(), end(), func, args...);
+        // for (size_t i = 0; i < size(); ++i) {
+        //     func(m_data[i], args...);
+        // }
     }
     template <typename Func, typename... Args>
     Node& FirstThat(Func func, Args... args) {
