@@ -52,6 +52,7 @@ decltype(auto) call(Iterator begin, Iterator end, Func func, Args&&... args) {
             auto ret = func(*iter, std::forward<Args>(args)...);
             if(ret) return *iter;
         }
+        //return end();
     }
 }
 

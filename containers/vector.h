@@ -208,9 +208,9 @@ public:
     {
         if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
         {    //cout << "Function is returning: void!" << endl;
-                for (size_t i = 0; i < size(); ++i) {
-                    invoke(forward<Func>(func), forward<Node&>(m_data[i]), forward<Args>(args)...);
-                }
+                //for (size_t i = 0; i < size(); ++i) {
+                    ::call(begin(), end(), func, args...);
+                    //}
         //      //...  // do something before we return
                 //ApplyFunction(func, args...);
               return;
@@ -219,10 +219,11 @@ public:
         { ////auto ret = invoke(forward<Func>(func), forward<Args>(args)...);
         //      //cout << "Function is returning: " << type_name<decltype(ret)>() << endl;
         //      //...  // do something (with ret) before we return
-                for (size_t i = 0; i < size(); ++i) {
-                    auto ret = invoke(forward<Func>(func), forward<Node&>(m_data[i]), forward<Args>(args)...);
-                    if (ret) return m_data[i];
-                }
+                // for (size_t i = 0; i < size(); ++i) {
+                //     auto ret = invoke(forward<Func>(func), forward<Node&>(m_data[i]), forward<Args>(args)...);
+                //     if (ret) return m_data[i];
+                // }
+                return ::call(begin(), end(), func, args...);
                 //return FirstThat(func, args...);
         //      return ret;
         }
