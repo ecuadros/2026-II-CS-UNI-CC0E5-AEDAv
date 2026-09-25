@@ -22,6 +22,14 @@ void Square(GeneralNode<TX> &node) {
     node.value() *= node.value();
 }
 
+// Predicado generico para FirstThat/call: true si el valor del nodo es
+// mayor que 'threshold'. Generico en Node y T para servir tanto a
+// Vector<VectorAscTraits<TX>> (int) como a Vector<VectorAscTraits<string>>.
+template <typename Node, typename T>
+bool IsGreaterThan(Node &node, T threshold) {
+    return node.getValue() > threshold;
+}
+
 template <typename Node>
 void PrintNode(Node &node, ostream &os) {
     os << node << " ";
@@ -68,12 +76,20 @@ void TestTraversal(Container &container) {
     using Node = typename Container::Node;
 
     cout << "Forward traversal:  [";
-    ::ApplyFunction(container.begin(), container.end(), PrintNode<Node>, cout);
+    container.call(PrintNode<Node>, cout);
     cout << "]" << endl;
 
     cout << "Backward traversal: [";
-    ::ApplyFunction(container.rbegin(), container.rend(), PrintNode<Node>, cout);
+    container.rcall(PrintNode<Node>, cout);
     cout << "]" << endl;
+
+    // Prueba de call()/FirstThat() con valor de retorno: busca el primer
+    // nodo cuyo valor sea mayor que el del primer elemento del container.
+    if (!container.empty()) {
+        auto threshold = (*container.begin()).getValue();
+        Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
+        cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
+    }
 }
 
 void DemoVector() {

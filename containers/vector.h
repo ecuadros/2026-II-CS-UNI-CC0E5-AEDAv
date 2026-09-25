@@ -181,19 +181,30 @@ public:
 
     template <typename Func, typename... Args>
     void ApplyFunction(Func func, Args... args) {
-        call(func, forward<Args>(args)...);
+        call(func, std::forward<Args>(args)...);
     }
     template <typename Func, typename... Args>
     Node& FirstThat(Func func, Args... args) {
-        return call(func, forward<Args>(args)...);
+        return call(func, std::forward<Args>(args)...);
     }
     template<typename Func, typename... Args>
     decltype(auto) call(Func func, Args&&... args)
     {    lock_guard<mutex> lock(m_mutex);
-        if constexpr(is_void_v<invoke_result_t<Func, Args...>>)
-            ::call(begin(), end(), forward<Func>(func), forward<Args>(args)...);
+        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
+            ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
         else // return type is not void:
-            return ::call(begin(), end(), forward<Func>(func), forward<Args>(args)...);
+            return ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
+    }
+
+    // Igual que call(), pero recorriendo el container en sentido inverso
+    // (rbegin()/rend()) en vez de hacia adelante.
+    template<typename Func, typename... Args>
+    decltype(auto) rcall(Func func, Args&&... args)
+    {    lock_guard<mutex> lock(m_mutex);
+        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
+            ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
+        else // return type is not void:
+            return ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
     }
 };
 
