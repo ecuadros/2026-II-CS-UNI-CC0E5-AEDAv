@@ -22,6 +22,17 @@ void Square(GeneralNode<TX> &node) {
     node.value() *= node.value();
 }
 
+template <typename T>
+bool IsMultipleOfN(GeneralNode<TX> &node, T N) {
+    return node.value() % N == 0;
+}
+
+//template <typename T>
+bool IsYInWord(GeneralNode<string> &node) {
+    string w = node.value();
+    return w.find('y') != string::npos or w.find('y') != string::npos;
+}
+
 template <typename Node>
 void PrintNode(Node &node, ostream &os) {
     os << node << " ";
@@ -90,16 +101,40 @@ void DemoVector() {
 
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
-    Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    cout << "Container using write(): ";
+    Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}, {5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}});
+    cout << "Initial Container: ";
     vec.write(cout);
     cout << "\n";
-    vec.ApplyFunction(AddX, 4);
+    vec.ApplyFunction(AddX<TX>, 4);
+    cout << "Container add 4: ";
+    vec.write(cout);
+    cout << "\n";
+    cout << "First multiple of 7: " << vec.FirstThat(IsMultipleOfN<TX>, 7);
+    cout << "\n";
+    cout << "\nCall in vector\n";
+    cout << "Add 6 to vector: ";
+    vec.call(AddX<TX>, 6);
+    vec.write(cout);
+    cout << "\n";
+    cout << "First multiple of 13:" << vec.call(IsMultipleOfN<TX>, 13);
+    cout << "\n";
+    cout << "\nCall out vector\n";
+    cout << "Add 3: ";
+    ::call(vec.begin(), vec.end(), AddX<TX>, 3);
+    vec.write(cout);
+    cout << "\n";
+    cout << "First multiple of 11:" << ::call(vec.begin(), vec.end(), IsMultipleOfN<TX>, 11);
+    cout << "\n";
+    ///
     // TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     // TestTraversal(vec);
 
-    ofstream("vector_str.txt", ios::trunc).close();
-    Vector<VectorAscTraits<string>> strVec;
+    ofstream("vector_str.txt", ios::trunc).close(); //One hundred years from now See the chrome
+
+    cout << "Initial String Container': ";
+    Vector<VectorAscTraits<string>> strVec({{"One", 10}, {"hundred", 11}, {"years", 12}, {"from", 13}, {"now", 14}, {"See", 15}, {"the", 16}, {"chrome", 17}});
+    cout << "First node with 'y': " << ::call(strVec.begin(), strVec.end(), IsYInWord);
+    cout << "\n";
     // TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     // TestTraversal(strVec);
 }

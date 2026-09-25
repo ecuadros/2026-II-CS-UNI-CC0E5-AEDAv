@@ -2,6 +2,7 @@
 #define __VECTOR_H__
 #include <mutex>
 #include <initializer_list>
+#include <type_traits>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
 #include "../foreach.h"
@@ -195,26 +196,37 @@ public:
     Node& FirstThat(Func func, Args... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
+        //::FirstThat(begin(), end(), func, args...);
         for (size_t i = 0; i < size(); ++i)
             if( func(m_data[i], args...) )
                 return m_data[i];
+
     }
-    // template<typename Func, typename... Args>
-    // decltype(auto) call(Func func, Args&&... args)
-    // {
-    //     if constexpr(is_void_v<invoke_result_t<Func, Args...>>)
-    //     {    //cout << "Function is returning: void!" << endl;
-    //          invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //...  // do something before we return
-    //          return;
-    //     }
-    //     else // return type is not void:
-    //     { auto ret = invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //cout << "Function is returning: " << type_name<decltype(ret)>() << endl;
-    //          //...  // do something (with ret) before we return
-    //          return ret;
-    //     }
-    // }
+
+    template<typename Func, typename... Args>
+    decltype(auto) call(Func func, Args&&... args)
+    {
+        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
+        {    //cout << "Function is returning: void!" << endl;
+                for (size_t i = 0; i < size(); ++i) {
+                    invoke(forward<Func>(func), forward<Node&>(m_data[i]), forward<Args>(args)...);
+                }
+        //      //...  // do something before we return
+                //ApplyFunction(func, args...);
+              return;
+        }
+        else // return type is not void:
+        { ////auto ret = invoke(forward<Func>(func), forward<Args>(args)...);
+        //      //cout << "Function is returning: " << type_name<decltype(ret)>() << endl;
+        //      //...  // do something (with ret) before we return
+                for (size_t i = 0; i < size(); ++i) {
+                    auto ret = invoke(forward<Func>(func), forward<Node&>(m_data[i]), forward<Args>(args)...);
+                    if (ret) return m_data[i];
+                }
+                //return FirstThat(func, args...);
+        //      return ret;
+        }
+    }
 };
 
 template <typename T>
