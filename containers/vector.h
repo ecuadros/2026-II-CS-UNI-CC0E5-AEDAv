@@ -2,8 +2,13 @@
 #define __VECTOR_H__
 #include <mutex>
 #include <initializer_list>
+#include <utility>
+#include <type_traits>
+#include <functional>
+#include <stdexcept>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
+#include "../foreach.h"
 using namespace std;
 
 template <typename T>
@@ -163,56 +168,69 @@ public:
 
     // Persistencia
     ostream &write(ostream &os){
-        // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
-        lock_guard<mutex> lock(m_mutex);
         os << "[";
-        for (size_t i = 0; i < size()-1; ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
+        size_t i = 0;
+        ApplyFunction([&](Node &node){ 
+            if (i++ > 0) os << ", ";
+            os << node;
+        });
         return os << "]";
     }
 
     // TODO: implementar la lectura de un vector desde un stream
-    istream &read(istream &is){
-        // Implementation for reading vector from stream
+    template <typename Stream = istream>
+    Stream& read(Stream &is){
+        using CharT = typename Stream::char_type;
+        clear();
+        CharT ch;
+        if (!(is >> ch) || ch != static_cast<CharT>('[')) return is;
+
+        is >> ch;
+        if (ch == static_cast<CharT>(']')) return is;
+        is.putback(ch);
+
+        while (is >> ch && ch != static_cast<CharT>(']')) {
+            value_type val;
+            Ref ref;
+            CharT coma, paren_der;
+
+            if (is >> val >> coma >> ref >> paren_der) {
+                push_back(val, ref);
+            } else {
+                break;
+            }
+
+            is >> ch;
+            if (ch == static_cast<CharT>(']')) break;
+        }
+        return is;
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
     // Variadic template to allow passing additional arguments to the function
     // Iterator Level #0
     template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
+    void ApplyFunction(Func func, Args&&... args) {
         lock_guard<mutex> lock(m_mutex);
-        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
-            func(m_data[i], args...);
-        }
+        ::ApplyFunction(begin(), end(), func, std::forward<Args>(args)...);
     }
+
     template <typename Func, typename... Args>
-    Node& FirstThat(Func func, Args... args) {
+    Node& FirstThat(Func func, Args&&... args) {
         lock_guard<mutex> lock(m_mutex);
-        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i)
-            if( func(m_data[i], args...) )
-                return m_data[i];
+        auto it = ::FirstThat(begin(), end(), func, std::forward<Args>(args)...);
+        if (it != end()) 
+            return *it;
+
+        throw std::out_of_range("FirstThat: No se encontro ningun elemento");
     }
-    // template<typename Func, typename... Args>
-    // decltype(auto) call(Func func, Args&&... args)
-    // {
-    //     if constexpr(is_void_v<invoke_result_t<Func, Args...>>)
-    //     {    //cout << "Function is returning: void!" << endl;
-    //          invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //...  // do something before we return
-    //          return;
-    //     }
-    //     else // return type is not void:
-    //     { auto ret = invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //cout << "Function is returning: " << type_name<decltype(ret)>() << endl;
-    //          //...  // do something (with ret) before we return
-    //          return ret;
-    //     }
-    // }
+
+    template<typename Func, typename... Args>
+    decltype(auto) call(Func&& func, Args&&... args)
+    {
+        lock_guard<mutex> lock(m_mutex);
+        return ::call(std::forward<Func>(func), std::forward<Args>(args)...);
+    }
 };
 
 template <typename T>
@@ -220,8 +238,8 @@ ostream& operator<<(ostream &os, Vector<T> &vec) {
     return vec.write(os);
 }
 
-template <typename T>
-istream& operator>>(istream &is, Vector<T> &vec) {
+template <typename T, typename Stream>
+Stream& operator>>(Stream &is, Vector<T> &vec) {
     return vec.read(is);
 }
 

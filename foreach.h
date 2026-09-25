@@ -1,6 +1,8 @@
 #ifndef __FOREACH_H__
 #define __FOREACH_H__
 #include <utility> // std::forward
+#include <type_traits>
+#include <functional>
 using namespace std;
 
 // Variadic template to allow passing additional arguments to the function
@@ -45,4 +47,21 @@ void ApplyFunction(Container &container, Func func, Args&&... args) {
         func(v, std::forward<Args>(args)...);
 }
 
+template <typename Iterator, typename Predicate, typename... Args>
+Iterator FirstThat(Iterator begin, Iterator end, Predicate pred, Args&&... args) {
+    for (auto iter = begin; iter != end; ++iter)
+        if (pred(*iter, std::forward<Args>(args)...))
+            return iter;
+    return end;
+}
+
+template <typename Func, typename... Args>
+decltype(auto) call(Func&& func, Args&&... args) {
+    if constexpr (std::is_void_v<std::invoke_result_t<Func, Args...>>) {
+        std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
+        return;
+    } else {
+        return std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
+    }
+}
 #endif // __FOREACH_H__
