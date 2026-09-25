@@ -3,6 +3,7 @@
 #include <mutex>
 #include <initializer_list>
 #include "GeneralIterator.h"
+#include "../foreach.h"
 #include "../types.h" // Ref
 using namespace std;
 
@@ -177,42 +178,23 @@ public:
     istream &read(istream &is){
         // Implementation for reading vector from stream
     }
-    // Aplicarle una funcion a cada elemento.
-    //       ej. sumarle un valor x
-    // Variadic template to allow passing additional arguments to the function
-    // Iterator Level #0
+
     template <typename Func, typename... Args>
     void ApplyFunction(Func func, Args... args) {
-        lock_guard<mutex> lock(m_mutex);
-        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
-            func(m_data[i], args...);
-        }
+        call(func, forward<Args>(args)...);
     }
     template <typename Func, typename... Args>
     Node& FirstThat(Func func, Args... args) {
-        lock_guard<mutex> lock(m_mutex);
-        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i)
-            if( func(m_data[i], args...) )
-                return m_data[i];
+        return call(func, forward<Args>(args)...);
     }
-    // template<typename Func, typename... Args>
-    // decltype(auto) call(Func func, Args&&... args)
-    // {
-    //     if constexpr(is_void_v<invoke_result_t<Func, Args...>>)
-    //     {    //cout << "Function is returning: void!" << endl;
-    //          invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //...  // do something before we return
-    //          return;
-    //     }
-    //     else // return type is not void:
-    //     { auto ret = invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //cout << "Function is returning: " << type_name<decltype(ret)>() << endl;
-    //          //...  // do something (with ret) before we return
-    //          return ret;
-    //     }
-    // }
+    template<typename Func, typename... Args>
+    decltype(auto) call(Func func, Args&&... args)
+    {    lock_guard<mutex> lock(m_mutex);
+        if constexpr(is_void_v<invoke_result_t<Func, Args...>>)
+            ::call(begin(), end(), forward<Func>(func), forward<Args>(args)...);
+        else // return type is not void:
+            return ::call(begin(), end(), forward<Func>(func), forward<Args>(args)...);
+    }
 };
 
 template <typename T>
