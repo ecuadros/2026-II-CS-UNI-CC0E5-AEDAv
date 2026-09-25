@@ -1,9 +1,15 @@
 #ifndef __VECTOR_H__
 #define __VECTOR_H__
 #include <mutex>
+#include <functional>
 #include <initializer_list>
+#include <sstream>
+#include <string>
+#include <type_traits>
+#include <utility>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
+#include "../foreach.h"
 using namespace std;
 
 template <typename T>
@@ -36,6 +42,17 @@ private:
     T   m_value;
     Ref m_ref;      // Reference to the value
 
+    template <typename U>
+    static bool parseField(const string &text, U &field) {
+        if constexpr (is_same_v<U, string>) {
+            field = text;
+            return true;
+        } else {
+            istringstream iss(text);
+            return iss >> field && (iss >> ws).eof();
+        }
+    }
+
 public:
     GeneralNode() = default; // requerido por resize(): new Node[new_cap]
     GeneralNode(const T& value, Ref ref) : m_value(value), m_ref(ref) {}
@@ -46,6 +63,25 @@ public:
     friend ostream &operator <<(ostream &os, const GeneralNode<T> &node) {
         os << "(" << node.getValue() << "," << node.getRef() << ")";
         return os;
+    }
+
+    friend istream &operator>>(istream &is, GeneralNode<T> &node) {
+        char   open;
+        string body;
+        if (!(is >> open) || open != '(' || !getline(is, body, ')') || is.eof()) {
+            is.setstate(ios::failbit);
+            return is;
+        }
+        size_t comma = body.rfind(',');
+        T      value{};
+        Ref    ref{};
+        if (comma == string::npos
+            || !parseField(body.substr(0, comma), value)
+            || !parseField(body.substr(comma + 1), ref))
+            is.setstate(ios::failbit);
+        else
+            node = GeneralNode(value, ref);
+        return is;
     }
 };
 
@@ -163,56 +199,52 @@ public:
 
     // Persistencia
     ostream &write(ostream &os){
-        // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
         lock_guard<mutex> lock(m_mutex);
         os << "[";
-        for (size_t i = 0; i < size()-1; ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
+        ::ApplyFunction(begin(), end(), [&os, sep = ""](const Node &node) mutable { os << exchange(sep, ",") << node; });
         return os << "]";
     }
 
-    // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
-        // Implementation for reading vector from stream
+        auto fail = [&is]() -> istream & { is.setstate(ios::failbit); return is; };
+        char delim;
+        if (!(is >> delim) || delim != '[')
+            return fail();
+        Vector parsed;
+        if ((is >> ws).peek() == ']') {
+            is >> delim;
+        } else {
+            Node node;
+            do {
+                if (!(is >> node >> delim))
+                    return is;
+                parsed.push_back(node.getValue(), node.getRef());
+            } while (delim == ',');
+        }
+        if (delim != ']')
+            return fail();
+        *this = std::move(parsed);
+        return is;
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
-    // Variadic template to allow passing additional arguments to the function
-    // Iterator Level #0
     template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
+    void ApplyFunction(Func func, Args&&... args) {
         lock_guard<mutex> lock(m_mutex);
-        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
-            func(m_data[i], args...);
-        }
+        ::ApplyFunction(begin(), end(), func, args...);
     }
+
     template <typename Func, typename... Args>
-    Node& FirstThat(Func func, Args... args) {
+    ForwardIterator FirstThat(Func func, Args&&... args) {
         lock_guard<mutex> lock(m_mutex);
-        // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i)
-            if( func(m_data[i], args...) )
-                return m_data[i];
+        return ::FirstThat(begin(), end(), func, args...);
     }
-    // template<typename Func, typename... Args>
-    // decltype(auto) call(Func func, Args&&... args)
-    // {
-    //     if constexpr(is_void_v<invoke_result_t<Func, Args...>>)
-    //     {    //cout << "Function is returning: void!" << endl;
-    //          invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //...  // do something before we return
-    //          return;
-    //     }
-    //     else // return type is not void:
-    //     { auto ret = invoke(forward<Func>(func), forward<Args>(args)...);
-    //          //cout << "Function is returning: " << type_name<decltype(ret)>() << endl;
-    //          //...  // do something (with ret) before we return
-    //          return ret;
-    //     }
-    // }
+
+    template <typename Func, typename... Args>
+    decltype(auto) call(Func &&func, Args&&... args) {
+        lock_guard<mutex> lock(m_mutex);
+        return std::invoke(std::forward<Func>(func), *this, std::forward<Args>(args)...);
+    }
 };
 
 template <typename T>

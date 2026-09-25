@@ -45,4 +45,12 @@ void ApplyFunction(Container &container, Func func, Args&&... args) {
         func(v, std::forward<Args>(args)...);
 }
 
+template <typename Iterator, typename Func, typename... Args>
+Iterator FirstThat(Iterator begin, Iterator end, Func func, Args&&... args) {
+    for (auto iter = begin; iter != end; ++iter)
+        if (func(*iter, args...))
+            return iter;
+    return end;
+}
+
 #endif // __FOREACH_H__

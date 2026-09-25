@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
 #include <string>
@@ -25,6 +26,27 @@ void Square(GeneralNode<TX> &node) {
 template <typename Node>
 void PrintNode(Node &node, ostream &os) {
     os << node << " ";
+}
+
+bool HasEvenSquareRoot(const GeneralNode<TX> &node) {
+    TX value = node.getValue();
+    if (value < 0)
+        return false;
+    TX root = static_cast<TX>(lround(sqrt(value)));
+    return root * root == value && root % 2 == 0;
+}
+
+template <typename Container>
+void PrintAll(Container &container, ostream &os) {
+    ::ApplyFunction(container, PrintNode<typename Container::Node>, os);
+}
+
+template <typename Container>
+typename Container::value_type SumValues(Container &container) {
+    typename Container::value_type total{};
+    for (auto &node : container)
+        total += node.getValue();
+    return total;
 }
 const int NThreads = 5;
 
@@ -76,6 +98,40 @@ void TestTraversal(Container &container) {
     cout << "]" << endl;
 }
 
+template <typename Container>
+void TestRead(const string &filename) {
+    ifstream in(filename);
+    Container loaded;
+    if (in >> loaded)
+        cout << "Container read from " << filename << ": " << loaded << endl;
+    else
+        cout << "Container could not be read from " << filename << endl;
+}
+
+template <typename Container>
+void TestFirstThat(Container &container) {
+    auto found = container.FirstThat(HasEvenSquareRoot);
+    cout << "FirstThat with even square root: ";
+    if (found != container.end())
+        cout << *found << endl;
+    else
+        cout << "not found" << endl;
+}
+
+template <typename Container>
+void TestApplyFunction(Container &container, const typename Container::value_type &x) {
+    container.ApplyFunction(AddX<typename Container::value_type>, x);
+    cout << "After ApplyFunction(AddX, " << x << "): " << container << endl;
+}
+
+template <typename Container>
+void TestCall(Container &container) {
+    cout << "Vector::call returning void: [";
+    container.call(PrintAll<Container>, cout);
+    cout << "]" << endl;
+    cout << "Vector::call returning value: " << container.call(SumValues<Container>) << endl;
+}
+
 void DemoVector() {
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
@@ -86,11 +142,19 @@ void DemoVector() {
     Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
+    TestRead<decltype(vec)>("vector.txt");
+    TestFirstThat(vec);
+    TestApplyFunction(vec, 10);
+    TestFirstThat(vec);
+    TestCall(vec);
 
     ofstream("vector_str.txt", ios::trunc).close();
     Vector<VectorAscTraits<string>> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
+    TestRead<decltype(strVec)>("vector_str.txt");
+    TestApplyFunction(strVec, "!");
+    TestCall(strVec);
 }
 
 // Insertamos muchos elementos (generados en un loop, no a mano)
