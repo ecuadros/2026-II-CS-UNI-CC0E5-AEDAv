@@ -84,10 +84,9 @@ public:
         }
         return os << "]";
     }
-    // TODO: 
+    // TODO: implementar
     friend std::istream &operator >>(std::istream &is, const LinkedList<Traits> &list) {
         clear();
-        
         return is; 
     }
     // Iterators
