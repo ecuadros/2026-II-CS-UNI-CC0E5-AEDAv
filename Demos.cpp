@@ -153,3 +153,9 @@ void DemoRaceCondition() {
         cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
              << "sincroniza correctamente las inserciones concurrentes" << endl;
 }
+
+// TODO: Implementar DemoLinkedList() para probar la lista enlazada y sus iteradores.
+void DemoLinkedList()
+{
+    // Implementation for LinkedList demo
+}

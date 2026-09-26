@@ -3,6 +3,7 @@
 #include <mutex>
 #include <initializer_list>
 #include "GeneralIterator.h"
+#include "GeneralNode.h"
 #include "../foreach.h"
 #include "../types.h" // Ref
 using namespace std;
@@ -29,25 +30,6 @@ public:
 
     // Prefix increment
     VectorBackwardIterator& operator++() { --Parent::m_ptr; return *this; }
-};
-
-template <typename T>
-struct GeneralNode{
-private:
-    T   m_value;
-    Ref m_ref;      // Reference to the value
-
-public:
-    GeneralNode() = default; // requerido por resize(): new Node[new_cap]
-    GeneralNode(const T& value, Ref ref) : m_value(value), m_ref(ref) {}
-    T    getValue() const { return m_value; }
-    Ref  getRef()   const { return m_ref;   }
-    T&   value()          { return m_value; } // acceso mutable para ApplyFunction
-
-    friend ostream &operator <<(ostream &os, const GeneralNode<T> &node) {
-        os << "(" << node.getValue() << "," << node.getRef() << ")";
-        return os;
-    }
 };
 
 template <typename T>
