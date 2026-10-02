@@ -7,6 +7,7 @@
 #include "foreach.h"
 #include "containers/vector.h"
 #include "Demos.h"
+#include "containers/linkedlist.h"
 using namespace std;
 
 void AddOne(GeneralNode<TX> &node) {
@@ -155,7 +156,23 @@ void DemoRaceCondition() {
 }
 
 // TODO: Implementar DemoLinkedList() para probar la lista enlazada y sus iteradores.
+
 void DemoLinkedList()
 {
-    // Implementation for LinkedList demo
+    LinkedList<LinkedListAscTraits<TX>> list;
+
+    list.push_back(10, 1);
+    list.push_back(20, 2);
+    list.push_back(30, 3);
+
+    cout << "Lista: " << list << endl;
+
+    cout << "Recorrido: ";
+
+    for (auto it = list.begin(); it != list.end(); ++it)
+    {
+        cout << *it << " ";
+    }
+
+    cout << endl;
 }

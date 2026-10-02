@@ -1,6 +1,7 @@
 #include <iostream>
 #include "Demos.h"
 #include "containers/vector.h"
+#include "containers/linkedlist.h"
 
 using namespace std;
 
@@ -9,5 +10,6 @@ using namespace std;
 int main() {
     DemoVector();
     DemoRaceCondition();
+    DemoLinkedList();
     return 0;
 }

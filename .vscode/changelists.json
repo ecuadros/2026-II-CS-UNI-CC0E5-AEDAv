@@ -1,0 +1,19 @@
+{
+  "changelists": [
+    {
+      "name": "Default",
+      "files": [
+        ".vscode/c_cpp_properties.json",
+        ".vscode/launch.json",
+        ".vscode/settings.json",
+        ".vscode/changelists.json",
+        "containers/linkedlist.h",
+        "Demos.cpp",
+        "containers/vector.h",
+        "main.cpp",
+        "Demos.h"
+      ]
+    }
+  ],
+  "active": "Default"
+}
