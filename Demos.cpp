@@ -6,6 +6,7 @@
 #include <vector>
 #include "foreach.h"
 #include "containers/vector.h"
+#include "containers/linkedlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -158,4 +159,20 @@ void DemoRaceCondition() {
 void DemoLinkedList()
 {
     // Implementation for LinkedList demo
+    LinkedList<LinkedListAscTraits<TX>> lkl;
+    lkl.insert(2, 1);
+    lkl.insert(8, 2);
+    lkl.insert(6, 3);
+    lkl.push_back(5, 4);
+    lkl.push_back(0, 9);
+    //lkl.read(cin);
+    lkl.write(cout);
+    cout << endl;
+    LinkedList<LinkedListAscTraits<TX>> lkl2(lkl);
+    //lkl2 == lkl;
+    lkl2.push_back(14, 90);
+    lkl.write(cout);
+    cout << endl;
+    lkl2.write(cout);
+    cout << endl;
 }
