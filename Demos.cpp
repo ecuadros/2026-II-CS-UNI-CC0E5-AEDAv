@@ -80,9 +80,9 @@ void TestTraversal(Container &container) {
     container.call(PrintNode<Node>, cout);
     cout << "]" << endl;
 
-    cout << "Backward traversal: [";
+    /*cout << "Backward traversal: [";
     container.rcall(PrintNode<Node>, cout);
-    cout << "]" << endl;
+    cout << "]" << endl;*/
 
     // Prueba de call()/FirstThat() con valor de retorno: busca el primer
     // nodo cuyo valor sea mayor que el del primer elemento del container.
@@ -159,20 +159,82 @@ void DemoRaceCondition() {
 void DemoLinkedList()
 {
     // Implementation for LinkedList demo
+    cout << "Lista enlazada demo usuario:\n";
     LinkedList<LinkedListAscTraits<TX>> lkl;
     lkl.insert(2, 1);
     lkl.insert(8, 2);
     lkl.insert(6, 3);
     lkl.push_back(5, 4);
     lkl.push_back(0, 9);
-    //lkl.read(cin);
+    cout << "Lista 1 Demo bucle nativo: ";
+    for (auto it: lkl) cout << it << '\n';
+
+    /*cout << "Lista 1 lectura a partir de un archivo: \n";
+    ifstream ifs("lista_read.txt");
+    lkl.read(ifs);
+    ifs.close();*/
+
+    cout << "Lista 1 Demo usuario: ";
     lkl.write(cout);
     cout << endl;
     LinkedList<LinkedListAscTraits<TX>> lkl2(lkl);
+
+
     //lkl2 == lkl;
     lkl2.push_back(14, 90);
+    cout << "Lista 1: ";
     lkl.write(cout);
     cout << endl;
+    cout << "Lista 2 (copia lista 1 y agrega un nodo al final): ";
     lkl2.write(cout);
     cout << endl;
+
+    cout << "Lista 1 Demo apply function: ";
+    lkl.ApplyFunction(AddX<TX>, 6);
+    lkl.write(cout);
+    cout << endl;
+
+    cout << "Lista 1 container: \n";
+    TestContainer(lkl, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "linkedlist.txt");
+    //TestTraversal(lkl);
+}
+
+void DemoLinkedListRaceCondition() {
+    const size_t N = 200000;
+
+    vector<pair<TX, Ref>> values(N);
+    for (size_t i = 0; i < N; ++i)
+        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
+
+    LinkedList<LinkedListAscTraits<TX>> lkl;
+
+    // Insercion concurrente: NThreads workers insertando en paralelo sobre
+    // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
+    size_t n = values.size();
+    vector<thread> workers;
+    for (int t = 0; t < NThreads; ++t) {
+        workers.emplace_back([&lkl, &values, n, t](){
+            for (size_t i = t; i < n; i += NThreads)
+                lkl.push_back(values[i].first, values[i].second);
+        });
+    }
+    for (auto &worker : workers)
+        worker.join();
+
+    long long expectedSum = 0;
+    for (auto &v : values) expectedSum += v.first;
+
+    long long actualSum = 0;
+    for (auto it: lkl) actualSum += it.getValue();
+
+    /*cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
+         << "el Vector quedo con " << lkl.size() << endl;*/
+    cout << "  suma esperada = " << expectedSum
+         << ", suma obtenida = " << actualSum << endl;
+
+    if (lkl.size() != N || actualSum != expectedSum)
+        cout << "  *** Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar) ***" << endl;
+    else
+        cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
+             << "sincroniza correctamente las inserciones concurrentes" << endl;
 }

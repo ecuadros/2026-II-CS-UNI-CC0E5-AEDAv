@@ -1,5 +1,6 @@
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
+#include <cstddef>
 #include <istream>
 #include <mutex>
 #include <sstream>
@@ -51,6 +52,7 @@ public:
 private:
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
+    size_t m_size = 0;
     // TODO: agregar mutex para sincronización de acceso concurrente
     std::mutex m_mutex;             // mutex para sincronización
 
@@ -61,7 +63,7 @@ public:
     // TODO: implementar LinkedList con nodos enlazados y métodos push_back.
     LinkedList(const LinkedList&)            ; // no se permite copia
     // TODO: implementar LinkedList con nodos enlazados y métodos push_back.
-    LinkedList& operator==(const LinkedList&); // no se permite asignacion
+    LinkedList& operator=(const LinkedList&); // no se permite asignacion
 
     // TODO: implementar la destruccion en un metodo clear()
     void clear();
@@ -78,8 +80,8 @@ public:
     void insert(const value_type& value, Ref ref){ internalInsert(value, ref, m_pRoot); }
 
     // TODO: persistencia: write() y read() para LinkedList
-    std::ostream &write(std::ostream &os) { return os << *this; }
-    std::istream &read(std::istream &is)  { return is >> *this; }
+    std::ostream &write(std::ostream &os) {lock_guard<mutex> lock(m_mutex); return os << *this; }
+    std::istream &read(std::istream &is)  {lock_guard<mutex> lock(m_mutex); return is >> *this; }
     friend std::ostream &operator <<(std::ostream &os, const LinkedList<Traits> &list) {
         NodePtr current = list.m_pRoot;
         os << "[";
@@ -112,8 +114,29 @@ public:
     ForwardIterator begin() { return ForwardIterator(m_pRoot); }
     ForwardIterator end()   { return ForwardIterator(nullptr); }
 
+    bool   empty()    const { return m_pRoot == nullptr; }
+    std::size_t size() { return m_size; }
+
     // TODO: implementar ApplyFunction(), FirstThat(), call, rcall para LinkedList
     // Chequear que hago para evitar codigo repetido
+    template <typename Func, typename... Args>
+    void ApplyFunction(Func func, Args... args) {
+        call(func, std::forward<Args>(args)...);
+    }
+
+    template <typename Func, typename... Args>
+    Node& FirstThat(Func func, Args... args) {
+        return call(func, std::forward<Args>(args)...);
+    }
+
+    template<typename Func, typename... Args>
+    decltype(auto) call(Func func, Args&&... args)
+    {    lock_guard<mutex> lock(m_mutex);
+        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
+            ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
+        else // return type is not void:
+            return ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
+    }
 };
 
 template <typename Traits>
@@ -123,11 +146,11 @@ LinkedList<Traits>::~LinkedList(){
 
 template <typename Traits>
 LinkedList<Traits>::LinkedList(const LinkedList& other) {
-    *this == other;
+    *this = other;
 }
 
 template <typename Traits>
-LinkedList<Traits>& LinkedList<Traits>::operator==(const LinkedList<Traits>& other){ // no se permite asignacion
+LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ // no se permite asignacion
     clear();
     auto current = other.m_pRoot;
     while(current != nullptr) {
@@ -141,8 +164,10 @@ LinkedList<Traits>& LinkedList<Traits>::operator==(const LinkedList<Traits>& oth
 template <typename Traits>
 void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr &rParent){
     if( rParent == nullptr || value < rParent->getValue() ) {
+        lock_guard<mutex> lock(m_mutex);
         rParent = new Node(value, ref, rParent);
         if (rParent->m_pNext == nullptr) m_pTail = rParent;
+        ++m_size;
         return;
     }
     internalInsert(value, ref, rParent->m_pNext);
@@ -150,6 +175,7 @@ void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePt
 
 template <typename Traits>
 void LinkedList<Traits>::clear() {
+    lock_guard<mutex> lock(m_mutex);
     auto current = m_pRoot;
     while(current != nullptr) {
         current = current->m_pNext;
@@ -157,10 +183,13 @@ void LinkedList<Traits>::clear() {
         m_pRoot = current;
     }
     m_pTail = nullptr;
+    m_size = 0;
 }
 
 template <typename Traits>
 void LinkedList<Traits>::push_back(const value_type& value, Ref ref) {
+    lock_guard<mutex> lock(m_mutex);
+    ++m_size;
     if (m_pRoot == nullptr) {
         m_pRoot = new Node(value, ref, nullptr);
         m_pTail = m_pRoot;
