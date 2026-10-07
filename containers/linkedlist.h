@@ -22,8 +22,17 @@ public:
     using value_type = LinkedListNode<T>;
     using MySelf = LinkedListForwardIterator<T>;
     using Parent = GeneralIterator<MySelf, value_type>;
-    using Parent::Parent; // Inherit constructor
-    LinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
+private:
+    value_type* m_start; 
+public:
+    
+    LinkedListForwardIterator(value_type* ptr) : Parent(ptr), m_start(ptr) {}
+    LinkedListForwardIterator& operator++() { 
+        Parent::m_ptr = Parent::m_ptr->m_pNext; 
+        if(Parent::m_ptr == m_start) 
+            Parent::m_ptr = nullptr;
+        return *this; 
+    }
 };
 
 template <typename T, typename _Compare>
@@ -56,7 +65,7 @@ public:
     using ForwardIterator   = typename Traits::ForwardIterator;
     using Compare           = typename Traits::Compare;
     using Delim             = typename Node::Delim;
-private:
+protected:
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
     
@@ -75,14 +84,14 @@ public:
             push_back(v.first, v.second);
     }
 
-    void clear();
+    virtual void clear();
     virtual ~LinkedList(){ clear(); };
 
-    void push_back(const value_type& value, Ref ref);
+    virtual void push_back(const value_type& value, Ref ref);
 
     bool empty() const { return m_pRoot == nullptr; }
 
-    void insert(const value_type& value, Ref ref) {
+    virtual void insert(const value_type& value, Ref ref) {
         scoped_lock lock(m_mutex);
         internalInsert(value, ref, m_pRoot);
     }
@@ -100,6 +109,9 @@ public:
             os << *it;
             first = false;
         }
+        if(list.m_pTail != nullptr && list.m_pTail->m_pNext == list.m_pRoot)
+            os << "," << *list.m_pRoot;
+
         return os << "]";
     }
     
@@ -149,9 +161,11 @@ public:
 
 template <typename Traits>
 LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ 
+    if(this == &other)
+        return *this;
     clear();
     if(!other.m_pRoot)
-        return;
+        return *this;
     std::lock_guard<std::mutex> lock(other.m_mutex);
 
     m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);
@@ -159,12 +173,15 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
     NodePtr next = other.m_pRoot->m_pNext;
     NodePtr curr = m_pRoot;
 
-    while(next){
+    while(next != nullptr && next != other.m_pRoot){
         curr->m_pNext = new Node(next->getValue(), next->getRef(), nullptr);
         curr = curr->m_pNext;
         next = next->m_pNext;
     }
     m_pTail = curr;
+
+    if(this->m_pTail != nullptr)
+        this->m_pTail->m_pNext = this->m_pRoot; 
     return *this;
 }
 
@@ -198,11 +215,22 @@ insert(...) empieza desde el nodo raiz
 */
 template <typename Traits>
 void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
-    if (rParent == nullptr || value < rParent->getValue()) {
+    if (rParent == nullptr || m_comp(value, rParent->getValue())) {
+        NodePtr temp = rParent;
         rParent = new Node(value, ref, rParent);
-        m_pTail = rParent;
+        if (temp == nullptr) {
+            m_pTail = rParent;
+        }
         return;
     }
+
+    if (rParent == m_pTail && !m_comp(value, rParent->getValue())) {
+        NodePtr new_node = new Node(value, ref, nullptr);
+        rParent->m_pNext = new_node;
+        m_pTail = new_node;
+        return;
+    }
+
     internalInsert(value, ref, rParent->m_pNext);
 }
 #endif // __LINKEDLIST_H__

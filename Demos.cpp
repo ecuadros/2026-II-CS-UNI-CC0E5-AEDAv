@@ -4,6 +4,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "containers/circularlinkedlist.h"
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
@@ -218,4 +219,13 @@ void DemoLinkedList()
     in.close();
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+}
+
+void DemoCircularLinkedList() 
+{
+    std::cout << "DemoCircularLinkedList: probando CircularLinkedList\n" ;
+    CircularLinkedList<LinkedListAscTraits<TX>> clist;
+    TestContainer(clist, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "CL.txt");
+
+    // TestTraversal(clist);
 }
