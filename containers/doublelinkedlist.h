@@ -1,0 +1,129 @@
+#ifndef __DOUBLE_LINKED_LIST__
+#define __DOUBLE_LINKED_LIST__
+
+#include "GeneralIterator.h"
+#include "GeneralNode.h"
+#include "linkedlist.h"
+#include <cstddef>
+#include <mutex>
+
+template <typename T> class DoubleLinkedNode : public LinkedListNode<T> {
+  using Node = DoubleLinkedNode<T>;
+
+public:
+  Node *m_pPrev = nullptr; // puntero al nodo anterior, para acceso directo
+  DoubleLinkedNode() = default;
+  DoubleLinkedNode(const T &value, Ref ref, Node *pNext, Node *pPrev = nullptr)
+      : LinkedListNode<T>(value, ref, pNext), m_pPrev(pPrev) {}
+};
+
+template <typename T>
+class DoubleLinkedListBackwardIterator
+    : public GeneralIterator<DoubleLinkedListBackwardIterator<T>,
+                             DoubleLinkedNode<T>> {
+public:
+  using value_type = DoubleLinkedNode<T>;
+  using MySelf = DoubleLinkedListBackwardIterator<T>;
+  using Parent = GeneralIterator<MySelf, value_type>;
+
+public:
+  DoubleLinkedListBackwardIterator(value_type *ptr) : Parent(ptr) {}
+  DoubleLinkedListBackwardIterator &operator++() {
+    Parent::m_ptr = Parent::m_ptr->m_pPrev;
+    return *this;
+  }
+};
+
+template <typename T>
+class DoubleLinkedListAscTraits : public AscendingTraits<T> {
+public:
+  using Node = DoubleLinkedNode<T>;
+  using ForwardIterator = LinkedListForwardIterator<T, Node>;
+  using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
+};
+
+template <typename T>
+class DoubleLinkedListDescTraits : public DescendingTraits<T> {
+public:
+  using Node = DoubleLinkedNode<T>;
+  using ForwardIterator = LinkedListForwardIterator<T, Node>;
+  using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
+};
+
+template <typename Traits> class DoubleLinkedList : public LinkedList<Traits> {
+public:
+  using value_type = typename Traits::value_type;
+  using Node = typename Traits::Node;
+  using NodePtr = Node *;
+  using ForwardIterator = typename Traits::ForwardIterator;
+  using BackwardIterator = typename Traits::BackwardIterator;
+
+public:
+  DoubleLinkedList() = default;
+
+  DoubleLinkedList(const DoubleLinkedList &other) : LinkedList<Traits>(other) {
+    NodePtr previous = nullptr;
+    for (NodePtr current = this->m_pRoot; current != nullptr;
+         current = static_cast<NodePtr>(current->m_pNext)) {
+      current->m_pPrev = previous;
+      previous = current;
+    }
+    this->m_pTail = previous;
+  }
+
+  void insert(const typename Traits::value_type &value, Ref ref) override {
+    std::scoped_lock lock(this->m_mutex);
+    this->internalInsert(value, ref, this->m_pRoot);
+    NodePtr previous = nullptr;
+    for (NodePtr current = this->m_pRoot; current != nullptr;
+         current = static_cast<NodePtr>(current->m_pNext)) {
+      current->m_pPrev = previous;
+      previous = current;
+    }
+    this->m_pTail = previous;
+  }
+
+  DoubleLinkedList &operator=(const DoubleLinkedList &other) {
+    if (this != &other) {
+      LinkedList<Traits>::operator=(other);
+      NodePtr previous = nullptr;
+      for (NodePtr current = this->m_pRoot; current != nullptr;
+           current = static_cast<NodePtr>(current->m_pNext)) {
+        current->m_pPrev = previous;
+        previous = current;
+      }
+      this->m_pTail = previous;
+    }
+    return *this;
+  }
+
+  void push_back(const value_type &value, Ref ref) override {
+    std::scoped_lock lock(this->m_mutex);
+
+    NodePtr node = new Node(value, ref, nullptr);
+    node->m_pPrev = this->m_pTail;
+
+    if (this->m_pTail == nullptr)
+      this->m_pRoot = node;
+    else
+      this->m_pTail->m_pNext = node;
+
+    this->m_pTail = node;
+  }
+
+  BackwardIterator rbegin() const { return BackwardIterator(this->m_pTail); }
+  BackwardIterator rend() const { return BackwardIterator(nullptr); }
+
+  template <typename Func, typename... Args>
+  decltype(auto) rcall(Func func, Args &&...args) {
+    std::lock_guard<std::mutex> lock(this->m_mutex);
+    if constexpr (std::is_void_v<std::invoke_result_t<Func, Node &, Args...>>)
+      ::call(rbegin(), rend(), std::forward<Func>(func),
+             std::forward<Args>(args)...);
+    else
+      return ::call(rbegin(), rend(), std::forward<Func>(func),
+                    std::forward<Args>(args)...);
+  }
+};
+
+#endif // DOUBLE_LINKED_LIST

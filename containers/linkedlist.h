@@ -16,11 +16,11 @@ public:
     LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref), m_pNext(pNext) {}
 };
 
-template <typename T>
-class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<T>, LinkedListNode<T>> {
+template <typename T, typename NodeType = LinkedListNode<T>>
+class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<T, NodeType>, NodeType> {
 public:
-    using value_type = LinkedListNode<T>;
-    using MySelf = LinkedListForwardIterator<T>;
+    using value_type = NodeType;
+    using MySelf = LinkedListForwardIterator<T, NodeType>;
     using Parent = GeneralIterator<MySelf, value_type>;
 private:
     value_type* m_start; 
@@ -28,7 +28,8 @@ public:
     
     LinkedListForwardIterator(value_type* ptr) : Parent(ptr), m_start(ptr) {}
     LinkedListForwardIterator& operator++() { 
-        Parent::m_ptr = Parent::m_ptr->m_pNext; 
+        auto next = Parent::m_ptr->m_pNext;
+        Parent::m_ptr = static_cast<value_type*>(next); 
         if(Parent::m_ptr == m_start) 
             Parent::m_ptr = nullptr;
         return *this; 
@@ -109,9 +110,9 @@ public:
             os << *it;
             first = false;
         }
-        if(list.m_pTail != nullptr && list.m_pTail->m_pNext == list.m_pRoot)
-            os << "," << *list.m_pRoot;
-
+        if(list.m_pTail != nullptr && list.m_pRoot != list.m_pTail && list.m_pTail->m_pNext == list.m_pRoot)
+             os << "," << *list.m_pRoot;
+        //
         return os << "]";
     }
     
@@ -170,17 +171,17 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 
     m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);
 
-    NodePtr next = other.m_pRoot->m_pNext;
+    NodePtr next = static_cast<NodePtr>(other.m_pRoot->m_pNext);
     NodePtr curr = m_pRoot;
 
     while(next != nullptr && next != other.m_pRoot){
         curr->m_pNext = new Node(next->getValue(), next->getRef(), nullptr);
-        curr = curr->m_pNext;
-        next = next->m_pNext;
+        curr = static_cast<NodePtr>(curr->m_pNext);
+        next = static_cast<NodePtr>(next->m_pNext);
     }
     m_pTail = curr;
 
-    if(this->m_pTail != nullptr)
+    if(other.m_pTail != nullptr && other.m_pTail->m_pNext == other.m_pRoot)
         this->m_pTail->m_pNext = this->m_pRoot; 
     return *this;
 }
@@ -188,8 +189,11 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 template <typename Traits>
 void LinkedList<Traits>::clear(){
     scoped_lock lock(m_mutex);
-    for (auto it = begin(); it != end(); ++it){
-        delete& (*it);
+    NodePtr current = m_pRoot;
+    while (current != nullptr) {
+        NodePtr next = static_cast<NodePtr>(current->m_pNext);
+        delete current;
+        current = next;
     }
     m_pRoot = nullptr;
     m_pTail = nullptr;
@@ -231,6 +235,8 @@ void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePt
         return;
     }
 
-    internalInsert(value, ref, rParent->m_pNext);
+    NodePtr next = static_cast<NodePtr>(rParent->m_pNext);
+    internalInsert(value, ref, next);
+    rParent->m_pNext = next;
 }
 #endif // __LINKEDLIST_H__

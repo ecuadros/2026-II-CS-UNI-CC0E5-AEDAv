@@ -1,10 +1,12 @@
 
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
 #include "containers/circularlinkedlist.h"
+#include "containers/doublelinkedlist.h"
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
@@ -223,9 +225,150 @@ void DemoLinkedList()
 
 void DemoCircularLinkedList() 
 {
-    std::cout << "DemoCircularLinkedList: probando CircularLinkedList\n" ;
-    CircularLinkedList<LinkedListAscTraits<TX>> clist;
-    TestContainer(clist, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "CL.txt");
+    using AscList = CircularLinkedList<LinkedListAscTraits<TX>>;
+    using DescList = CircularLinkedList<LinkedListDescTraits<TX>>;
 
-    // TestTraversal(clist);
+    auto imprimir_lista = [](const auto& lista) {
+        std::cout << " recorrido: ";
+        for(auto it = lista.begin(); it != lista.end(); ++it) 
+            std::cout << (*it) << "->";
+        std::cout << "\n";
+    };
+
+    std::cout << "DemoCircularLinkedList: probando CircularLinkedList\n";
+    AscList lista;
+    std::cout<<"Vacia: "<< lista.empty() << "\n";
+    imprimir_lista(lista);
+    
+    lista.push_back(1, 101);
+    std::cout<<"Luego de push_back(1, 101): ";
+    imprimir_lista(lista);
+
+    lista.push_back(3, 103);
+    lista.push_back(7, 107);
+    std::cout<<"Luego de push_back: \n";
+    imprimir_lista(lista);
+
+    lista.insert(5, 105);
+    lista.insert(2, 102);
+    lista.insert(9, 109);
+    std::cout<<"Luego de insert: \n";
+    imprimir_lista(lista);
+
+    std::cout << "call: ";
+    lista.call([](AscList::Node& node) {
+        std::cout << node.getValue() << " ";
+    });
+    std::cout << "\n";
+
+    AscList copia(lista);
+    AscList asignada;
+    asignada = lista; 
+    copia.insert(4, 104);
+    std::cout << "Original despues de modificar copia: \n";
+    imprimir_lista(lista);
+    std::cout<<"Copia modificada:\n";
+    imprimir_lista(copia);
+    std::cout<<"Asignada:\n";
+    imprimir_lista(asignada);
+
+    std::stringstream datos;
+    lista.write(datos);
+    std::cout << "Lista escrita en stringstream: \n" << datos.str() << "\n";
+    AscList lista_leida;
+    lista_leida.read(datos);
+    std::cout << "Lista leida desde stringstream: \n";
+    imprimir_lista(lista_leida);
+
+    lista.clear();
+    std::cout << "Luego de clear, lista vacia: " << lista.empty() << "\n";
+    lista.push_back(10, 110);
+    std::cout << "Luego de push_back(10, 110): ";
+    imprimir_lista(lista);
+
+    DescList lista_desc;
+    lista_desc.insert(5, 105);
+    lista_desc.insert(3, 103);
+    lista_desc.insert(7, 107);
+    std::cout << "Lista descendente: ";
+    imprimir_lista(lista_desc);
+
+    std::cout << "Usando cout para imprimir: \n";
+    std::cout << "Lista ascendente: " << lista_desc << "\n";
+    std::cout << "Lista origianl: " << lista << "\n";
+    
+}
+
+void DemoDoubleLinkedList() 
+{
+    using AscList = DoubleLinkedList<DoubleLinkedListAscTraits<TX>>;
+    using DescList = DoubleLinkedList<DoubleLinkedListDescTraits<TX>>;
+
+    auto imprimir_lista = [](const auto& lista) {
+        std::cout << "Hacia adelante: ";
+        for(auto it = lista.begin(); it != lista.end(); ++it) {
+            std::cout << (*it) << "->";
+        }
+
+        std::cout << "\nHacia atras: ";
+        for(auto it = lista.rbegin(); it != lista.rend(); ++it) {
+            std::cout << (*it) << "->";
+        }
+
+        std::cout << "\n";
+    };
+
+    std::cout << "DemoDoubleLinkedList: probando DoubleLinkedList\n";
+    AscList lista;
+    std::cout<<"Vacia: "<< lista.empty() << "\n";
+
+    lista.push_back(1, 101);
+    lista.push_back(3, 103);
+    lista.push_back(7, 107);
+    std::cout<<"Luego de push_back: ";
+    imprimir_lista(lista);
+
+    lista.insert(5, 105);
+    lista.insert(2, 102);
+    lista.insert(9, 109);
+    std::cout<<"Luego de insert: ";
+    imprimir_lista(lista);
+
+    std::cout << "rcall: ";
+    lista.rcall([](AscList::Node& node) {
+        std::cout << node.getValue() << " ";
+    });
+    std::cout << "\n";
+
+    AscList copia(lista);
+    AscList asignada;
+    asignada = lista;
+    copia.insert(4, 104);
+    std::cout << "Original despues de modificar copia: \n";
+    imprimir_lista(lista);
+    std::cout<<"Copia modificada:\n";
+    imprimir_lista(copia);
+    std::cout<<"Asignada:\n";
+    imprimir_lista(asignada);
+
+    std::stringstream datos;
+    lista.write(datos);
+    std::cout << "Lista escrita en stringstream: \n" << datos.str() << "\n";
+    AscList lista_leida;
+    lista_leida.read(datos);
+    std::cout << "Lista leida desde stringstream: \n";
+    imprimir_lista(lista_leida);
+
+    lista.clear();
+    std::cout << "Luego de clear, lista vacia: " << lista.empty() << "\n";
+    lista.push_back(10, 110);
+    std::cout << "Luego de push_back(10, 110): ";
+    imprimir_lista(lista);
+
+    DescList lista_desc;
+    lista_desc.insert(5, 105);
+    lista_desc.insert(3, 103);
+    lista_desc.insert(7, 107);
+    std::cout << "Lista descendente: ";
+    imprimir_lista(lista_desc);
 }
