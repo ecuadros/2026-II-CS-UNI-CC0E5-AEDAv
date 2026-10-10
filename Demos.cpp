@@ -7,6 +7,8 @@
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
+#include "containers/cll.h"
+#include "containers/dll.h"
 #include "Demos.h"
 using namespace std;
 
@@ -108,11 +110,11 @@ void TestForwardTraversal(Container &container){
     cout << "]" << endl;
 
     // Prueba de FirstThat(): primer nodo cuyo valor sea mayor que el primero
-    if (container.begin() != container.end()) {
+    //if (container.begin() != container.end()) {
         auto threshold = (*container.begin()).getValue();
         Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
         cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
-    }
+        //}
 }
 
 void DemoVector() {
@@ -185,6 +187,7 @@ void DemoLinkedList()
     ofstream("linkedlist.txt", ios::trunc).close();
 
     // Pruebas de pushback
+    cout << "LINKED LIST:\n";
     IntLinkedList list;
     TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "linkedlist.txt");
     TestForwardTraversal(list);
@@ -218,4 +221,98 @@ void DemoLinkedList()
     in.close();
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+    cout << endl;
+}
+
+void DemoCircularLinkedList() {
+    cout << "CIRCULAR LINKED LIST:\n";
+    using IntCircLinkedList = CircularLinkedList<LinkedListAscTraits<TX>>;
+
+    ofstream("clinkedlist.txt", ios::trunc).close();
+
+    // Pruebas de pushback
+    IntCircLinkedList clist;
+    TestContainer(clist, {{50, 15}, {10, 11}, {80, 18}, {30, 13}}, "clinkedlist.txt");
+    TestForwardTraversal(clist);
+
+    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {10, 11}, {20, 12}, {30, 13}, {40, 14}});
+    for(auto& e : elements)
+        clist.push_back(e.first, e.second);
+
+    // Pruebas de insert
+    clist.insert(4, 12);
+    clist.insert(11, 20);
+    clist.insert(7, 6);
+    cout << "CircularLinkedList luego de hacer 3 inserts " << clist << endl;
+
+    // Prueba de apply function
+    clist.ApplyFunction(AddOne);
+    cout << "CircularLinkedList tras usar Add One a sus elementos: " << clist << endl;
+    clist.ApplyFunction(AddX<TX>, TX(10));
+    cout << "CircularLinkedList tras usar AddX(10) a sus elementos: " << clist << endl;
+
+    // Prueba de clear
+    clist.clear();
+    cout << "CircularLinkedList luego de usar clear" << clist << endl;
+    clist.push_back(100, 2);
+    cout << "CircularLinkedList luego de un nuevo push_back " << clist << endl;
+
+    // Prueba de lectura
+    IntCircLinkedList new_clist;
+    ifstream in("clinkedlist.txt");
+    in >> new_clist;
+    in.close();
+    cout << "CircularLinkedList leida desde archivo: " << new_clist << endl;
+    TestForwardTraversal(new_clist);
+    cout << endl;
+
+    auto iter = new_clist.begin();
+    cout << "recorrer 10 nodos:  [";
+    for (int i = 0; i < 10; ++i, ++iter) {
+        cout << *iter << " ";
+    }
+    cout << "]" << endl << endl;
+}
+
+void DemoDoublyLinkedList() {
+    using IntDLinkedList = DoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
+
+    ofstream("dlinkedlist.txt", ios::trunc).close();
+
+    // Pruebas de pushback
+    cout << "DOUBLY LINKED LIST:\n";
+    IntDLinkedList dlist;
+    TestContainer(dlist, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "dlinkedlist.txt");
+    TestTraversal(dlist);
+
+    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    for(auto& e : elements)
+        dlist.push_back(e.first, e.second);
+
+    // Pruebas de insert
+    /*dlist.insert(4, 12);
+    dlist.insert(11, 20);
+    dlist.insert(7, 6);
+    cout << "DoublyLinkedList luego de hacer 3 inserts " << dlist << endl;*/
+
+    // Prueba de apply function
+    dlist.ApplyFunction(AddOne);
+    cout << "DoublyLinkedList tras usar Add One a sus elementos: " << dlist << endl;
+    dlist.ApplyFunction(AddX<TX>, TX(10));
+    cout << "DoublyLinkedList tras usar AddX(10) a sus elementos: " << dlist << endl;
+
+    // Prueba de clear
+    dlist.clear();
+    cout << "DoublyLinkedList luego de usar clear" << dlist << endl;
+    dlist.push_back(10, 2);
+    cout << "DoublyLinkedList luego de un nuevo push_back " << dlist << endl;
+
+    // Prueba de lectura
+    IntDLinkedList new_dlist;
+    ifstream in("dlinkedlist.txt");
+    in >> new_dlist;
+    in.close();
+    cout << "DoublyLinkedList leida desde archivo: " << new_dlist << endl;
+    TestTraversal(new_dlist);
+    cout << endl;
 }

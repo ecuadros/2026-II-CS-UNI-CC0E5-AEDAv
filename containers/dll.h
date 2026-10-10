@@ -1,42 +1,56 @@
-#ifndef __LINKEDLIST_H__
-#define __LINKEDLIST_H__
+#ifndef __DLL_H__
+#define __DLL_H__
 #include <cstddef>
 #include <mutex>
 #include "Node.h"
 #include "GeneralIterator.h"
 #include "traits.h"
 #include "../foreach.h"
+//#include "linkedlist.h"
 
 
 template <typename T>
-class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<T>, LinkedListNode<T>> {
+class DoublyLinkedListForwardIterator : public GeneralIterator<DoublyLinkedListForwardIterator<T>, DoublyLinkedListNode<T>> {
 public:
-    using value_type = LinkedListNode<T>;
-    using MySelf = LinkedListForwardIterator<T>;
+    using value_type = DoublyLinkedListNode<T>;
+    using MySelf = DoublyLinkedListForwardIterator<T>;
     using Parent = GeneralIterator<MySelf, value_type>;
     using Parent::Parent; // Inherit constructor
-    LinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
+    DoublyLinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
 };
 
 template <typename T>
-struct LinkedListAscTraits : public AscendingTraits<T> {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+class DoublyLinkedListBackwardIterator : public GeneralIterator<DoublyLinkedListBackwardIterator<T>, DoublyLinkedListNode<T>> {
+public:
+    using value_type = DoublyLinkedListNode<T>;
+    using MySelf = DoublyLinkedListBackwardIterator<T>;
+    using Parent = GeneralIterator<MySelf, value_type>;
+    using Parent::Parent; // Inherit constructor
+    DoublyLinkedListBackwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pPrev; return *this; }
 };
 
 template <typename T>
-struct LinkedListDescTraits : public DescendingTraits<T> {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+struct DoublyLinkedListAscTraits : public AscendingTraits<T> {
+    using Node              = DoublyLinkedListNode<T>;
+    using ForwardIterator   = DoublyLinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+    using BackwardIterator   = DoublyLinkedListBackwardIterator<T>;
+};
+
+template <typename T>
+struct DoublyLinkedListDescTraits : public DescendingTraits<T> {
+    using Node              = DoublyLinkedListNode<T>;
+    using ForwardIterator   = DoublyLinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+    using BackwardIterator   = DoublyLinkedListBackwardIterator<T>;
 };
 
 template <typename Traits>
-class LinkedList {
+class DoublyLinkedList {
 public:
     using value_type        = typename Traits::value_type;
     using Node              = typename Traits::Node;
     using NodePtr           = Node *;
     using ForwardIterator   = typename Traits::ForwardIterator;
+    using BackwardIterator   = typename Traits::BackwardIterator;
     using Compare           = typename Traits::Compare;
     using Delim             = typename Node::Delim;
 protected:
@@ -51,16 +65,16 @@ protected:
     virtual void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
 
 public:
-    LinkedList() {}
-    LinkedList(const LinkedList& another){ *this = another; } // copia profunda de la lista enlazada
-    LinkedList& operator=(const LinkedList& another); // no se permite asignacion
-    LinkedList(initializer_list<pair<value_type, Ref>> values) {
+    DoublyLinkedList() {}
+    DoublyLinkedList(const DoublyLinkedList& another){ *this = another; } // copia profunda de la lista enlazada
+    DoublyLinkedList& operator=(const DoublyLinkedList& another); // no se permite asignacion
+    DoublyLinkedList(initializer_list<pair<value_type, Ref>> values) {
         for (const auto &v : values)
             push_back(v.first, v.second);
     }
 
     void clear();
-    virtual ~LinkedList(){ clear(); };
+    virtual ~DoublyLinkedList(){ clear(); };
 
     virtual void push_back(const value_type& value, Ref ref);
 
@@ -74,7 +88,7 @@ public:
     std::ostream& write(std::ostream& os) { return os << *this; }
     std::istream& read(std::istream& is) { return is >> *this; }
 
-    friend std::ostream& operator <<(std::ostream& os, const LinkedList<Traits>& list) {
+    friend std::ostream& operator <<(std::ostream& os, const DoublyLinkedList<Traits>& list) {
         lock_guard lock(list.m_mutex);
         auto first = true;
         os << "[";
@@ -99,7 +113,7 @@ public:
         return os << "]";
     }
 
-    friend std::istream &operator >>(std::istream &is, LinkedList<Traits> &list) {
+    friend std::istream &operator >>(std::istream &is, DoublyLinkedList<Traits> &list) {
         Delim d;
         Node node;
         list.clear();
@@ -125,6 +139,8 @@ public:
     // ForwardIterator end() { return ForwardIterator(nullptr); }
     ForwardIterator begin() const { return ForwardIterator(m_pRoot); }
     virtual ForwardIterator end() const { return ForwardIterator(nullptr); }
+    BackwardIterator rbegin() const { return BackwardIterator(m_pTail); }
+    virtual BackwardIterator rend() const { return BackwardIterator(nullptr); }
 
     template <typename Func, typename... Args>
     void ApplyFunction(Func func, Args... args) {
@@ -142,11 +158,19 @@ public:
         else // return type is not void:
             return ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
     }
+    template<typename Func, typename... Args>
+    decltype(auto) rcall(Func func, Args&&... args)
+    {    lock_guard<mutex> lock(m_mutex);
+        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
+            ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
+        else // return type is not void:
+            return ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
+    }
 };
 
 
 template <typename Traits>
-LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){
+DoublyLinkedList<Traits>& DoublyLinkedList<Traits>::operator=(const DoublyLinkedList<Traits>& other){
     clear();
     /*if(!other.m_pRoot)
         return;*/
@@ -183,7 +207,7 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 }
 
 template <typename Traits>
-void LinkedList<Traits>::clear(){
+void DoublyLinkedList<Traits>::clear(){
     scoped_lock lock(m_mutex);
     for (auto it = begin(); it != end(); ++it){
         if (it == begin() && m_pTail->m_pNext != nullptr) m_pTail->m_pNext = nullptr;
@@ -195,15 +219,14 @@ void LinkedList<Traits>::clear(){
 }
 
 template<typename Traits>
-void LinkedList<Traits>::push_back(const value_type& value, Ref ref){
+void DoublyLinkedList<Traits>::push_back(const value_type& value, Ref ref){
     scoped_lock lock(m_mutex);
-    NodePtr new_node = new Node(value, ref, nullptr);
     if (!this->m_pRoot){
-        this->m_pRoot = new_node;
-        this->m_pTail = new_node;
+        this->m_pRoot = new Node(value, ref, nullptr, nullptr);
+        this->m_pTail = this->m_pRoot;
     } else {
-        this->m_pTail->m_pNext = new_node;
-        this->m_pTail = new_node;
+        this->m_pTail->m_pNext = new Node(value, ref, nullptr, this->m_pTail);
+        this->m_pTail = this->m_pTail->m_pNext;
     }
     ++m_size;
 }
@@ -214,16 +237,19 @@ si el nodo padre es nullptr, crea uno nuevo con el valor y retorna
 insert(...) empieza desde el nodo raiz
 */
 template <typename Traits>
-void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
+void DoublyLinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
     if (m_pRoot != nullptr && m_pTail->m_pNext != nullptr) {
         m_pTail->m_pNext = nullptr;
     }
     if (rParent == nullptr || value < rParent->getValue()) {
-        rParent = new Node(value, ref, rParent);
+        if (rParent == nullptr) push_back(value, ref);
+        else { rParent = new Node(value, ref, rParent, m_pRoot == nullptr ? nullptr: rParent->m_pPrev); }
+        if(rParent->m_pNext != nullptr) rParent->m_pNext->m_pPrev = rParent;
         if (rParent->m_pNext == nullptr) m_pTail = rParent;
         ++m_size;
         return;
     }
     internalInsert(value, ref, rParent->m_pNext);
 }
-#endif // __LINKEDLIST_H__
+
+#endif // __DLL_H__
