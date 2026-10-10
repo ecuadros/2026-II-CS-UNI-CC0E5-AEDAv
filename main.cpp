@@ -11,9 +11,5 @@ int main() {
     DemoRaceCondition();
     DemoLinkedList();
     DemoLC();
-    DemoLCNativeLoop();
-    DemoLCPersistencia();
-    DemoLCCall();
-    DemoLCConcurrencia();
     return 0;
 }

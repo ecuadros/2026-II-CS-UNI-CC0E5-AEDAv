@@ -6,9 +6,5 @@ void DemoVector();
 void DemoRaceCondition();
 void DemoLinkedList();
 void DemoLC();
-void DemoLCNativeLoop();
-void DemoLCPersistencia();
-void DemoLCCall();
-void DemoLCConcurrencia();
 
 #endif // __DEMOS_H__

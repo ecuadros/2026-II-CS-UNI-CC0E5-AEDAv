@@ -224,6 +224,7 @@ void DemoLinkedList()
 
 void DemoLC()
 {
+    // uso
     LC<TX> list;
     list.push_back(3, 30);
     list.push_back(1, 10);
@@ -243,15 +244,8 @@ void DemoLC()
 
     list.pop_back();
     cout << "LC luego de pop_back: " << list << endl;
-}
 
-void DemoLCNativeLoop()
-{
-    LC<TX> list;
-    list.push_back(1, 10);
-    list.push_back(2, 20);
-    list.push_back(3, 30);
-
+    // bucle nativo
     cout << "Bucle nativo sobre el anillo: ";
     LinkedListNode<TX> *p = list.GetRoot();
     do {
@@ -259,15 +253,8 @@ void DemoLCNativeLoop()
         p = p->m_pNext;
     } while (p != list.GetRoot());
     cout << endl;
-}
 
-void DemoLCPersistencia()
-{
-    LC<TX> list;
-    list.push_back(1, 10);
-    list.push_back(2, 20);
-    list.insert(0, 5);
-
+    // persistencia
     stringstream ss;
     list.write(ss);
     cout << "LC write: " << ss.str() << endl;
@@ -275,16 +262,8 @@ void DemoLCPersistencia()
     LC<TX> copy;
     ss >> copy;
     cout << "LC read:  " << copy << endl;
-}
 
-void DemoLCCall()
-{
-    LC<TX> list;
-    list.push_back(1, 10);
-    list.push_back(2, 20);
-    list.push_back(3, 30);
-    cout << "LC: " << list << endl;
-
+    // call
     list.ApplyFunction(AddOne);
     cout << "LC tras ApplyFunction(AddOne): " << list << endl;
 
@@ -298,11 +277,9 @@ void DemoLCCall()
     } catch (const runtime_error &e) {
         cout << "LC FirstThat sin match: " << e.what() << endl;
     }
-}
 
-void DemoLCConcurrencia()
-{
-    LC<TX> list;
+    // concurrencia
+    list.clear();
     const int NThreads = 4;
     vector<thread> workers;
     for (int t = 0; t < NThreads; ++t) {
@@ -315,7 +292,7 @@ void DemoLCConcurrencia()
         worker.join();
 
     int count = 0;
-    LinkedListNode<TX> *p = list.GetRoot();
+    p = list.GetRoot();
     do {
         ++count;
         p = p->m_pNext;
