@@ -9,6 +9,7 @@
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
 #include "containers/circularlist.h"
+#include "containers/doublylist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -222,7 +223,7 @@ void DemoLinkedList()
     TestForwardTraversal(new_list);
 }
 
-void DemoLC()
+void DemoCircularLinkedList()
 {
     // uso
     LC<TX> list;
@@ -300,4 +301,23 @@ void DemoLC()
 
     cout << "LC concurrencia: " << NThreads * 100 << " inserciones, el anillo quedo con "
          << count << " nodos" << (count == NThreads * 100 ? " (integro)" : " (ROTO)") << endl;
+}
+
+void DemoDoubleLinkedList()
+{
+    // uso
+    DoubleLinkedList<TX> list;
+    list.push_back(3, 30);
+    list.push_back(1, 10);
+    list.push_back(2, 20);
+    cout << "DoubleLinkedList luego de push_back x3: " << list << endl;
+
+    list.insert(0, 5);
+    cout << "DoubleLinkedList luego de insert(0,5):  " << list << endl;
+
+    // backward
+    cout << "Recorrido backward: ";
+    for (auto it = list.rbegin(); it != list.rend(); ++it)
+        cout << *it << " ";
+    cout << endl;
 }

@@ -64,7 +64,8 @@ protected:
     Compare m_comp; // comparador para ordenar los nodos de la lista
     mutable std::mutex m_mutex; // mutex para sincronización
 
-    void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
+    template <typename NodePtrT>
+    void internalInsert(const value_type& value, Ref ref, NodePtrT& rParent);
 
 public:
     LinkedList() {}
@@ -197,10 +198,11 @@ si el nodo padre es nullptr, crea uno nuevo con el valor y retorna
 insert(...) empieza desde el nodo raiz
 */
 template <typename Traits>
-void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
+template <typename NodePtrT>
+void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtrT& rParent) {
     if (rParent == nullptr || value < rParent->getValue()) {
         rParent = new Node(value, ref, rParent);
-        m_pTail = rParent;
+        m_pTail = static_cast<NodePtr>(rParent);
         return;
     }
     internalInsert(value, ref, rParent->m_pNext);
