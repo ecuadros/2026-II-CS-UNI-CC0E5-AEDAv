@@ -8,6 +8,7 @@ class DoubleLinkedListNode : public LinkedListNode<T> {
     using NodePtr = Node *;
     DoubleLinkedListNode *m_pPrev = nullptr; // puntero al nodo anterior
 public:
+    DoubleLinkedListNode() : LinkedListNode<T>(T{}, Ref{}, nullptr), m_pPrev(nullptr) {}
     DoubleLinkedListNode(const T& value, Ref ref, LinkedListNode<T> *pNext, DoubleLinkedListNode *pPrev = nullptr)
         : LinkedListNode<T>(value, ref, pNext), m_pPrev(pPrev) {}
     DoubleLinkedListNode *GetPrev() const { return m_pPrev; }
@@ -45,14 +46,15 @@ struct DoubleLinkedListTraits : public LinkedListAscTraits<T> {
     using BackwardIterator  = DoubleLinkedListBackwardIterator<T>;
 };
 
-template <typename T>
-class DoubleLinkedList : public LinkedList<DoubleLinkedListTraits<T>> {
-    using Base    = LinkedList<DoubleLinkedListTraits<T>>;
+template <typename Traits>
+class DoubleLinkedList : public LinkedList<Traits> {
+    using Base = LinkedList<Traits>;
+public:
     using value_type = typename Base::value_type;
     using Node    = typename Base::Node;
     using NodePtr = typename Base::NodePtr;
-    using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
-public:
+    using BackwardIterator = typename Traits::BackwardIterator;
+
     DoubleLinkedList() {}
 
     void push_back(const value_type& value, Ref ref) {

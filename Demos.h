@@ -7,5 +7,6 @@ void DemoRaceCondition();
 void DemoLinkedList();
 void DemoCircularLinkedList();
 void DemoDoubleLinkedList();
+void DemoDoubleCircularLinkedList();
 
 #endif // __DEMOS_H__

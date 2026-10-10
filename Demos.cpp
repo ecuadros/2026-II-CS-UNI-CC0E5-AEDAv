@@ -10,6 +10,7 @@
 #include "containers/linkedlist.h"
 #include "containers/circularlist.h"
 #include "containers/doublylist.h"
+#include "containers/doublecircularlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -306,7 +307,7 @@ void DemoCircularLinkedList()
 void DemoDoubleLinkedList()
 {
     // uso
-    DoubleLinkedList<TX> list;
+    DoubleLinkedList<DoubleLinkedListTraits<TX>> list;
     list.push_back(3, 30);
     list.push_back(1, 10);
     list.push_back(2, 20);
@@ -314,6 +315,32 @@ void DemoDoubleLinkedList()
 
     list.insert(0, 5);
     cout << "DoubleLinkedList luego de insert(0,5):  " << list << endl;
+
+    // backward
+    cout << "Recorrido backward: ";
+    for (auto it = list.rbegin(); it != list.rend(); ++it)
+        cout << *it << " ";
+    cout << endl;
+}
+
+void DemoDoubleCircularLinkedList()
+{
+    // uso
+    DoubleCircularLinkedList<TX> list;
+    list.push_back(3, 30);
+    list.push_back(1, 10);
+    list.push_back(2, 20);
+    list.insert(0, 5);
+    cout << "DCL luego de push_back e insert: " << list << endl;
+
+    // persistencia
+    stringstream ss;
+    list.write(ss);
+    cout << "DCL write: " << ss.str() << endl;
+
+    DoubleCircularLinkedList<TX> copy;
+    ss >> copy;
+    cout << "DCL read:  " << copy << endl;
 
     // backward
     cout << "Recorrido backward: ";
