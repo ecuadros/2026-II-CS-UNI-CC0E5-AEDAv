@@ -56,6 +56,7 @@ public:
     using ForwardIterator   = typename Traits::ForwardIterator;
     using Compare           = typename Traits::Compare;
     using Delim             = typename Node::Delim;
+    NodePtr GetRoot() const { return m_pRoot; }
 protected:
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
@@ -63,7 +64,6 @@ protected:
     Compare m_comp; // comparador para ordenar los nodos de la lista
     mutable std::mutex m_mutex; // mutex para sincronización
 
-    NodePtr GetRoot() const { return m_pRoot; }
     void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
 
 public:
