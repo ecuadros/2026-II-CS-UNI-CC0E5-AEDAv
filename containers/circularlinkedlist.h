@@ -1,8 +1,6 @@
 #ifndef __CIRCULAR_LINKED_LIST__
 #define __CIRCULAR_LINKED_LIST__
 
-// Clase para una lista cirtular enlazada
-
 #include "linkedlist.h"
 #include <mutex>
 
@@ -16,13 +14,17 @@ public:
   using Compare = typename Traits::Compare;
   using Delim = typename Node::Delim;
 
+protected:
+  void corregirPunteros() override { this->m_pTail->m_pNext = this->m_pRoot; }
+
 private:
   NodePtr GetRoot() const { return this->m_pRoot; }
   NodePtr GetTail() const { return this->m_pTail; }
 
 public:
   CircularLinkedList() = default;
-  CircularLinkedList(const CircularLinkedList &other) : LinkedList<Traits>(other) {}
+  CircularLinkedList(const CircularLinkedList &other)
+      : LinkedList<Traits>(other) {}
 
   CircularLinkedList &operator=(const CircularLinkedList &other) {
     LinkedList<Traits>::operator=(other);
@@ -36,7 +38,7 @@ public:
     this->m_pTail->m_pNext = nullptr;
     NodePtr current = this->m_pRoot;
     while (current != nullptr) {
-      NodePtr next = static_cast<NodePtr>(current->m_pNext);
+      NodePtr next = current->m_pNext;
       delete current;
       current = next;
     }
@@ -61,9 +63,7 @@ public:
   ~CircularLinkedList() override { clear(); }
 
   void insert(const value_type &value, Ref ref) override {
-    std::lock_guard<std::mutex> lock(this->m_mutex);
-    this->internalInsert(value, ref, this->m_pRoot);
-    this->m_pTail->m_pNext = this->m_pRoot;
+    LinkedList<Traits>::insert(value, ref);
   }
 };
 

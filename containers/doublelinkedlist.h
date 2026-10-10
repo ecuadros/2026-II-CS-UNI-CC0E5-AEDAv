@@ -11,7 +11,7 @@ template <typename T> class DoubleLinkedNode : public LinkedListNode<T> {
   using Node = DoubleLinkedNode<T>;
 
 public:
-  Node *m_pPrev = nullptr; // puntero al nodo anterior, para acceso directo
+  Node *m_pPrev = nullptr;
   DoubleLinkedNode() = default;
   DoubleLinkedNode(const T &value, Ref ref, Node *pNext, Node *pPrev = nullptr)
       : LinkedListNode<T>(value, ref, pNext), m_pPrev(pPrev) {}
@@ -48,6 +48,26 @@ public:
   using ForwardIterator = typename Traits::ForwardIterator;
   using BackwardIterator = typename Traits::BackwardIterator;
 
+protected:
+  void corregirPunteros() override {
+    NodePtr previous = nullptr;
+    NodePtr current = this->m_pRoot;
+
+    while (current != nullptr) {
+      current->m_pPrev = previous;
+      previous = current;
+      current = static_cast<NodePtr>(current->m_pNext);
+
+      if (current == this->m_pRoot)
+        break;
+    }
+
+    this->m_pTail = previous;
+
+    if (current == this->m_pRoot && this->m_pRoot != nullptr)
+      this->m_pRoot->m_pPrev = this->m_pTail;
+  }
+
 public:
   DoubleLinkedList() = default;
 
@@ -60,25 +80,13 @@ public:
       anterior = actual;
       actual = static_cast<NodePtr>(actual->m_pNext);
       if (actual == this->m_pRoot)
-        break; // lista circular
+        break;
     }
     this->m_pTail = anterior;
   }
 
   void insert(const typename Traits::value_type &value, Ref ref) override {
-    std::scoped_lock lock(this->m_mutex);
-    this->internalInsert(value, ref, this->m_pRoot);
-    NodePtr anterior = nullptr;
-    NodePtr actual = this->m_pRoot;
-
-    while (actual != nullptr) {
-      actual->m_pPrev = anterior;
-      anterior = actual;
-      actual = static_cast<NodePtr>(actual->m_pNext);
-      if (actual == this->m_pRoot)
-        break; // lista circular
-    }
-    this->m_pTail = anterior;
+    LinkedList<Traits>::insert(value, ref);
   }
 
   DoubleLinkedList &operator=(const DoubleLinkedList &other) {
@@ -92,7 +100,7 @@ public:
         anterior = actual;
         actual = static_cast<NodePtr>(actual->m_pNext);
         if (actual == this->m_pRoot)
-          break; // lista circular
+          break;
       }
       this->m_pTail = anterior;
     }

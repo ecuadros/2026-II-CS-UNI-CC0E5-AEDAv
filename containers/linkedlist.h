@@ -53,6 +53,7 @@ protected:
 
     NodePtr GetRoot() const { return m_pRoot; }
     void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
+    virtual void corregirPunteros() {};
 
 public:
     LinkedList() {}
@@ -73,6 +74,7 @@ public:
     virtual void insert(const value_type& value, Ref ref) {
         scoped_lock lock(m_mutex);
         internalInsert(value, ref, m_pRoot);
+        corregirPunteros();
     }
 
     std::ostream& write(std::ostream& os) { return os << *this; }
@@ -88,9 +90,6 @@ public:
             os << *it;
             first = false;
         }
-        if(list.m_pTail->m_pNext != nullptr)
-              os << "," << *list.m_pRoot;
-        //
         return os << "]";
     }
     

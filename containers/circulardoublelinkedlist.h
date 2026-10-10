@@ -12,6 +12,12 @@ public:
   using ForwardIterator = typename Traits::ForwardIterator;
   using BackwardIterator = typename Traits::BackwardIterator;
 
+protected:
+  void corregirPunteros() override {
+    this->m_pTail->m_pNext = this->m_pRoot;
+    DoubleLinkedList<Traits>::corregirPunteros();
+  }
+
 public:
   CircularDoubleLinkedList() = default;
 
@@ -75,17 +81,7 @@ public:
   }
 
   void insert(const value_type &value, Ref ref) override {
-    std::scoped_lock lock(this->m_mutex);
-    this->internalInsert(value, ref, this->m_pRoot);
-    this->m_pTail->m_pNext = this->m_pRoot;
-
-    NodePtr previous = this->m_pTail;
-    NodePtr current = this->m_pRoot;
-    do {
-      current->m_pPrev = previous;
-      previous = current;
-      current = static_cast<NodePtr>(current->m_pNext);
-    } while (current != this->m_pRoot);
+    DoubleLinkedList<Traits>::insert(value, ref);
   }
 };
 
