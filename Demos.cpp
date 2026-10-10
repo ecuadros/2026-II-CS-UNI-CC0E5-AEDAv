@@ -7,19 +7,25 @@
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
+#include "containers/doublylinkedlist.h"
+#include "containers/circularlist.h"
+#include "containers/circulardoublylinkedlist.h"
 #include "Demos.h"
 using namespace std;
 
-void AddOne(GeneralNode<TX> &node) {
+void AddOne(GeneralNode<TX> &node)
+{
     node.value() += 1;
 }
 
 template <typename T>
-void AddX(GeneralNode<T> &node, T x) {
+void AddX(GeneralNode<T> &node, T x)
+{
     node.value() += x;
 }
 
-void Square(GeneralNode<TX> &node) {
+void Square(GeneralNode<TX> &node)
+{
     node.value() *= node.value();
 }
 
@@ -27,12 +33,14 @@ void Square(GeneralNode<TX> &node) {
 // mayor que 'threshold'. Generico en Node y T para servir tanto a
 // Vector<VectorAscTraits<TX>> (int) como a Vector<VectorAscTraits<string>>.
 template <typename Node, typename T>
-bool IsGreaterThan(Node &node, T threshold) {
+bool IsGreaterThan(Node &node, T threshold)
+{
     return node.getValue() > threshold;
 }
 
 template <typename Node>
-void PrintNode(Node &node, ostream &os) {
+void PrintNode(Node &node, ostream &os)
+{
     os << node << " ";
 }
 const int NThreads = 5;
@@ -42,15 +50,17 @@ const int NThreads = 5;
 // DemoRaceCondition(), que es donde se estudia esa problematica.
 template <typename Container>
 void InsertElements(Container &container,
-                     const vector<pair<typename Container::value_type, Ref>> &values) {
+                    const vector<pair<typename Container::value_type, Ref>> &values)
+{
     for (const auto &v : values)
         container.push_back(v.first, v.second);
 }
 
 template <typename Container>
 void TestContainer(Container &container,
-                    const vector<pair<typename Container::value_type, Ref>> &values,
-                    const string &filename) {
+                   const vector<pair<typename Container::value_type, Ref>> &values,
+                   const string &filename)
+{
     InsertElements(container, values);
 
     // Impresion usando write()
@@ -73,7 +83,8 @@ void TestContainer(Container &container,
 // Prueba los recorridos del Container hacia adelante (begin/end) y hacia
 // atras (rbegin/rend) solamente, imprimiendo los elementos en cada sentido.
 template <typename Container>
-void TestTraversal(Container &container) {
+void TestTraversal(Container &container)
+{
     using Node = typename Container::Node;
 
     cout << "Forward traversal:  [";
@@ -86,7 +97,8 @@ void TestTraversal(Container &container) {
 
     // Prueba de call()/FirstThat() con valor de retorno: busca el primer
     // nodo cuyo valor sea mayor que el del primer elemento del container.
-    if (!container.empty()) {
+    if (!container.empty())
+    {
         auto threshold = (*container.begin()).getValue();
         Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
         cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
@@ -95,7 +107,8 @@ void TestTraversal(Container &container) {
 
 // Prueba los recorridos hacia únicamente hacia adelante, especialmente para una LinkedList
 template <typename Container>
-void TestForwardTraversal(Container &container){
+void TestForwardTraversal(Container &container)
+{
     using Node = typename Container::Node;
 
     cout << "Prueba de función call con std::cout para LinkedList [";
@@ -108,14 +121,16 @@ void TestForwardTraversal(Container &container){
     cout << "]" << endl;
 
     // Prueba de FirstThat(): primer nodo cuyo valor sea mayor que el primero
-    if (container.begin() != container.end()) {
+    if (container.begin() != container.end())
+    {
         auto threshold = (*container.begin()).getValue();
         Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
         cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
     }
 }
 
-void DemoVector() {
+void DemoVector()
+{
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
     ofstream("vector.txt", ios::trunc).close();
@@ -137,7 +152,8 @@ void DemoVector() {
 // cuantos entraron realmente. Si push_back no estuviera sincronizado
 // (sin el mutex/lock_guard actual) esto perderia inserciones o crashearia;
 // con el mutex protegiendo push_back/resize, deberia dar siempre 0 perdidas.
-void DemoRaceCondition() {
+void DemoRaceCondition()
+{
     const size_t N = 200000;
 
     vector<pair<TX, Ref>> values(N);
@@ -150,20 +166,23 @@ void DemoRaceCondition() {
     // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
     size_t n = values.size();
     vector<thread> workers;
-    for (int t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&vec, &values, n, t](){
+    for (int t = 0; t < NThreads; ++t)
+    {
+        workers.emplace_back([&vec, &values, n, t]()
+                             {
             for (size_t i = t; i < n; i += NThreads)
-                vec.push_back(values[i].first, values[i].second);
-        });
+                vec.push_back(values[i].first, values[i].second); });
     }
     for (auto &worker : workers)
         worker.join();
 
     long long expectedSum = 0;
-    for (auto &v : values) expectedSum += v.first;
+    for (auto &v : values)
+        expectedSum += v.first;
 
     long long actualSum = 0;
-    for (size_t i = 0; i < vec.size(); ++i) actualSum += vec[i].getValue();
+    for (size_t i = 0; i < vec.size(); ++i)
+        actualSum += vec[i].getValue();
 
     cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
          << "el Vector quedo con " << vec.size() << endl;
@@ -190,7 +209,7 @@ void DemoLinkedList()
     TestForwardTraversal(list);
 
     auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    for(auto& e : elements)
+    for (auto &e : elements)
         list.push_back(e.first, e.second);
 
     // Pruebas de insert
@@ -218,4 +237,130 @@ void DemoLinkedList()
     in.close();
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+}
+
+void DemoDoublyLinkedList()
+{
+    using IntLinkedList = DoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
+
+    ofstream("linkedlist.txt", ios::trunc).close();
+
+    // Pruebas de pushback
+    IntLinkedList list;
+    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "linkedlist.txt");
+    TestForwardTraversal(list);
+
+    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    for (auto &e : elements)
+        list.push_back(e.first, e.second);
+
+    // Pruebas de insert
+    list.insert(4, 12);
+    list.insert(11, 20);
+    list.insert(7, 6);
+    cout << "DoublyLinkedList luego de hacer 3 inserts " << list << endl;
+
+    // Prueba de apply function
+    list.ApplyFunction(AddOne);
+    cout << "DoublyLinkedList tras usar Add One a sus elementos: " << list << endl;
+    list.ApplyFunction(AddX<TX>, TX(10));
+    cout << "DoublyLinkedList tras usar AddX(10) a sus elementos: " << list << endl;
+
+    // Prueba de clear
+    list.clear();
+    cout << "DoublyLinkedList luego de usar clear" << list << endl;
+    list.push_back(10, 2);
+    cout << "DoublyLinkedList luego de un nuevo push_back " << list << endl;
+
+    // Prueba de lectura, usa traversal
+    IntLinkedList new_list;
+    ifstream in("linkedlist.txt");
+    in >> new_list;
+    in.close();
+    cout << "DoublyLinkedList leida desde archivo: " << new_list << endl;
+    TestTraversal(new_list);
+}
+
+void DemoCircularLinkedList()
+{
+    using IntLinkedList = CircularList<LinkedListAscTraits<TX>>;
+
+    ofstream("linkedlist.txt", ios::trunc).close();
+
+    // Pruebas de pushback
+    IntLinkedList list;
+    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "linkedlist.txt");
+    TestForwardTraversal(list);
+
+    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    for (auto &e : elements)
+        list.push_back(e.first, e.second);
+
+    // Pruebas de insert
+    list.insert(4, 12);
+    list.insert(11, 20);
+    list.insert(7, 6);
+    cout << "CircularList luego de hacer 3 inserts " << list << endl;
+
+    // Prueba de apply function
+    list.ApplyFunction(AddOne);
+    cout << "CircularList tras usar Add One a sus elementos: " << list << endl;
+    list.ApplyFunction(AddX<TX>, TX(10));
+    cout << "CircularList tras usar AddX(10) a sus elementos: " << list << endl;
+
+    // Prueba de clear
+    list.clear();
+    cout << "CircularList luego de usar clear" << list << endl;
+    list.push_back(10, 2);
+    cout << "CircularList luego de un nuevo push_back " << list << endl;
+
+    // Prueba de lectura
+    IntLinkedList new_list;
+    ifstream in("linkedlist.txt");
+    in >> new_list;
+    in.close();
+    cout << "CircularList leida desde archivo: " << new_list << endl;
+    TestForwardTraversal(new_list);
+}
+
+void DemoCircularDoublyLinkedList()
+{
+    using IntLinkedList = CircularDoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
+
+    ofstream("linkedlist.txt", ios::trunc).close();
+
+    // Pruebas de pushback
+    IntLinkedList list;
+    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "linkedlist.txt");
+    TestForwardTraversal(list);
+
+    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    for (auto &e : elements)
+        list.push_back(e.first, e.second);
+
+    // Pruebas de insert
+    list.insert(4, 12);
+    list.insert(11, 20);
+    list.insert(7, 6);
+    cout << "CircularDoublyLinkedList luego de hacer 3 inserts " << list << endl;
+
+    // Prueba de apply function
+    list.ApplyFunction(AddOne);
+    cout << "CircularDoublyLinkedList tras usar Add One a sus elementos: " << list << endl;
+    list.ApplyFunction(AddX<TX>, TX(10));
+    cout << "CircularDoublyLinkedList tras usar AddX(10) a sus elementos: " << list << endl;
+
+    // Prueba de clear
+    list.clear();
+    cout << "CircularDoublyLinkedList luego de usar clear" << list << endl;
+    list.push_back(10, 2);
+    cout << "CircularDoublyLinkedList luego de un nuevo push_back " << list << endl;
+
+    // Prueba de lectura, usa traversal
+    IntLinkedList new_list;
+    ifstream in("linkedlist.txt");
+    in >> new_list;
+    in.close();
+    cout << "CircularDoublyLinkedList leida desde archivo: " << new_list << endl;
+    TestTraversal(new_list);
 }

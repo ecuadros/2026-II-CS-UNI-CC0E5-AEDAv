@@ -10,5 +10,8 @@ int main() {
     DemoVector();
     DemoRaceCondition();
     DemoLinkedList();
+    DemoDoublyLinkedList();
+    DemoCircularLinkedList();
+    DemoCircularDoublyLinkedList();
     return 0;
 }
