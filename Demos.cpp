@@ -7,6 +7,9 @@
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
+#include "containers/circularlinkedlist.h"
+#include "containers/doublylinkedlist.h"
+#include "containers/circulardoublylinkedlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -115,6 +118,107 @@ void TestForwardTraversal(Container &container){
     }
 }
 
+template <typename Container>
+void TestRing(Container &container) {
+    using Node = typename Container::Node;
+
+    Node *first = nullptr;
+    Node *last = nullptr;
+    size_t count = 0;
+    for (auto &node : container) {
+        if (!first)
+            first = &node;
+        last = &node;
+        ++count;
+    }
+
+    cout << "Nodos recorridos con iteradores (una vuelta): " << count << endl;
+    cout << "tail->m_pNext == root: " << ((last && last->m_pNext == first) ? "si" : "no") << endl;
+    cout << "Siguiendo m_pNext durante dos vueltas: [";
+    Node *curr = first;
+    for (size_t i = 0; curr && i < 2 * count; ++i) {
+        cout << *curr << " ";
+        curr = curr->m_pNext;
+    }
+    cout << "]" << endl;
+}
+
+template <typename Container>
+void TestBackLinks(Container &container) {
+    using Node = typename Container::Node;
+
+    Node *first = nullptr;
+    Node *last = nullptr;
+    bool consistent = true;
+    for (auto &node : container) {
+        if (!first)
+            first = &node;
+        last = &node;
+        if (node.m_pNext && node.m_pNext->m_pPrev != &node)
+            consistent = false;
+    }
+
+    cout << "m_pPrev coherente con m_pNext en todos los nodos: " << (consistent ? "si" : "no") << endl;
+    if (first)
+        cout << "root->m_pPrev: " << (first->m_pPrev == nullptr ? "nullptr" : (first->m_pPrev == last ? "tail" : "otro")) << endl;
+}
+
+template <typename Container>
+void TestBackwardIterator(Container &container) {
+    cout << "Backward con rbegin()/rend(): [";
+    for (auto it = container.rbegin(); it != container.rend(); ++it)
+        cout << *it << " ";
+    cout << "]" << endl;
+}
+
+template <typename Container, typename Checker>
+void TestListOperations(Container &list, const string &label, const string &filename, Checker check) {
+    list.insert(4, 12);
+    list.insert(11, 20);
+    list.insert(7, 6);
+    cout << label << " luego de hacer 3 inserts " << list << endl;
+    check(list);
+
+    list.ApplyFunction(AddOne);
+    cout << label << " tras usar Add One a sus elementos: " << list << endl;
+    list.ApplyFunction(AddX<TX>, TX(10));
+    cout << label << " tras usar AddX(10) a sus elementos: " << list << endl;
+
+    Container copy(list);
+    check(copy);
+    copy.push_back(99, 9);
+    cout << label << " copia con un push_back extra: " << copy << endl;
+    cout << label << " original sin cambios: " << list << endl;
+    check(copy);
+
+    Container assigned;
+    assigned = copy;
+    cout << label << " tras la asignacion: " << assigned << endl;
+    check(assigned);
+
+    list.clear();
+    cout << label << " luego de usar clear " << list << endl;
+    list.push_back(10, 2);
+    cout << label << " luego de un nuevo push_back " << list << endl;
+    check(list);
+
+    Container read_list;
+    ifstream in(filename);
+    in >> read_list;
+    in.close();
+    cout << label << " leida desde archivo: " << read_list << endl;
+    TestTraversal(read_list);
+    check(read_list);
+}
+
+template <typename Container>
+void TestOrderedInsert(const string &label, const vector<pair<typename Container::value_type, Ref>> &values) {
+    Container container;
+    for (const auto &v : values)
+        container.insert(v.first, v.second);
+    cout << label << ": " << container << endl;
+}
+
 void DemoVector() {
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
@@ -218,4 +322,71 @@ void DemoLinkedList()
     in.close();
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+}
+
+void DemoCircularLinkedList()
+{
+    using IntCircularList = CircularLinkedList<CircularLinkedListAscTraits<TX>>;
+
+    ofstream("list_circular.txt", ios::trunc).close();
+
+    IntCircularList list;
+    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "list_circular.txt");
+    TestTraversal(list);
+    TestRing(list);
+
+    TestListOperations(list, "CircularLinkedList", "list_circular.txt", [](auto &l) { TestRing(l); });
+}
+
+void DemoDoublyLinkedList()
+{
+    using IntDoublyList = DoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
+
+    ofstream("list_doubly.txt", ios::trunc).close();
+
+    IntDoublyList list;
+    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "list_doubly.txt");
+    TestTraversal(list);
+    TestBackwardIterator(list);
+    TestBackLinks(list);
+
+    TestListOperations(list, "DoublyLinkedList", "list_doubly.txt", [](auto &l) {
+        TestBackLinks(l);
+        TestBackwardIterator(l);
+    });
+}
+
+void DemoCircularDoublyLinkedList()
+{
+    using IntDoublyCircularList = CircularDoublyLinkedList<CircularDoublyLinkedListAscTraits<TX>>;
+
+    ofstream("list_doubly_circular.txt", ios::trunc).close();
+
+    IntDoublyCircularList list;
+    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "list_doubly_circular.txt");
+    TestTraversal(list);
+    TestBackwardIterator(list);
+    TestRing(list);
+    TestBackLinks(list);
+
+    TestListOperations(list, "CircularDoublyLinkedList", "list_doubly_circular.txt", [](auto &l) {
+        TestRing(l);
+        TestBackLinks(l);
+        TestBackwardIterator(l);
+    });
+}
+
+void DemoTraits()
+{
+    const vector<pair<TX, Ref>> values = {{5, 15}, {1, 11}, {8, 18}, {3, 13}, {7, 17}, {3, 23}};
+
+    cout << "Insertando " << values.size() << " valores (5, 1, 8, 3, 7, 3) solo con insert()" << endl;
+    TestOrderedInsert<LinkedList<LinkedListAscTraits<TX>>>("LinkedList Asc", values);
+    TestOrderedInsert<LinkedList<LinkedListDescTraits<TX>>>("LinkedList Desc", values);
+    TestOrderedInsert<CircularLinkedList<CircularLinkedListAscTraits<TX>>>("CircularLinkedList Asc", values);
+    TestOrderedInsert<CircularLinkedList<CircularLinkedListDescTraits<TX>>>("CircularLinkedList Desc", values);
+    TestOrderedInsert<DoublyLinkedList<DoublyLinkedListAscTraits<TX>>>("DoublyLinkedList Asc", values);
+    TestOrderedInsert<DoublyLinkedList<DoublyLinkedListDescTraits<TX>>>("DoublyLinkedList Desc", values);
+    TestOrderedInsert<CircularDoublyLinkedList<CircularDoublyLinkedListAscTraits<TX>>>("CircularDoublyLinkedList Asc", values);
+    TestOrderedInsert<CircularDoublyLinkedList<CircularDoublyLinkedListDescTraits<TX>>>("CircularDoublyLinkedList Desc", values);
 }
