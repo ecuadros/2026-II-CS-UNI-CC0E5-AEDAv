@@ -56,7 +56,7 @@ public:
     using ForwardIterator   = typename Traits::ForwardIterator;
     using Compare           = typename Traits::Compare;
     using Delim             = typename Node::Delim;
-private:
+protected:
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
     
@@ -75,10 +75,10 @@ public:
             push_back(v.first, v.second);
     }
 
-    void clear();
+    virtual void clear();
     virtual ~LinkedList(){ clear(); };
 
-    void push_back(const value_type& value, Ref ref);
+    virtual void push_back(const value_type& value, Ref ref);
 
     bool empty() const { return m_pRoot == nullptr; }
 
