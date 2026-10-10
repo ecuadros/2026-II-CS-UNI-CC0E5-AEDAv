@@ -63,12 +63,22 @@ classDiagram
     class DoubleLinkedListBackwardIterator~T~ {
         +operator++() : retrocede via GetPrev()
     }
+    class DoubleCircularForwardIterator~T~ {
+        -NodePtr m_start
+        +operator++() : avanza, se anula al volver a m_start
+    }
+    class DoubleCircularBackwardIterator~T~ {
+        -NodePtr m_start
+        +operator++() : retrocede, se anula al volver a m_start
+    }
     GeneralIterator~Derived,T~ <|-- VectorForwardIterator~T~
     GeneralIterator~Derived,T~ <|-- VectorBackwardIterator~T~
     GeneralIterator~Derived,T~ <|-- LinkedListForwardIterator~T~
     GeneralIterator~Derived,T~ <|-- CircularForwardIterator~T~
     GeneralIterator~Derived,T~ <|-- DoubleLinkedListForwardIterator~T~
     GeneralIterator~Derived,T~ <|-- DoubleLinkedListBackwardIterator~T~
+    GeneralIterator~Derived,T~ <|-- DoubleCircularForwardIterator~T~
+    GeneralIterator~Derived,T~ <|-- DoubleCircularBackwardIterator~T~
 ```
 
 - El CRTP (`GeneralIterator<Derived, T>`) comparte `operator*` y los `==/!=` sobre el tipo concreto del hijo — polimorfismo estático, sin vptr (nota 04a).
@@ -106,19 +116,27 @@ classDiagram
         +front() / back()
         +clear() override (circle-safe)
     }
-    class DoubleLinkedList~T~ {
+    class DoubleLinkedList~Traits~ {
         +push_back() : base + prev O(1)
         +insert() : base + repair walk
-        +rbegin() / rend()
+        +rbegin() / rend() (via Traits::BackwardIterator)
+    }
+    class DoubleCircularLinkedList~T~ {
+        +push_back() : base LDE + cerrar anillo
+        +insert() : abrir anillo → insert de LDE → recerrar
+        +clear() override (circle-safe)
+        +rbegin() / rend() heredados via traits
     }
     LinkedList~Traits~ <|-- LC~T~ : LinkedList~CircularTraits~T~~
-    LinkedList~Traits~ <|-- DoubleLinkedList~T~ : LinkedList~DoubleLinkedListTraits~T~~
+    LinkedList~Traits~ <|-- DoubleLinkedList~Traits~ : DoubleLinkedListTraits
+    DoubleLinkedList~Traits~ <|-- DoubleCircularLinkedList~T~ : DoubleLinkedList~DoubleCircularTraits~T~~
 ```
 
 - `Vector` es la rama independiente (arreglo dinámico con `resize` + `std::exchange` en move).
 - `LinkedList` es la base de las enlazadas: nodos encadenados, insert ordenado (recursión de cola con `NodePtrT&`), persistencia y algoritmos heredables.
 - `LC` (lista circular): hereda y cierra el anillo — ops de deque (`push_front/pop_*`) en O(1) salvo `pop_back`.
-- `DoubleLinkedList`: reutiliza el `insert` de la base y repara los `m_pPrev` con un walk; `rbegin/rend` recorren al revés.
+- `DoubleLinkedList` (traits-parametrizada, convención del curso): reutiliza el `insert` de la base y repara los `m_pPrev` con un walk; `rbegin/rend` recorren al revés.
+- `DoubleCircularLinkedList`: reutiliza el `insert` de la LDE (abre el anillo, inserta, recierra) y mantiene el anillo cerrado en ambos sentidos (`tail->next = root`, `root->prev = tail`).
 
 ## 4 · Traits
 
@@ -155,17 +173,23 @@ classDiagram
         +ForwardIterator = VectorForwardIterator~T~
         +BackwardIterator = VectorBackwardIterator~T~
     }
+    class DoubleCircularTraits~T~ {
+        +ForwardIterator = DoubleCircularForwardIterator~T~
+        +BackwardIterator = DoubleCircularBackwardIterator~T~
+    }
     DefaultTraits~T,Compare~ <|-- AscendingTraits~T~
     DefaultTraits~T,Compare~ <|-- DescendingTraits~T~
     AscendingTraits~T~ <|-- LinkedListAscTraits~T~
     DescendingTraits~T~ <|-- LinkedListDescTraits~T~
     LinkedListAscTraits~T~ <|-- CircularTraits~T~
     LinkedListAscTraits~T~ <|-- DoubleLinkedListTraits~T~
+    DoubleLinkedListTraits~T~ <|-- DoubleCircularTraits~T~
 ```
 
 - Los traits son la "tabla de configuración" de cada contenedor: qué `Node` guarda, qué iteradores entrega, cómo ordena (`less/greater`).
 - Cambiar el comportamiento del contenedor = otro traits, cero cambios en el contenedor (la lección de la nota 04a: `begin()/end()` devuelven `Traits::ForwardIterator`).
-- `VectorAscTraits` vive en `vector.h` (rama de Vector); el resto en `linkedlist.h` / `circularlist.h` / `doublylist.h`.
+- `DoubleCircularTraits` solo redefine los iteradores — hereda `Node` (`DoubleLinkedListNode`) y `Compare` de `DoubleLinkedListTraits`.
+- `VectorAscTraits` vive en `vector.h` (rama de Vector); el resto en `linkedlist.h` / `circularlist.h` / `doublylist.h` / `doublecircularlist.h`.
 
 ## 5 · Composición y reuso
 
@@ -189,6 +213,11 @@ classDiagram
         usa: DoubleLinkedListNode + Fwd/Backward iteradores
         reutiliza: insert de LinkedList (+ repair walk de m_pPrev)
     }
+    class DoubleCircularLinkedList~DoubleCircularTraits~ {
+        hereda de: DoubleLinkedList
+        usa: DoubleLinkedListNode + iteradores circulares Fwd/Backward
+        reutiliza: insert de DoubleLinkedList (abrir anillo → LDE → recerrar)
+    }
     class foreach_h {
         ::call(begin, end, func, args...)
         ::ApplyFunction(begin, end, ...)
@@ -198,12 +227,14 @@ classDiagram
     LinkedList~LinkedListAscTraits~ *-- LinkedListNode~T~ : almacena
     LC~CircularTraits~ ..|> LinkedList~LinkedListAscTraits~
     DoubleLinkedList~DoubleLinkedListTraits~ ..|> LinkedList~LinkedListAscTraits~
+    DoubleCircularLinkedList~DoubleCircularTraits~ ..|> DoubleLinkedList~DoubleLinkedListTraits~
     Vector~VectorAscTraits~ ..> foreach_h : call/rcall/FirstThat
     LinkedList~LinkedListAscTraits~ ..> foreach_h : call/FirstThat/ApplyFunction
     LC~CircularTraits~ ..> foreach_h : via begin()/end() heredados
     DoubleLinkedList~DoubleLinkedListTraits~ ..> foreach_h : via rbegin()/rend()
+    DoubleCircularLinkedList~DoubleCircularTraits~ ..> foreach_h : via begin()/end() y rbegin()/rend() heredados
 ```
 
 - Un solo `::call` genérico (foreach.h) sirve a **todos** los contenedores porque todos entregan pares de iteradores con el mismo protocolo.
-- `LC` reutiliza el `insert` de la base abriendo y recerrando el anillo; `DoubleLinkedList` reutiliza el mismo `insert` (templado en `NodePtrT`) y repara los `m_pPrev` con un walk O(n) — la recursión es una sola para las tres listas.
+- `LC` reutiliza el `insert` de la base abriendo y recerrando el anillo; `DoubleLinkedList` reutiliza el mismo `insert` (templado en `NodePtrT`) y repara los `m_pPrev` con un walk O(n); `DoubleCircularLinkedList` reutiliza el `insert` de la LDE con la misma técnica de abrir/recerrar — **la recursión es una sola para las cuatro listas**.
 - La persistencia (`operator<<` / `operator>>`) también es heredada: `>>` llama `clear()` y `push_back()` **virtuales**, por eso cada derivada mantiene su invariante (anillo cerrado, prevs correctos) sin duplicar el parser.
