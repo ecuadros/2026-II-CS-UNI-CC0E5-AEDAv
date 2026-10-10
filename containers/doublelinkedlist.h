@@ -40,22 +40,6 @@ public:
   }
 };
 
-template <typename T>
-class DoubleLinkedListAscTraits : public AscendingTraits<T> {
-public:
-  using Node = DoubleLinkedNode<T>;
-  using ForwardIterator = LinkedListForwardIterator<T, Node>;
-  using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
-};
-
-template <typename T>
-class DoubleLinkedListDescTraits : public DescendingTraits<T> {
-public:
-  using Node = DoubleLinkedNode<T>;
-  using ForwardIterator = LinkedListForwardIterator<T, Node>;
-  using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
-};
-
 template <typename Traits> class DoubleLinkedList : public LinkedList<Traits> {
 public:
   using value_type = typename Traits::value_type;

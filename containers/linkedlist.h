@@ -35,28 +35,6 @@ public:
         return *this; 
     }
 };
-
-template <typename T, typename _Compare>
-struct DefaultTraits {
-    using value_type        = T;
-    using Compare           = _Compare;
-};
-template <typename T, typename _Compare = std::less<T>>
-struct AscendingTraits : public DefaultTraits<T, _Compare> {};
-
-template <typename T, typename _Compare = std::greater<T>>
-struct DescendingTraits : public DefaultTraits<T, _Compare> {};
-template <typename T>
-struct LinkedListAscTraits : public AscendingTraits<T> {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
-};
-
-template <typename T>
-struct LinkedListDescTraits : public DescendingTraits<T> {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
-};
 template <typename Traits>
 class LinkedList {
 public:
@@ -110,8 +88,8 @@ public:
             os << *it;
             first = false;
         }
-        // if(list.m_pTail != nullptr && list.m_pRoot != list.m_pTail && list.m_pTail->m_pNext == list.m_pRoot)
-        //      os << "," << *list.m_pRoot;
+        if(list.m_pTail->m_pNext != nullptr)
+              os << "," << *list.m_pRoot;
         //
         return os << "]";
     }

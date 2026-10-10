@@ -22,6 +22,13 @@ private:
 
 public:
   CircularLinkedList() = default;
+  CircularLinkedList(const CircularLinkedList &other) : LinkedList<Traits>(other) {}
+
+  CircularLinkedList &operator=(const CircularLinkedList &other) {
+    LinkedList<Traits>::operator=(other);
+    return *this;
+  }
+
   void clear() override {
     std::lock_guard<std::mutex> lock(this->m_mutex);
     if (!this->m_pRoot)

@@ -1,13 +1,14 @@
 
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
-#include <sstream>
+#include <cstdio>
 #include <string>
 #include <thread>
 #include <vector>
 #include "containers/circulardoublelinkedlist.h"
 #include "containers/circularlinkedlist.h"
 #include "containers/doublelinkedlist.h"
+#include "containers/traits.h"
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
@@ -102,7 +103,7 @@ template <typename Container>
 void TestForwardTraversal(Container &container){
     using Node = typename Container::Node;
 
-    cout << "Prueba de función call con std::cout para LinkedList [";
+    cout << "Prueba de función call con std::cout para List [";
     container.call(PrintNode<Node>, cout);
     cout << "]" << endl;
 
@@ -117,6 +118,95 @@ void TestForwardTraversal(Container &container){
         Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
         cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
     }
+}
+
+template <typename Container>
+void TestBackwardTraversal(Container &container){
+    using Node = typename Container::Node;
+
+    cout << "Prueba de función rcall con std::cout para List [";
+    container.rcall(PrintNode<Node>, cout);
+    cout << "]" << endl;
+
+    cout << "Prueba de uso de iteradores inversos para impresión: [";
+    for (auto it = container.rbegin(); it != container.rend(); ++it)
+        cout << *it << " ";
+    cout << "]" << endl;
+}
+
+template <typename Iterator>
+void PrintCircularTraversal(Iterator begin, Iterator end) {
+    if (begin == end) {
+        cout << "[]\n";
+        return;
+    }
+
+    cout << *begin;
+    auto it = begin;
+    for (++it; it != end; ++it)
+        cout << " -> " << *it;
+    cout << " -> (vuelve a " << *begin << ")\n";
+}
+
+template <typename Container>
+void TestGenericContainer(Container &container) {
+    cout << "Vacio: " << container.empty() << '\n';
+
+    container.push_back(1, 101);
+    container.push_back(3, 103);
+    container.push_back(7, 107);
+    cout << "Luego de push_back: " << container << '\n';
+
+    container.insert(5, 105);
+    container.insert(2, 102);
+    container.insert(9, 109);
+    cout << "Luego de insert: " << container << '\n';
+
+    Container copia(container);
+    Container asignada;
+    asignada = container;
+    copia.insert(4, 104);
+    cout << "Original: " << container << '\n';
+    cout << "Copia modificada: " << copia << '\n';
+    cout << "Asignada: " << asignada << '\n';
+
+    const char *filename = "container.txt";
+    {
+        ofstream archivo(filename);
+        if (!archivo) {
+            cerr << "No se pudo crear " << filename << '\n';
+            return;
+        }
+        archivo << '[';
+        bool primero = true;
+        for (const auto &nodo : container) {
+            if (!primero)
+                archivo << ',';
+            archivo << nodo;
+            primero = false;
+        }
+        archivo << ']';
+    }
+    cout << "Escrito en " << filename << '\n';
+
+    Container leida;
+    {
+        ifstream archivo(filename);
+        if (!archivo) {
+            cerr << "No se pudo abrir " << filename << '\n';
+            std::remove(filename);
+            return;
+        }
+        leida.read(archivo);
+    }
+    cout << "Leido desde " << filename << ": " << leida << '\n';
+    if (std::remove(filename) != 0)
+        cerr << "No se pudo borrar " << filename << '\n';
+
+    asignada.clear();
+    cout << "Luego de clear, vacia: " << asignada.empty() << '\n';
+    asignada.push_back(10, 110);
+    cout << "Luego de reutilizarla: " << asignada << '\n';
 }
 
 void DemoVector() {
@@ -181,275 +271,74 @@ void DemoRaceCondition() {
              << "sincroniza correctamente las inserciones concurrentes" << endl;
 }
 
-// TODO: Implementar DemoLinkedList() para probar la lista enlazada y sus iteradores.
-void DemoLinkedList()
-{
-    using IntLinkedList = LinkedList<LinkedListAscTraits<TX>>;
+void DemoLinkedList() {
+    using List = LinkedList<LinkedListAscTraits<TX>>;
+    cout << "DemoLinkedList:\n";
+    List lista;
+    TestGenericContainer(lista);
+    TestForwardTraversal(lista);
 
-    ofstream("linkedlist.txt", ios::trunc).close();
-
-    // Pruebas de pushback
-    IntLinkedList list;
-    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "linkedlist.txt");
-    TestForwardTraversal(list);
-
-    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    for(auto& e : elements)
-        list.push_back(e.first, e.second);
-
-    // Pruebas de insert
-    list.insert(4, 12);
-    list.insert(11, 20);
-    list.insert(7, 6);
-    cout << "LinkedList luego de hacer 3 inserts " << list << endl;
-
-    // Prueba de apply function
-    list.ApplyFunction(AddOne);
-    cout << "LinkedList tras usar Add One a sus elementos: " << list << endl;
-    list.ApplyFunction(AddX<TX>, TX(10));
-    cout << "LinkedList tras usar AddX(10) a sus elementos: " << list << endl;
-
-    // Prueba de clear
-    list.clear();
-    cout << "LinkedList luego de usar clear" << list << endl;
-    list.push_back(10, 2);
-    cout << "LinkedList luego de un nuevo push_back " << list << endl;
-
-    // Prueba de lectura
-    IntLinkedList new_list;
-    ifstream in("linkedlist.txt");
-    in >> new_list;
-    in.close();
-    cout << "LinkedList leida desde archivo: " << new_list << endl;
-    TestForwardTraversal(new_list);
+    lista.ApplyFunction(AddOne);
+    cout << "Tras AddOne: " << lista << '\n';
+    lista.ApplyFunction(AddX<TX>, TX(10));
+    cout << "Tras AddX(10): " << lista << '\n';
 }
 
-void DemoCircularLinkedList() 
-{
+void DemoCircularLinkedList() {
     using AscList = CircularLinkedList<LinkedListAscTraits<TX>>;
     using DescList = CircularLinkedList<LinkedListDescTraits<TX>>;
-
-    auto imprimir_lista = [](const auto& lista) {
-        std::cout << " recorrido: ";
-        for(auto it = lista.begin(); it != lista.end(); ++it) 
-            std::cout << (*it) << "->";
-        std::cout << "\n";
-    };
-
-    std::cout << "DemoCircularLinkedList: probando CircularLinkedList\n";
+    cout << "DemoCircularLinkedList:\n";
     AscList lista;
-    std::cout<<"Vacia: "<< lista.empty() << "\n";
-    imprimir_lista(lista);
-    
-    lista.push_back(1, 101);
-    std::cout<<"Luego de push_back(1, 101): ";
-    imprimir_lista(lista);
+    TestGenericContainer(lista);
+    cout << "Ciclo: ";
+    PrintCircularTraversal(lista.begin(), lista.end());
+    TestForwardTraversal(lista);
 
-    lista.push_back(3, 103);
-    lista.push_back(7, 107);
-    std::cout<<"Luego de push_back: \n";
-    imprimir_lista(lista);
-
-    lista.insert(5, 105);
-    lista.insert(2, 102);
-    lista.insert(9, 109);
-    std::cout<<"Luego de insert: \n";
-    imprimir_lista(lista);
-
-    std::cout << "call: ";
-    lista.call([](AscList::Node& node) {
-        std::cout << node.getValue() << " ";
-    });
-    std::cout << "\n";
-
-    AscList copia(lista);
-    AscList asignada;
-    asignada = lista; 
-    copia.insert(4, 104);
-    std::cout << "Original despues de modificar copia: \n";
-    imprimir_lista(lista);
-    std::cout<<"Copia modificada:\n";
-    imprimir_lista(copia);
-    std::cout<<"Asignada:\n";
-    imprimir_lista(asignada);
-
-    std::stringstream datos;
-    lista.write(datos);
-    std::cout << "Lista escrita en stringstream: \n" << datos.str() << "\n";
-    AscList lista_leida;
-    lista_leida.read(datos);
-    std::cout << "Lista leida desde stringstream: \n";
-    imprimir_lista(lista_leida);
-
-    lista.clear();
-    std::cout << "Luego de clear, lista vacia: " << lista.empty() << "\n";
-    lista.push_back(10, 110);
-    std::cout << "Luego de push_back(10, 110): ";
-    imprimir_lista(lista);
-
-    DescList lista_desc;
-    lista_desc.insert(5, 105);
-    lista_desc.insert(3, 103);
-    lista_desc.insert(7, 107);
-    std::cout << "Lista descendente: ";
-    imprimir_lista(lista_desc);
-
-    std::cout << "Usando cout para imprimir: \n";
-    std::cout << "Lista ascendente: " << lista_desc << "\n";
-    std::cout << "Lista origianl" << lista << "\n";
-    
+    DescList descendente;
+    descendente.insert(5, 105);
+    descendente.insert(3, 103);
+    descendente.insert(7, 107);
+    cout << "Lista descendente: " << descendente << '\n';
+    cout << "Ciclo descendente: ";
+    PrintCircularTraversal(descendente.begin(), descendente.end());
 }
 
-void DemoDoubleLinkedList() 
-{
+void DemoDoubleLinkedList() {
     using AscList = DoubleLinkedList<DoubleLinkedListAscTraits<TX>>;
     using DescList = DoubleLinkedList<DoubleLinkedListDescTraits<TX>>;
-
-    auto imprimir_lista = [](const auto& lista) {
-        std::cout << "Hacia adelante: ";
-        for(auto it = lista.begin(); it != lista.end(); ++it) {
-            std::cout << (*it) << "->";
-        }
-
-        std::cout << "\nHacia atras: ";
-        for(auto it = lista.rbegin(); it != lista.rend(); ++it) {
-            std::cout << (*it) << "->";
-        }
-
-        std::cout << "\n";
-    };
-
-    std::cout << "DemoDoubleLinkedList: probando DoubleLinkedList\n";
+    cout << "DemoDoubleLinkedList:\n";
     AscList lista;
-    std::cout<<"Vacia: "<< lista.empty() << "\n";
+    TestGenericContainer(lista);
+    TestForwardTraversal(lista);
+    TestBackwardTraversal(lista);
 
-    lista.push_back(1, 101);
-    lista.push_back(3, 103);
-    lista.push_back(7, 107);
-    std::cout<<"Luego de push_back: ";
-    imprimir_lista(lista);
-
-    lista.insert(5, 105);
-    lista.insert(2, 102);
-    lista.insert(9, 109);
-    std::cout<<"Luego de insert: ";
-    imprimir_lista(lista);
-
-    std::cout << "rcall: ";
-    lista.rcall([](AscList::Node& node) {
-        std::cout << node.getValue() << " ";
-    });
-    std::cout << "\n";
-
-    AscList copia(lista);
-    AscList asignada;
-    asignada = lista;
-    copia.insert(4, 104);
-    std::cout << "Original despues de modificar copia: \n";
-    imprimir_lista(lista);
-    std::cout<<"Copia modificada:\n";
-    imprimir_lista(copia);
-    std::cout<<"Asignada:\n";
-    imprimir_lista(asignada);
-
-    std::stringstream datos;
-    lista.write(datos);
-    std::cout << "Lista escrita en stringstream: \n" << datos.str() << "\n";
-    AscList lista_leida;
-    lista_leida.read(datos);
-    std::cout << "Lista leida desde stringstream: \n";
-    imprimir_lista(lista_leida);
-
-    lista.clear();
-    std::cout << "Luego de clear, lista vacia: " << lista.empty() << "\n";
-    lista.push_back(10, 110);
-    std::cout << "Luego de push_back(10, 110): ";
-    imprimir_lista(lista);
-
-    DescList lista_desc;
-    lista_desc.insert(5, 105);
-    lista_desc.insert(3, 103);
-    lista_desc.insert(7, 107);
-    std::cout << "Lista descendente: ";
-    imprimir_lista(lista_desc);
+    DescList descendente;
+    descendente.insert(5, 105);
+    descendente.insert(3, 103);
+    descendente.insert(7, 107);
+    cout << "Lista descendente: " << descendente << '\n';
 }
 
 void DemoCircularDoubleLinkedList() {
-  
     using AscList = CircularDoubleLinkedList<DoubleLinkedListAscTraits<TX>>;
     using DescList = CircularDoubleLinkedList<DoubleLinkedListDescTraits<TX>>;
-
-    auto imprimir_lista = [](const auto& lista) {
-        std::cout << "Hacia adelante: ";
-        for(auto it = lista.begin(); it != lista.end(); ++it) {
-            std::cout << (*it) << "->";
-        }
-
-        std::cout << "\nHacia atras: ";
-        for(auto it = lista.rbegin(); it != lista.rend(); ++it) {
-            std::cout << (*it) << "->";
-        }
-
-        std::cout << "\n";
-    };
-
-    std::cout << "DemoCircularDoubleLinkedList: probando CircularDoubleLinkedList\n";
+    cout << "DemoCircularDoubleLinkedList:\n";
     AscList lista;
-    std::cout<<"Vacia: "<< lista.empty() << "\n";
+    TestGenericContainer(lista);
+    cout << "Ciclo hacia adelante: ";
+    PrintCircularTraversal(lista.begin(), lista.end());
+    cout << "Ciclo hacia atras: ";
+    PrintCircularTraversal(lista.rbegin(), lista.rend());
+    TestForwardTraversal(lista);
+    TestBackwardTraversal(lista);
 
-    lista.push_back(1, 101);
-    lista.push_back(3, 103);
-    lista.push_back(7, 107);
-    std::cout<<"Luego de push_back: ";
-    imprimir_lista(lista);
-
-    lista.insert(5, 105);
-    lista.insert(2, 102);
-    lista.insert(9, 109);
-    std::cout<<"Luego de insert: ";
-    imprimir_lista(lista);
-
-    std::cout << "rcall: ";
-    lista.rcall([](AscList::Node& node) {
-        std::cout << node.getValue() << " ";
-    });
-    
-    std::cout << "\n";
-
-    AscList copia(lista);
-    AscList asignada;
-    asignada = lista;
-    copia.insert(4, 104);
-    std::cout << "Original despues de modificar copia: \n";
-    imprimir_lista(lista);
-    std::cout<<"Copia modificada:\n";
-    imprimir_lista(copia);
-    std::cout<<"Asignada:\n";
-    imprimir_lista(asignada);
-    
-    std::stringstream datos;
-    lista.write(datos);
-    std::cout << "Lista escrita en stringstream: \n" << datos.str();
-    std::cout << "\n";
-
-    AscList lista_leida;
-    lista_leida.read(datos);
-    std::cout << "Lista leida desde stringstream: \n";
-    imprimir_lista(lista_leida);
-
-    lista.clear();
-    std::cout << "Luego de clear, lista vacia: " << lista.empty() << "\n";
-    lista.push_back(10, 110);
-
-    std::cout << "Luego de push_back(10, 110): ";
-    imprimir_lista(lista);
-
-    DescList lista_desc;
-    lista_desc.insert(5, 105);
-    lista_desc.insert(3, 103);
-    lista_desc.insert(7, 107);
-    std::cout << "Lista descendente: ";
-    imprimir_lista(lista_desc);
-
+    DescList descendente;
+    descendente.insert(5, 105);
+    descendente.insert(3, 103);
+    descendente.insert(7, 107);
+    cout << "Lista descendente: " << descendente << '\n';
+    cout << "Ciclo descendente hacia adelante: ";
+    PrintCircularTraversal(descendente.begin(), descendente.end());
+    cout << "Ciclo descendente hacia atras: ";
+    PrintCircularTraversal(descendente.rbegin(), descendente.rend());
 }
-
