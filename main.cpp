@@ -12,5 +12,6 @@ int main() {
     DemoLinkedList();
     DemoCircularLinkedList();
     DemoDoubleLinkedList();
+    DemoCircularDoubleLinkedList();
     return 0;
 }

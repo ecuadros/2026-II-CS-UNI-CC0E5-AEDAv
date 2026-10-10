@@ -26,12 +26,13 @@ public:
     std::lock_guard<std::mutex> lock(this->m_mutex);
     if (!this->m_pRoot)
       return;
+    this->m_pTail->m_pNext = nullptr;
     NodePtr current = this->m_pRoot;
-    do {
-      NodePtr next = current->m_pNext;
+    while (current != nullptr) {
+      NodePtr next = static_cast<NodePtr>(current->m_pNext);
       delete current;
       current = next;
-    } while (current != this->m_pRoot);
+    }
     this->m_pRoot = nullptr;
     this->m_pTail = nullptr;
   }

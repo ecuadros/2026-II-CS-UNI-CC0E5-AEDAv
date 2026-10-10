@@ -26,10 +26,16 @@ public:
   using MySelf = DoubleLinkedListBackwardIterator<T>;
   using Parent = GeneralIterator<MySelf, value_type>;
 
+private:
+  value_type *m_start;
+
 public:
-  DoubleLinkedListBackwardIterator(value_type *ptr) : Parent(ptr) {}
+  DoubleLinkedListBackwardIterator(value_type *ptr)
+      : Parent(ptr), m_start(ptr) {}
   DoubleLinkedListBackwardIterator &operator++() {
     Parent::m_ptr = Parent::m_ptr->m_pPrev;
+    if (Parent::m_ptr == m_start)
+      Parent::m_ptr = nullptr;
     return *this;
   }
 };
@@ -62,37 +68,49 @@ public:
   DoubleLinkedList() = default;
 
   DoubleLinkedList(const DoubleLinkedList &other) : LinkedList<Traits>(other) {
-    NodePtr previous = nullptr;
-    for (NodePtr current = this->m_pRoot; current != nullptr;
-         current = static_cast<NodePtr>(current->m_pNext)) {
-      current->m_pPrev = previous;
-      previous = current;
+    NodePtr anterior = nullptr;
+    NodePtr actual = this->m_pRoot;
+
+    while (actual != nullptr) {
+      actual->m_pPrev = anterior;
+      anterior = actual;
+      actual = static_cast<NodePtr>(actual->m_pNext);
+      if (actual == this->m_pRoot)
+        break; // lista circular
     }
-    this->m_pTail = previous;
+    this->m_pTail = anterior;
   }
 
   void insert(const typename Traits::value_type &value, Ref ref) override {
     std::scoped_lock lock(this->m_mutex);
     this->internalInsert(value, ref, this->m_pRoot);
-    NodePtr previous = nullptr;
-    for (NodePtr current = this->m_pRoot; current != nullptr;
-         current = static_cast<NodePtr>(current->m_pNext)) {
-      current->m_pPrev = previous;
-      previous = current;
+    NodePtr anterior = nullptr;
+    NodePtr actual = this->m_pRoot;
+
+    while (actual != nullptr) {
+      actual->m_pPrev = anterior;
+      anterior = actual;
+      actual = static_cast<NodePtr>(actual->m_pNext);
+      if (actual == this->m_pRoot)
+        break; // lista circular
     }
-    this->m_pTail = previous;
+    this->m_pTail = anterior;
   }
 
   DoubleLinkedList &operator=(const DoubleLinkedList &other) {
     if (this != &other) {
       LinkedList<Traits>::operator=(other);
-      NodePtr previous = nullptr;
-      for (NodePtr current = this->m_pRoot; current != nullptr;
-           current = static_cast<NodePtr>(current->m_pNext)) {
-        current->m_pPrev = previous;
-        previous = current;
+      NodePtr anterior = nullptr;
+      NodePtr actual = this->m_pRoot;
+
+      while (actual != nullptr) {
+        actual->m_pPrev = anterior;
+        anterior = actual;
+        actual = static_cast<NodePtr>(actual->m_pNext);
+        if (actual == this->m_pRoot)
+          break; // lista circular
       }
-      this->m_pTail = previous;
+      this->m_pTail = anterior;
     }
     return *this;
   }

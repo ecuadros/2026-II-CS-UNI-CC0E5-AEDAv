@@ -110,8 +110,8 @@ public:
             os << *it;
             first = false;
         }
-        if(list.m_pTail != nullptr && list.m_pRoot != list.m_pTail && list.m_pTail->m_pNext == list.m_pRoot)
-             os << "," << *list.m_pRoot;
+        // if(list.m_pTail != nullptr && list.m_pRoot != list.m_pTail && list.m_pTail->m_pNext == list.m_pRoot)
+        //      os << "," << *list.m_pRoot;
         //
         return os << "]";
     }
