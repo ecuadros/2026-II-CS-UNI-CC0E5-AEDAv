@@ -159,6 +159,7 @@ public:
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
         // Implementation for reading vector from stream
+        return is;
     }
 
     template <typename Func, typename... Args>

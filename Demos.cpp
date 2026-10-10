@@ -7,6 +7,9 @@
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
+#include "containers/circularlinkedlist.h"
+#include "containers/doublylinkedlist.h"
+#include "containers/circulardoublylinkedlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -219,3 +222,165 @@ void DemoLinkedList()
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
 }
+
+
+void DemoCircularLinkedList() {
+    cout << "\n=== DEMO CIRCULAR LINKED LIST (LC) ===" << endl;
+    using IntCircularList = CircularLinkedList<LinkedListAscTraits<TX>>;
+
+    ofstream("circularlist.txt", ios::trunc).close();
+
+    IntCircularList clist;
+    // 1. Inserción con push_back
+    clist.push_back(10, 1);
+    clist.push_back(20, 2);
+    clist.push_back(30, 3);
+    cout << "LC push_back inicial: " << clist << endl;
+
+    // 2. Inserción ordenada con insert
+    clist.insert(25, 25);
+    clist.insert(5, 5);
+    clist.insert(40, 40);
+    cout << "LC tras insert ordenado: " << clist << endl;
+
+    // 3. Imprimir N vueltas (Rúbrica oficial)
+    cout << "LC (2 vueltas completas con print_loops): ";
+    clist.print_loops(cout, 2);
+    cout << endl;
+
+    // 4. Recorrido con call
+    cout << "LC recorrido con call (1 vuelta): [";
+    clist.call([](const auto& node) { cout << "(" << node.getValue() << "," << node.getRef() << ") "; });
+    cout << "]" << endl;
+
+    // 5. Aplicar funciones (ApplyFunction)
+    clist.ApplyFunction(AddOne);
+    cout << "LC tras AddOne: " << clist << endl;
+
+    // 6. Persistencia (escritura en archivo)
+    ofstream out("circularlist.txt");
+    out << clist;
+    out.close();
+
+    // 7. Prueba de clear y push_back post-clear
+    clist.clear();
+    cout << "LC tras clear (empty = " << (clist.empty() ? "true" : "false") << "): " << clist << endl;
+    clist.push_back(99, 9);
+    cout << "LC nuevo push_back tras clear: " << clist << endl;
+
+    // 8. Prueba de lectura desde archivo
+    IntCircularList read_clist;
+    ifstream in("circularlist.txt");
+    in >> read_clist;
+    in.close();
+    cout << "LC leida desde archivo: " << read_clist << endl;
+    cout << "LC leida (2 vueltas): ";
+    read_clist.print_loops(cout, 2);
+    cout << endl;
+}
+
+void DemoDoublyLinkedList() {
+    cout << "\n=== DEMO DOUBLY LINKED LIST (LDE) ===" << endl;
+    using IntDoublyList = DoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
+
+    ofstream("doublylist.txt", ios::trunc).close();
+
+    IntDoublyList dlist;
+    // 1. push_back
+    dlist.push_back(10, 1);
+    dlist.push_back(20, 2);
+    dlist.push_back(30, 3);
+    cout << "LDE push_back inicial: " << dlist << endl;
+
+    // 2. insert ordenado
+    dlist.insert(25, 25);
+    dlist.insert(5, 5);
+    dlist.insert(50, 50);
+    cout << "LDE tras insert ordenado: " << dlist << endl;
+
+    // 3. TestTraversal (prueba call, rcall hacia atrás en O(1), y FirstThat)
+    TestTraversal(dlist);
+
+    // 4. ApplyFunction
+    dlist.ApplyFunction(AddOne);
+    cout << "LDE tras AddOne: " << dlist << endl;
+
+    // 5. Persistencia (escritura)
+    ofstream out("doublylist.txt");
+    out << dlist;
+    out.close();
+
+    // 6. clear y push_back post-clear
+    dlist.clear();
+    cout << "LDE tras clear (empty = " << (dlist.empty() ? "true" : "false") << "): " << dlist << endl;
+    dlist.push_back(100, 10);
+    cout << "LDE nuevo push_back tras clear: " << dlist << endl;
+
+    // 7. Lectura desde archivo
+    IntDoublyList read_dlist;
+    ifstream in("doublylist.txt");
+    in >> read_dlist;
+    in.close();
+    cout << "LDE leida desde archivo: " << read_dlist << endl;
+    TestTraversal(read_dlist);
+}
+
+void DemoCircularDoublyLinkedList() {
+    cout << "\n=== DEMO CIRCULAR DOUBLY LINKED LIST (LDEC) ===" << endl;
+    using IntCDList = CircularDoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
+
+    ofstream("circulardoublylist.txt", ios::trunc).close();
+
+    IntCDList cdlist;
+    // 1. push_back
+    cdlist.push_back(100, 10);
+    cdlist.push_back(200, 20);
+    cdlist.push_back(300, 30);
+    cout << "LDEC push_back inicial (1 vuelta): " << cdlist << endl;
+
+    // 2. insert ordenado
+    cdlist.insert(250, 25);
+    cdlist.insert(50, 5);
+    cdlist.insert(400, 40);
+    cout << "LDEC tras insert ordenado: " << cdlist << endl;
+
+    // 3. Vueltas adelante y atrás con print_loops
+    cout << "LDEC (2 vueltas adelante): ";
+    cdlist.print_loops(cout, 2, true);
+    cout << endl;
+
+    cout << "LDEC (2 vueltas atras):    ";
+    cdlist.print_loops(cout, 2, false);
+    cout << endl;
+
+    // 4. rcall con 2 vueltas
+    cout << "LDEC rcall (2 vueltas atras): [";
+    cdlist.rcall([](const auto& node) { cout << "(" << node.getValue() << "," << node.getRef() << ") "; }, 2);
+    cout << "]" << endl;
+
+    // 5. ApplyFunction
+    cdlist.ApplyFunction(AddOne);
+    cout << "LDEC tras AddOne (1 vuelta): " << cdlist << endl;
+
+    // 6. Persistencia (escritura)
+    ofstream out("circulardoublylist.txt");
+    out << cdlist;
+    out.close();
+
+    // 7. clear y push_back post-clear
+    cdlist.clear();
+    cout << "LDEC tras clear (empty = " << (cdlist.empty() ? "true" : "false") << "): " << cdlist << endl;
+    cdlist.push_back(999, 99);
+    cout << "LDEC nuevo push_back tras clear: " << cdlist << endl;
+
+    // 8. Lectura desde archivo
+    IntCDList read_cdlist;
+    ifstream in("circulardoublylist.txt");
+    in >> read_cdlist;
+    in.close();
+    cout << "LDEC leida desde archivo (1 vuelta): " << read_cdlist << endl;
+    cout << "LDEC leida (2 vueltas atras): ";
+    read_cdlist.print_loops(cout, 2, false);
+    cout << endl;
+}
+

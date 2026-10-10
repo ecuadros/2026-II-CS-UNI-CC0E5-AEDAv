@@ -22,8 +22,9 @@
 *.dylib
 *.dll
 *.so.*
-
-
+circulardoublylist.txt
+circularlist.txt
+doublylist.txt
 # Fortran module files
 *.mod
 *.smod
@@ -69,3 +70,5 @@ vcpkg_installed/
 Testing/
 .cache/
 main
+estructura_proyecto.mmd
+.gitignore

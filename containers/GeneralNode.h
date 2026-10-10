@@ -15,18 +15,26 @@ public:
     Ref  getRef()   const { return m_ref;   }
     T&   value()          { return m_value; } // acceso mutable para ApplyFunction
 
-    using Delim = std::istream::char_type;
+    using Delim = CW;
 
-    friend std::ostream &operator <<(std::ostream &os, const GeneralNode<T> &node) {
-        os << "(" << node.getValue() << "," << node.getRef() << ")";
-        return os;
-    }
+  template <typename CharT, typename StreamTraits = std::char_traits<CharT>>
+  friend std::basic_ostream<CharT, StreamTraits> &operator <<(
+      std::basic_ostream<CharT, StreamTraits> &os, const GeneralNode<T> &node) {
+      os << static_cast<CharT>('(') 
+         << node.getValue() 
+         << static_cast<CharT>(',') 
+         << node.getRef() 
+         << static_cast<CharT>(')');
+      return os;
+  }
 
-    friend std::istream &operator >>(std::istream &is, GeneralNode<T> &node){
-        Delim d;
-        is >> d >> node.m_value >> d >> node.m_ref >> d;
-        return is;
-    }
+  template <typename CharT, typename StreamTraits = std::char_traits<CharT>>
+  friend std::basic_istream<CharT, StreamTraits> &operator >>(
+      std::basic_istream<CharT, StreamTraits> &is, GeneralNode<T> &node){
+      CharT d;
+      is >> d >> node.m_value >> d >> node.m_ref >> d;
+      return is;
+  }
 };
 
 #endif // __GENERAL_NODE_H__

@@ -5,22 +5,26 @@
 #include "GeneralIterator.h"
 #include "../foreach.h"
 
-template <typename T>
-class LinkedListNode : public GeneralNode<T> {
-    using Node = LinkedListNode<T>;
-    using NodePtr = Node*;
+template <typename Traits> struct LinkedListAscTraits;
+template <typename Traits> struct LinkedListDescTraits;
+
+template <typename Traits>
+class LinkedListNode : public GeneralNode<typename Traits::value_type> {
 public:
+    using value_type = typename Traits::value_type;
+    using Node = typename Traits::Node;
+    using NodePtr = Node*;
     Node* m_pNext = nullptr; // puntero al siguiente nodo, npara acceso directo necesita ser publico
-    LinkedListNode() : GeneralNode<T>(T{}, Ref{}), m_pNext(nullptr) {}
+    LinkedListNode() : GeneralNode<value_type>(value_type{}, Ref{}), m_pNext(nullptr) {}
     // añadir friend class añade otro typename al template
-    LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref), m_pNext(pNext) {}
+    LinkedListNode(const value_type& value, Ref ref, Node* pNext = nullptr) : GeneralNode<value_type>(value, ref), m_pNext(pNext) {}
 };
 
-template <typename T>
-class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<T>, LinkedListNode<T>> {
+template <typename Traits>
+class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<Traits>, typename Traits::Node> {
 public:
-    using value_type = LinkedListNode<T>;
-    using MySelf = LinkedListForwardIterator<T>;
+    using value_type = typename Traits::Node;
+    using MySelf = LinkedListForwardIterator<Traits>;
     using Parent = GeneralIterator<MySelf, value_type>;
     using Parent::Parent; // Inherit constructor
     LinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
@@ -38,14 +42,14 @@ template <typename T, typename _Compare = std::greater<T>>
 struct DescendingTraits : public DefaultTraits<T, _Compare> {};
 template <typename T>
 struct LinkedListAscTraits : public AscendingTraits<T> {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+    using Node              = LinkedListNode<LinkedListAscTraits<T>>;
+    using ForwardIterator   = LinkedListForwardIterator<LinkedListAscTraits<T>>;  // itera sobre Node, no sobre T
 };
 
 template <typename T>
 struct LinkedListDescTraits : public DescendingTraits<T> {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+    using Node              = LinkedListNode<LinkedListDescTraits<T>>;
+    using ForwardIterator   = LinkedListForwardIterator<LinkedListDescTraits<T>>;  // itera sobre Node, no sobre T
 };
 template <typename Traits>
 class LinkedList {
@@ -56,7 +60,7 @@ public:
     using ForwardIterator   = typename Traits::ForwardIterator;
     using Compare           = typename Traits::Compare;
     using Delim             = typename Node::Delim;
-private:
+protected:
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
     
@@ -87,39 +91,45 @@ public:
         internalInsert(value, ref, m_pRoot);
     }
 
-    std::ostream& write(std::ostream& os) { return os << *this; }
-    std::istream& read(std::istream& is) { return is >> *this; }
+    template <typename CharT, typename StreamTraits = std::char_traits<CharT>>
+    std::basic_ostream<CharT, StreamTraits>& write(std::basic_ostream<CharT, StreamTraits>& os) { return os << *this; }
+    template <typename CharT, typename StreamTraits = std::char_traits<CharT>>
+    std::basic_istream<CharT, StreamTraits>& read(std::basic_istream<CharT, StreamTraits>& is) { return is >> *this; }
 
-    friend std::ostream& operator <<(std::ostream& os, const LinkedList<Traits>& list) {
-        lock_guard lock(list.m_mutex);
+    template <typename CharT, typename StreamTraits = std::char_traits<CharT>>
+    friend std::basic_ostream<CharT, StreamTraits>& operator <<(
+        std::basic_ostream<CharT, StreamTraits>& os, const LinkedList<Traits>& list) {
+        std::lock_guard lock(list.m_mutex);
         auto first = true;
-        os << "[";
+        os << static_cast<CharT>('[');
         for (auto it = list.begin(); it != list.end(); ++it){
             if (!first)
-                os << ",";
+                os << static_cast<CharT>(',');
             os << *it;
             first = false;
         }
-        return os << "]";
+        return os << static_cast<CharT>(']');
     }
-    
-    friend std::istream &operator >>(std::istream &is, LinkedList<Traits> &list) {
-        Delim d;
+        
+    template <typename CharT, typename StreamTraits = std::char_traits<CharT>>
+    friend std::basic_istream<CharT, StreamTraits> &operator >>(
+        std::basic_istream<CharT, StreamTraits> &is, LinkedList<Traits> &list) {
+        CharT d;
         Node node;
         list.clear();
 
         is >> d;
-        if (is >> d && d != ']'){
+        if (is >> d && d != static_cast<CharT>(']')){
             is.unget();
             while(is >> node >> d){
                 list.push_back(node.getValue(), node.getRef());
-                if (d == ']'){
+                if (d == static_cast<CharT>(']')){
                     break;
                 }
             }    
         }
 
-        return is; 
+      return is; 
     }
     
     // Iterators
@@ -149,9 +159,11 @@ public:
 
 template <typename Traits>
 LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ 
+    if(this == &other)
+        return *this;
     clear();
     if(!other.m_pRoot)
-        return;
+        return *this;
     std::lock_guard<std::mutex> lock(other.m_mutex);
 
     m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);
@@ -171,8 +183,11 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 template <typename Traits>
 void LinkedList<Traits>::clear(){
     scoped_lock lock(m_mutex);
-    for (auto it = begin(); it != end(); ++it){
-        delete& (*it);
+    Node* curr = m_pRoot;
+    while (curr) {
+        Node* next = curr->m_pNext;
+        delete curr;
+        curr = next;
     }
     m_pRoot = nullptr;
     m_pTail = nullptr;

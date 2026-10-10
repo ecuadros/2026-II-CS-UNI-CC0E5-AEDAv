@@ -7,8 +7,11 @@ using namespace std;
 // Compilar asi: make
 // Ejecutar asi: ./main
 int main() {
-    DemoVector();
-    DemoRaceCondition();
-    DemoLinkedList();
-    return 0;
-}
+      DemoVector();
+      DemoRaceCondition();
+      DemoLinkedList();
+      DemoCircularLinkedList();
+      DemoDoublyLinkedList();
+      DemoCircularDoublyLinkedList();
+      return 0;
+  }
