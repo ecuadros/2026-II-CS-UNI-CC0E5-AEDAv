@@ -7,8 +7,8 @@ using namespace std;
 // Compilar asi: make
 // Ejecutar asi: ./main
 int main() {
-    DemoVector();
-    DemoRaceCondition();
+    // DemoVector();
+    // DemoRaceCondition();
     DemoLinkedList();
     DemoCircularLinkedList();
     DemoDoubleLinkedList();

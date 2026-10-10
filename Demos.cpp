@@ -226,28 +226,17 @@ void DemoVector() {
     TestTraversal(strVec);
 }
 
-// Insertamos muchos elementos (generados en un loop, no a mano)
-// concurrentemente y comparamos cuantos deberian haber entrado contra
-// cuantos entraron realmente. Si push_back no estuviera sincronizado
-// (sin el mutex/lock_guard actual) esto perderia inserciones o crashearia;
-// con el mutex protegiendo push_back/resize, deberia dar siempre 0 perdidas.
-void DemoRaceCondition() {
-    const size_t N = 200000;
+template <typename Container>
+void TestRaceCondition(const string &name,
+                       const vector<pair<TX, Ref>> &values) {
+    Container container;
 
-    vector<pair<TX, Ref>> values(N);
-    for (size_t i = 0; i < N; ++i)
-        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
-
-    Vector<VectorAscTraits<TX>> vec;
-
-    // Insercion concurrente: NThreads workers insertando en paralelo sobre
-    // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
     size_t n = values.size();
     vector<thread> workers;
     for (int t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&vec, &values, n, t](){
+        workers.emplace_back([&container, &values, n, t](){
             for (size_t i = t; i < n; i += NThreads)
-                vec.push_back(values[i].first, values[i].second);
+                container.push_back(values[i].first, values[i].second);
         });
     }
     for (auto &worker : workers)
@@ -256,19 +245,34 @@ void DemoRaceCondition() {
     long long expectedSum = 0;
     for (auto &v : values) expectedSum += v.first;
 
+    size_t actualCount = 0;
     long long actualSum = 0;
-    for (size_t i = 0; i < vec.size(); ++i) actualSum += vec[i].getValue();
+    for (auto it = container.begin(); it != container.end(); ++it) {
+        ++actualCount;
+        actualSum += (*it).getValue();
+    }
 
-    cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
-         << "el Vector quedo con " << vec.size() << endl;
+    cout << "DemoRaceCondition (" << name << "): se esperaban " << n
+         << " elementos, el Container quedo con " << actualCount << endl;
     cout << "  suma esperada = " << expectedSum
          << ", suma obtenida = " << actualSum << endl;
 
-    if (vec.size() != N || actualSum != expectedSum)
-        cout << "  *** Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar) ***" << endl;
+    if (actualCount != n || actualSum != expectedSum)
+        cout << "  *** Race condition detectada: se perdieron inserciones (push_back sin sincronizar) ***" << endl;
     else
-        cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
+        cout << "  No se perdio ningun elemento: el mutex de push_back "
              << "sincroniza correctamente las inserciones concurrentes" << endl;
+}
+
+template <typename Container>
+void DemoRaceCondition(const string &name) {
+    const size_t N = 200000;
+    vector<pair<TX, Ref>> values(N);
+    for (size_t i = 0; i < N; ++i)
+        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
+
+    cout << "DemoRaceCondition (" << NThreads << " hilos, push_back):\n";
+    TestRaceCondition<Container>(name, values);
 }
 
 void DemoLinkedList() {
@@ -282,6 +286,7 @@ void DemoLinkedList() {
     cout << "Tras AddOne: " << lista << '\n';
     lista.ApplyFunction(AddX<TX>, TX(10));
     cout << "Tras AddX(10): " << lista << '\n';
+    DemoRaceCondition<List>("LinkedList");
 }
 
 void DemoCircularLinkedList() {
@@ -301,6 +306,7 @@ void DemoCircularLinkedList() {
     cout << "Lista descendente: " << descendente << '\n';
     cout << "Ciclo descendente: ";
     PrintCircularTraversal(descendente.begin(), descendente.end());
+    DemoRaceCondition<AscList>("CircularLinkedList");
 }
 
 void DemoDoubleLinkedList() {
@@ -317,6 +323,7 @@ void DemoDoubleLinkedList() {
     descendente.insert(3, 103);
     descendente.insert(7, 107);
     cout << "Lista descendente: " << descendente << '\n';
+    DemoRaceCondition<AscList>("DoubleLinkedList");
 }
 
 void DemoCircularDoubleLinkedList() {
@@ -341,4 +348,5 @@ void DemoCircularDoubleLinkedList() {
     PrintCircularTraversal(descendente.begin(), descendente.end());
     cout << "Ciclo descendente hacia atras: ";
     PrintCircularTraversal(descendente.rbegin(), descendente.rend());
+    DemoRaceCondition<AscList>("CircularDoubleLinkedList");
 }
