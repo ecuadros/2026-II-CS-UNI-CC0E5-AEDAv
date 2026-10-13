@@ -238,7 +238,7 @@ insert(...) empieza desde el nodo raiz
 */
 template <typename Traits>
 void DoublyLinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
-    if (m_pRoot != nullptr && m_pTail->m_pNext != nullptr) {
+    /*if (m_pRoot != nullptr && m_pTail->m_pNext != nullptr) {
         m_pTail->m_pNext = nullptr;
     }
     if (rParent == nullptr || value < rParent->getValue()) {
@@ -247,6 +247,18 @@ void DoublyLinkedList<Traits>::internalInsert(const value_type& value, Ref ref, 
         if(rParent->m_pNext != nullptr) rParent->m_pNext->m_pPrev = rParent;
         if (rParent->m_pNext == nullptr) m_pTail = rParent;
         ++m_size;
+        return;
+    }
+    internalInsert(value, ref, rParent->m_pNext);*/
+    if (m_pRoot != nullptr && m_pTail->m_pNext != nullptr) {
+        m_pTail->m_pNext = nullptr;
+        m_pRoot->m_pPrev = nullptr;
+    }
+    if (rParent == nullptr || value < rParent->getValue()) {
+        rParent = new Node(value, ref, rParent, rParent == nullptr ? m_pTail: rParent->m_pPrev); //
+        //m_pTail = rParent;
+        if (rParent->m_pNext == nullptr) { m_pTail = rParent; }
+        else { rParent->m_pNext->m_pPrev = rParent; }
         return;
     }
     internalInsert(value, ref, rParent->m_pNext);

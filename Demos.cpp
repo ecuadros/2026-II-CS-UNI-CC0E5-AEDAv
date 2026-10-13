@@ -9,6 +9,7 @@
 #include "containers/linkedlist.h"
 #include "containers/cll.h"
 #include "containers/dll.h"
+#include "containers/dcll.h"
 #include "Demos.h"
 using namespace std;
 
@@ -290,10 +291,10 @@ void DemoDoublyLinkedList() {
         dlist.push_back(e.first, e.second);
 
     // Pruebas de insert
-    /*dlist.insert(4, 12);
+    dlist.insert(4, 12);
     dlist.insert(11, 20);
     dlist.insert(7, 6);
-    cout << "DoublyLinkedList luego de hacer 3 inserts " << dlist << endl;*/
+    cout << "DoublyLinkedList luego de hacer 3 inserts " << dlist << endl;
 
     // Prueba de apply function
     dlist.ApplyFunction(AddOne);
@@ -314,5 +315,48 @@ void DemoDoublyLinkedList() {
     in.close();
     cout << "DoublyLinkedList leida desde archivo: " << new_dlist << endl;
     TestTraversal(new_dlist);
+    cout << endl;
+}
+
+void DemoCircularDoublyLinkedList() {
+    using IntDLinkedList = CircularDoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
+
+    ofstream("cdlinkedlist.txt", ios::trunc).close();
+
+    // Pruebas de pushback
+    cout << "CIRCULAR DOUBLY LINKED LIST:\n";
+    IntDLinkedList cdlist;
+    TestContainer(cdlist, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "cdlinkedlist.txt");
+    TestTraversal(cdlist);
+
+    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    for(auto& e : elements)
+        cdlist.push_back(e.first, e.second);
+
+    // Pruebas de insert
+    cdlist.insert(4, 12);
+    cdlist.insert(11, 20);
+    cdlist.insert(7, 6);
+    cout << "DoublyLinkedList luego de hacer 3 inserts " << cdlist << endl;
+
+    // Prueba de apply function
+    cdlist.ApplyFunction(AddOne);
+    cout << "DoublyLinkedList tras usar Add One a sus elementos: " << cdlist << endl;
+    cdlist.ApplyFunction(AddX<TX>, TX(10));
+    cout << "DoublyLinkedList tras usar AddX(10) a sus elementos: " << cdlist << endl;
+
+    // Prueba de clear
+    cdlist.clear();
+    cout << "DoublyLinkedList luego de usar clear" << cdlist << endl;
+    cdlist.push_back(10, 2);
+    cout << "DoublyLinkedList luego de un nuevo push_back " << cdlist << endl;
+
+    // Prueba de lectura
+    IntDLinkedList new_cdlist;
+    ifstream in("cdlinkedlist.txt");
+    in >> new_cdlist;
+    in.close();
+    cout << "DoublyLinkedList leida desde archivo: " << new_cdlist << endl;
+    TestTraversal(new_cdlist);
     cout << endl;
 }
