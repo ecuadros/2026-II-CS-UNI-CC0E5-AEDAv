@@ -1,31 +1,9 @@
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
 #include <mutex>
-#include "GeneralNode.h"
-#include "GeneralIterator.h"
-#include "listiterator.h"
+#include "listnodes.h"
 #include "traversalops.h"
 
-using namespace std;
-
-template <class Node>
-struct NextLink {
-  Node* m_pNext = nullptr;
-};
-
-template <typename T>
-class LinkedListNode : public GeneralNode<T>, public NextLink<LinkedListNode<T>> {
-    using Node = LinkedListNode<T>;
-    using NodePtr = Node*;
-public:
-    LinkedListNode() : GeneralNode<T>(T{}, Ref{}) {}
-    LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref) {
-        this->m_pNext = pNext;
-    }
-};
-
-template <typename T, typename NodeType = LinkedListNode<T>>
-using LinkedListForwardIterator = ListIterator<NodeType>;
 template <typename Traits>
 class LinkedList : public TraversalOps<LinkedList<Traits>> {
     friend class TraversalOps<LinkedList<Traits>>;
@@ -135,9 +113,6 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
         next = next->m_pNext;
     }
     m_pTail = curr;
-
-    if(other.m_pTail != nullptr && other.m_pTail->m_pNext == other.m_pRoot)
-        this->m_pTail->m_pNext = this->m_pRoot; 
     corregirPunteros();
     return *this;
 }
@@ -185,7 +160,7 @@ void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePt
         return;
     }
 
-    if (rParent == m_pTail && !m_comp(value, rParent->getValue())) {
+    if (rParent == m_pTail) {
         NodePtr new_node = new Node(value, ref, nullptr);
         rParent->m_pNext = new_node;
         m_pTail = new_node;

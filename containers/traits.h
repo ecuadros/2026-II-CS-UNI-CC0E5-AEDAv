@@ -1,14 +1,14 @@
 #ifndef __CONTAINERS_TRAITS_H__
 #define __CONTAINERS_TRAITS_H__
 
-#include "doublelinkedlist.h"
+#include "listnodes.h"
 #include <functional>
 
 template <typename T, typename NodeType, typename Comparator>
 struct ListTraits {
   using value_type = T;
   using Node = NodeType;
-  using ForwardIterator = ListIterator<Node>;
+  using ForwardIterator = LinkedListForwardIterator<T, Node>;
   using Compare = Comparator;
 };
 
@@ -17,7 +17,7 @@ struct LinkedListTraits : ListTraits<T, LinkedListNode<T>, _Compare> {};
 
 template <typename T, typename _Compare = std::less<T>>
 struct DoubleLinkedListTraits : ListTraits<T, DoubleLinkedNode<T>, _Compare> {
-  using BackwardIterator = ListIterator<DoubleLinkedNode<T>, true>;
+  using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
 };
 
 template <class T>

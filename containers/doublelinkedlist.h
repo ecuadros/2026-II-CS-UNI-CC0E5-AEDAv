@@ -1,33 +1,24 @@
 #ifndef __DOUBLE_LINKED_LIST__
 #define __DOUBLE_LINKED_LIST__
 
-#include "GeneralIterator.h"
-#include "GeneralNode.h"
 #include "linkedlist.h"
-
-template <typename T>
-class DoubleLinkedNode : public GeneralNode<T>,
-                         public NextLink<DoubleLinkedNode<T>> {
-  using Node = DoubleLinkedNode<T>;
-
-public:
-  Node *m_pPrev = nullptr;
-  DoubleLinkedNode() : GeneralNode<T>(T{}, Ref{}) {};
-  DoubleLinkedNode(const T &value, Ref ref, Node *pNext, Node *pPrev = nullptr)
-      : GeneralNode<T>(value, ref), m_pPrev(pPrev) {
-    this->m_pNext = pNext;
-  }
-};
-
-template <typename T>
-using DoubleLinkedListBackwardIterator =
-    ListIterator<DoubleLinkedNode<T>, true>;
 
 template <typename Traits> class DoubleLinkedList : public LinkedList<Traits> {
 public:
+  using Parent = LinkedList<Traits>;
+  using value_type = typename Traits::value_type;
   using Node = typename Traits::Node;
   using NodePtr = Node *;
   using BackwardIterator = typename Traits::BackwardIterator;
+
+  DoubleLinkedList() = default;
+  DoubleLinkedList(const DoubleLinkedList &other) : Parent(other) {
+    corregirPunteros();
+  }
+  DoubleLinkedList(std::initializer_list<std::pair<value_type, Ref>> values)
+      : Parent(values) {
+    corregirPunteros();
+  }
 
 protected:
   void corregirPunteros() override {
