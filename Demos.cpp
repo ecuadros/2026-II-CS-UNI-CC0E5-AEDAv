@@ -7,9 +7,9 @@
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
-#include "containers/cll.h"
-#include "containers/dll.h"
-#include "containers/dcll.h"
+#include "containers/circularlinkedlist.h"
+#include "containers/doublylinkedlist.h"
+#include "containers/circulardoublylinkedlist.h"
 #include "Demos.h"
 using namespace std;
 

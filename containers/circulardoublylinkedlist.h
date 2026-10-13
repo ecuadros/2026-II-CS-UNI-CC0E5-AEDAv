@@ -1,7 +1,7 @@
-#ifndef __DCLL_H__
-#define __DCLL_H__
+#ifndef __CIRCULARDOUBLYLINKEDLIST_H__
+#define __CIRCULARDOUBLYLINKEDLIST_H__
 
-#include "dll.h"
+#include "doublylinkedlist.h"
 
 template <typename Traits>
 class CircularDoublyLinkedList: public DoublyLinkedList<Traits> {
@@ -32,4 +32,4 @@ class CircularDoublyLinkedList: public DoublyLinkedList<Traits> {
 };
 
 
-#endif // __DCLL_H__
+#endif // __CIRCULARDOUBLYLINKEDLIST_H__

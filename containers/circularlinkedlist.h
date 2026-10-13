@@ -1,5 +1,5 @@
-#ifndef __CLL_H__
-#define __CLL_H__
+#ifndef __CIRCULARLINKEDLIST_H__
+#define __CIRCULARLINKEDLIST_H__
 #include "linkedlist.h"
 
 template <typename Traits>
@@ -26,4 +26,4 @@ class CircularLinkedList: public LinkedList<Traits> {
         }
 };
 
-#endif // __CLL_H__
+#endif // __CIRCULARLINKEDLIST_H__

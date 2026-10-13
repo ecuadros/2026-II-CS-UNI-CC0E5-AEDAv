@@ -1,29 +1,267 @@
 #ifndef __DOUBLYLINKEDLIST_H__
 #define __DOUBLYLINKEDLIST_H__
-#include "linkedlist.h"
+#include <cstddef>
+#include <mutex>
+#include "Node.h"
+#include "GeneralIterator.h"
+#include "traits.h"
+#include "../foreach.h"
+//#include "linkedlist.h"
+
+
+template <typename T>
+class DoublyLinkedListForwardIterator : public GeneralIterator<DoublyLinkedListForwardIterator<T>, DoublyLinkedListNode<T>> {
+public:
+    using value_type = DoublyLinkedListNode<T>;
+    using MySelf = DoublyLinkedListForwardIterator<T>;
+    using Parent = GeneralIterator<MySelf, value_type>;
+    using Parent::Parent; // Inherit constructor
+    DoublyLinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
+};
+
+template <typename T>
+class DoublyLinkedListBackwardIterator : public GeneralIterator<DoublyLinkedListBackwardIterator<T>, DoublyLinkedListNode<T>> {
+public:
+    using value_type = DoublyLinkedListNode<T>;
+    using MySelf = DoublyLinkedListBackwardIterator<T>;
+    using Parent = GeneralIterator<MySelf, value_type>;
+    using Parent::Parent; // Inherit constructor
+    DoublyLinkedListBackwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pPrev; return *this; }
+};
+
+template <typename T>
+struct DoublyLinkedListAscTraits : public AscendingTraits<T> {
+    using Node              = DoublyLinkedListNode<T>;
+    using ForwardIterator   = DoublyLinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+    using BackwardIterator   = DoublyLinkedListBackwardIterator<T>;
+};
+
+template <typename T>
+struct DoublyLinkedListDescTraits : public DescendingTraits<T> {
+    using Node              = DoublyLinkedListNode<T>;
+    using ForwardIterator   = DoublyLinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+    using BackwardIterator   = DoublyLinkedListBackwardIterator<T>;
+};
 
 template <typename Traits>
-class CircularLinkedList: public LinkedList<Traits> {
-    public:
-        using value_type        = typename Traits::value_type;
-        using Node              = typename Traits::Node;
-        using NodePtr           = Node *;
-        using ForwardIterator   = typename Traits::ForwardIterator;
-        using Compare           = typename Traits::Compare;
-        using Delim             = typename Node::Delim;
+class DoublyLinkedList {
+public:
+    using value_type        = typename Traits::value_type;
+    using Node              = typename Traits::Node;
+    using NodePtr           = Node *;
+    using ForwardIterator   = typename Traits::ForwardIterator;
+    using BackwardIterator   = typename Traits::BackwardIterator;
+    using Compare           = typename Traits::Compare;
+    using Delim             = typename Node::Delim;
+protected:
+    NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
+    NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
+    size_t m_size   = 0;
 
+    Compare m_comp; // comparador para ordenar los nodos de la lista
+    mutable std::mutex m_mutex; // mutex para sincronización
 
-        ForwardIterator end() const override { return ForwardIterator(this->m_pRoot); }
+    NodePtr GetRoot() const { return m_pRoot; }
+    virtual void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
 
-        void push_back(const value_type& value, Ref ref) override {
-            LinkedList<Traits>::push_back(value, ref);
-            this->m_pTail->m_pNext = this->m_pRoot;
+public:
+    DoublyLinkedList() {}
+    DoublyLinkedList(const DoublyLinkedList& another){ *this = another; } // copia profunda de la lista enlazada
+    DoublyLinkedList& operator=(const DoublyLinkedList& another); // no se permite asignacion
+    DoublyLinkedList(initializer_list<pair<value_type, Ref>> values) {
+        for (const auto &v : values)
+            push_back(v.first, v.second);
+    }
+
+    void clear();
+    virtual ~DoublyLinkedList(){ clear(); };
+
+    virtual void push_back(const value_type& value, Ref ref);
+
+    bool empty() const { return m_pRoot == nullptr; }
+
+    void insert(const value_type& value, Ref ref) {
+        scoped_lock lock(m_mutex);
+        internalInsert(value, ref, m_pRoot);
+    }
+
+    std::ostream& write(std::ostream& os) { return os << *this; }
+    std::istream& read(std::istream& is) { return is >> *this; }
+
+    friend std::ostream& operator <<(std::ostream& os, const DoublyLinkedList<Traits>& list) {
+        lock_guard lock(list.m_mutex);
+        auto first = true;
+        os << "[";
+        //size_t cont = 0;
+        auto it = list.begin();
+        if (it != nullptr) {
+            do {
+                if (!first)
+                    os << ",";
+                os << *it;
+                first = false;
+                ++it;
+            } while (it != list.end());
         }
 
-        void internalInsert (const value_type& value, Ref ref, NodePtr& rParent) override {
-            LinkedList<Traits>::internalInsert(value, ref, rParent);
-            this->m_pTail->m_pNext = this->m_pRoot;
+        /*for (auto it = list.begin(); it != list.end() && cont < list.size(); ++it, ++cont){
+            if (!first)
+                os << ",";
+            os << *it;
+            first = false;
+        }*/
+        return os << "]";
+    }
+
+    friend std::istream &operator >>(std::istream &is, DoublyLinkedList<Traits> &list) {
+        Delim d;
+        Node node;
+        list.clear();
+
+        is >> d;
+        if (is >> d && d != ']'){
+            is.unget();
+            while(is >> node >> d){
+                list.push_back(node.getValue(), node.getRef());
+                if (d == ']'){
+                    break;
+                }
+            }
         }
+
+        return is;
+    }
+
+    size_t size()     const { return m_size; }
+
+    // Iterators
+    // ForwardIterator begin() { return ForwardIterator(m_pRoot); }
+    // ForwardIterator end() { return ForwardIterator(nullptr); }
+    ForwardIterator begin() const { return ForwardIterator(m_pRoot); }
+    virtual ForwardIterator end() const { return ForwardIterator(nullptr); }
+    BackwardIterator rbegin() const { return BackwardIterator(m_pTail); }
+    virtual BackwardIterator rend() const { return BackwardIterator(nullptr); }
+
+    template <typename Func, typename... Args>
+    void ApplyFunction(Func func, Args... args) {
+        call(func, std::forward<Args>(args)...);
+    }
+    template <typename Func, typename... Args>
+    Node& FirstThat(Func func, Args... args) {
+        return call(func, std::forward<Args>(args)...);
+    }
+    template<typename Func, typename... Args>
+    decltype(auto) call(Func func, Args&&... args)
+    {    lock_guard<mutex> lock(m_mutex);
+        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
+            ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
+        else // return type is not void:
+            return ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
+    }
+    template<typename Func, typename... Args>
+    decltype(auto) rcall(Func func, Args&&... args)
+    {    lock_guard<mutex> lock(m_mutex);
+        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
+            ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
+        else // return type is not void:
+            return ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
+    }
 };
+
+
+template <typename Traits>
+DoublyLinkedList<Traits>& DoublyLinkedList<Traits>::operator=(const DoublyLinkedList<Traits>& other){
+    clear();
+    /*if(!other.m_pRoot)
+        return;*/
+    std::lock_guard<std::mutex> lock(other.m_mutex);
+
+    /*m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);
+
+    NodePtr next = other.m_pRoot->m_pNext;
+    NodePtr curr = m_pRoot;
+
+    while(next){
+        curr->m_pNext = new Node(next->getValue(), next->getRef(), nullptr);
+        curr = curr->m_pNext;
+        next = next->m_pNext;
+    }
+    m_pTail = curr;*/
+    //auto current = other.m_pRoot;
+    auto it = other.begin();
+    if (it != nullptr) {
+        do {
+            this->push_back(it->getValue(), it->getRef());
+            if(it->m_pNext == other.end()) m_pTail = it;
+            it = it->m_pNext;
+        } while(it != other.end());
+    }
+    /*size_t cont = 0;
+    while(current != nullptr && cont < m_size) {
+        this->push_back(current->getValue(), current->getRef());
+        if(current->m_pNext == nullptr) m_pTail = current;
+        current = current->m_pNext;
+       ++cont;
+    }*/
+    return *this;
+}
+
+template <typename Traits>
+void DoublyLinkedList<Traits>::clear(){
+    scoped_lock lock(m_mutex);
+    for (auto it = begin(); it != end(); ++it){
+        if (it == begin() && m_pTail->m_pNext != nullptr) m_pTail->m_pNext = nullptr;
+        delete& (*it);
+    }
+    m_pRoot = nullptr;
+    m_pTail = nullptr;
+    m_size = 0;
+}
+
+template<typename Traits>
+void DoublyLinkedList<Traits>::push_back(const value_type& value, Ref ref){
+    scoped_lock lock(m_mutex);
+    if (!this->m_pRoot){
+        this->m_pRoot = new Node(value, ref, nullptr, nullptr);
+        this->m_pTail = this->m_pRoot;
+    } else {
+        this->m_pTail->m_pNext = new Node(value, ref, nullptr, this->m_pTail);
+        this->m_pTail = this->m_pTail->m_pNext;
+    }
+    ++m_size;
+}
+
+/*
+internalInsert(...) recorre todos los nodos hasta llegar al final, y en la condición de parada
+si el nodo padre es nullptr, crea uno nuevo con el valor y retorna
+insert(...) empieza desde el nodo raiz
+*/
+template <typename Traits>
+void DoublyLinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
+    /*if (m_pRoot != nullptr && m_pTail->m_pNext != nullptr) {
+        m_pTail->m_pNext = nullptr;
+    }
+    if (rParent == nullptr || value < rParent->getValue()) {
+        if (rParent == nullptr) push_back(value, ref);
+        else { rParent = new Node(value, ref, rParent, m_pRoot == nullptr ? nullptr: rParent->m_pPrev); }
+        if(rParent->m_pNext != nullptr) rParent->m_pNext->m_pPrev = rParent;
+        if (rParent->m_pNext == nullptr) m_pTail = rParent;
+        ++m_size;
+        return;
+    }
+    internalInsert(value, ref, rParent->m_pNext);*/
+    if (m_pRoot != nullptr && m_pTail->m_pNext != nullptr) {
+        m_pTail->m_pNext = nullptr;
+        m_pRoot->m_pPrev = nullptr;
+    }
+    if (rParent == nullptr || value < rParent->getValue()) {
+        rParent = new Node(value, ref, rParent, rParent == nullptr ? m_pTail: rParent->m_pPrev); //
+        //m_pTail = rParent;
+        if (rParent->m_pNext == nullptr) { m_pTail = rParent; }
+        else { rParent->m_pNext->m_pPrev = rParent; }
+        return;
+    }
+    internalInsert(value, ref, rParent->m_pNext);
+}
 
 #endif // __DOUBLYLINKEDLIST_H__
