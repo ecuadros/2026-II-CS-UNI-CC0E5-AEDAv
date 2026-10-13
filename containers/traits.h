@@ -2,20 +2,22 @@
 #define __CONTAINERS_TRAITS_H__
 
 #include "doublelinkedlist.h"
-#include "linkedlist.h"
-template <typename T, typename _Compare = std::less<T>>
-struct LinkedListTraits {
+#include <functional>
+
+template <typename T, typename NodeType, typename Comparator>
+struct ListTraits {
   using value_type = T;
-  using Node = LinkedListNode<T>;
-  using ForwardIterator = LinkedListForwardIterator<T, Node>;
-  using Compare = _Compare;
+  using Node = NodeType;
+  using ForwardIterator = ListIterator<Node>;
+  using Compare = Comparator;
 };
 
 template <typename T, typename _Compare = std::less<T>>
-struct DoubleLinkedListTraits : LinkedListTraits<T, _Compare> {
-  using Node = DoubleLinkedNode<T>;
-  using ForwardIterator = LinkedListForwardIterator<T, Node>;
-  using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
+struct LinkedListTraits : ListTraits<T, LinkedListNode<T>, _Compare> {};
+
+template <typename T, typename _Compare = std::less<T>>
+struct DoubleLinkedListTraits : ListTraits<T, DoubleLinkedNode<T>, _Compare> {
+  using BackwardIterator = ListIterator<DoubleLinkedNode<T>, true>;
 };
 
 template <class T>

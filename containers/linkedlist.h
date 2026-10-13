@@ -3,41 +3,34 @@
 #include <mutex>
 #include "GeneralNode.h"
 #include "GeneralIterator.h"
-#include "../foreach.h"
+#include "listiterator.h"
+#include "traversalops.h"
+
+using namespace std;
+
+template <class Node>
+struct NextLink {
+  Node* m_pNext = nullptr;
+};
 
 template <typename T>
-class LinkedListNode : public GeneralNode<T> {
+class LinkedListNode : public GeneralNode<T>, public NextLink<LinkedListNode<T>> {
     using Node = LinkedListNode<T>;
     using NodePtr = Node*;
 public:
-    Node* m_pNext = nullptr; // puntero al siguiente nodo, npara acceso directo necesita ser publico
-    LinkedListNode() : GeneralNode<T>(T{}, Ref{}), m_pNext(nullptr) {}
-    // añadir friend class añade otro typename al template
-    LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref), m_pNext(pNext) {}
+    LinkedListNode() : GeneralNode<T>(T{}, Ref{}) {}
+    LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref) {
+        this->m_pNext = pNext;
+    }
 };
 
 template <typename T, typename NodeType = LinkedListNode<T>>
-class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<T, NodeType>, NodeType> {
-public:
-    using value_type = NodeType;
-    using MySelf = LinkedListForwardIterator<T, NodeType>;
-    using Parent = GeneralIterator<MySelf, value_type>;
-private:
-    value_type* m_start; 
-public:
-    
-    LinkedListForwardIterator(value_type* ptr) : Parent(ptr), m_start(ptr) {}
-    LinkedListForwardIterator& operator++() { 
-        auto next = Parent::m_ptr->m_pNext;
-        Parent::m_ptr = static_cast<value_type*>(next); 
-        if(Parent::m_ptr == m_start) 
-            Parent::m_ptr = nullptr;
-        return *this; 
-    }
-};
+using LinkedListForwardIterator = ListIterator<NodeType>;
 template <typename Traits>
-class LinkedList {
+class LinkedList : public TraversalOps<LinkedList<Traits>> {
+    friend class TraversalOps<LinkedList<Traits>>;
 public:
+    using traits_type       = Traits;
     using value_type        = typename Traits::value_type;
     using Node              = typename Traits::Node;
     using NodePtr           = Node *;
@@ -54,9 +47,10 @@ protected:
     NodePtr GetRoot() const { return m_pRoot; }
     void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
     virtual void corregirPunteros() {};
+    virtual void completarInsercion(NodePtr, NodePtr) {};
 
 public:
-    LinkedList() {}
+    LinkedList() = default;
     LinkedList(const LinkedList& another){ *this = another; } // copia profunda de la lista enlazada
     LinkedList& operator=(const LinkedList& another); // no se permite asignacion
     LinkedList(initializer_list<pair<value_type, Ref>> values) {
@@ -118,22 +112,6 @@ public:
     ForwardIterator begin() const { return ForwardIterator(m_pRoot); }
     ForwardIterator end() const { return ForwardIterator(nullptr); }
 
-    template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
-        call(func, std::forward<Args>(args)...);
-    }
-    template <typename Func, typename... Args>
-    Node& FirstThat(Func func, Args... args) {
-        return call(func, std::forward<Args>(args)...);
-    }
-    template<typename Func, typename... Args>
-    decltype(auto) call(Func func, Args&&... args)
-    {    lock_guard<mutex> lock(m_mutex);
-        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
-            ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
-        else // return type is not void:
-            return ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
-    }
 };
 
 
@@ -148,45 +126,47 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 
     m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);
 
-    NodePtr next = static_cast<NodePtr>(other.m_pRoot->m_pNext);
+    NodePtr next = other.m_pRoot->m_pNext;
     NodePtr curr = m_pRoot;
 
     while(next != nullptr && next != other.m_pRoot){
         curr->m_pNext = new Node(next->getValue(), next->getRef(), nullptr);
-        curr = static_cast<NodePtr>(curr->m_pNext);
-        next = static_cast<NodePtr>(next->m_pNext);
+        curr = curr->m_pNext;
+        next = next->m_pNext;
     }
     m_pTail = curr;
 
     if(other.m_pTail != nullptr && other.m_pTail->m_pNext == other.m_pRoot)
         this->m_pTail->m_pNext = this->m_pRoot; 
+    corregirPunteros();
     return *this;
 }
 
 template <typename Traits>
 void LinkedList<Traits>::clear(){
     scoped_lock lock(m_mutex);
+    if(m_pTail && m_pTail->m_pNext == m_pRoot)
+        m_pTail->m_pNext = nullptr;
+
     NodePtr current = m_pRoot;
-    while (current != nullptr) {
-        NodePtr next = static_cast<NodePtr>(current->m_pNext);
+    while(current != nullptr){
+        NodePtr next = current->m_pNext;
         delete current;
         current = next;
     }
-    m_pRoot = nullptr;
-    m_pTail = nullptr;
+    m_pRoot = m_pTail = nullptr;
 }
 
 template<typename Traits>
 void LinkedList<Traits>::push_back(const value_type& value, Ref ref){
     scoped_lock lock(m_mutex);
+    NodePtr previous = m_pTail;
     NodePtr new_node = new Node(value, ref, nullptr);
-    if (!this->m_pRoot){
-        this->m_pRoot = new_node;
-        this->m_pTail = new_node;
-    } else {
-        this->m_pTail->m_pNext = new_node;
-        this->m_pTail = new_node;
-    }
+
+    if (previous) previous->m_pNext = new_node;
+    else m_pRoot = new_node;
+    m_pTail = new_node;
+    completarInsercion(new_node, previous);
 }
 
 /*
@@ -212,7 +192,7 @@ void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePt
         return;
     }
 
-    NodePtr next = static_cast<NodePtr>(rParent->m_pNext);
+    NodePtr next = rParent->m_pNext;
     internalInsert(value, ref, next);
     rParent->m_pNext = next;
 }
