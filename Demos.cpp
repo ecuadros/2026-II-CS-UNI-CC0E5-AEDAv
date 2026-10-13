@@ -5,13 +5,8 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "containers/circulardoublelinkedlist.h"
-#include "containers/circularlinkedlist.h"
-#include "containers/doublelinkedlist.h"
-#include "containers/traits.h"
+#include "containers/aliases.h"
 #include "foreach.h"
-#include "containers/vector.h"
-#include "containers/linkedlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -216,12 +211,12 @@ void DemoVector() {
 
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
-    Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    VectorAsc<TX> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
 
     ofstream("vector_str.txt", ios::trunc).close();
-    Vector<VectorAscTraits<string>> strVec;
+    VectorAsc<string> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
 }
@@ -276,7 +271,7 @@ void DemoRaceCondition(const string &name) {
 }
 
 void DemoLinkedList() {
-    using List = LinkedList<LinkedListAscTraits<TX>>;
+    using List = LinkedAscList<TX>;
     cout << "DemoLinkedList:\n";
     List lista;
     TestGenericContainer(lista);
@@ -290,8 +285,8 @@ void DemoLinkedList() {
 }
 
 void DemoCircularLinkedList() {
-    using AscList = CircularLinkedList<LinkedListAscTraits<TX>>;
-    using DescList = CircularLinkedList<LinkedListDescTraits<TX>>;
+    using AscList = CircularLinkedAscList<TX>;
+    using DescList = CircularLinkedDescList<TX>;
     cout << "DemoCircularLinkedList:\n";
     AscList lista;
     TestGenericContainer(lista);
@@ -310,8 +305,8 @@ void DemoCircularLinkedList() {
 }
 
 void DemoDoubleLinkedList() {
-    using AscList = DoubleLinkedList<DoubleLinkedListAscTraits<TX>>;
-    using DescList = DoubleLinkedList<DoubleLinkedListDescTraits<TX>>;
+    using AscList = DoubleLinkedAscList<TX>;
+    using DescList = DoubleLinkedDescList<TX>;
     cout << "DemoDoubleLinkedList:\n";
     AscList lista;
     TestGenericContainer(lista);
@@ -327,8 +322,8 @@ void DemoDoubleLinkedList() {
 }
 
 void DemoCircularDoubleLinkedList() {
-    using AscList = CircularDoubleLinkedList<DoubleLinkedListAscTraits<TX>>;
-    using DescList = CircularDoubleLinkedList<DoubleLinkedListDescTraits<TX>>;
+    using AscList = CircularDoubleLinkedAscList<TX>;
+    using DescList = CircularDoubleLinkedDescList<TX>;
     cout << "DemoCircularDoubleLinkedList:\n";
     AscList lista;
     TestGenericContainer(lista);
