@@ -25,15 +25,17 @@ public:
 };
 
 template <typename T>
-class DoubleLinkedNode : public GeneralNode<T>,
+class DoubleLinkedNode : public LinkedListNode<T>,
                          public NextLink<DoubleLinkedNode<T>>,
                          public PrevLink<DoubleLinkedNode<T>> {
   using Node = DoubleLinkedNode<T>;
 
 public:
-  DoubleLinkedNode() : GeneralNode<T>(T{}, Ref{}) {}
+  using NextLink<Node>::m_pNext;
+
+  DoubleLinkedNode() = default;
   DoubleLinkedNode(const T &value, Ref ref, Node *pNext, Node *pPrev = nullptr)
-      : GeneralNode<T>(value, ref) {
+      : LinkedListNode<T>(value, ref, nullptr) {
     this->m_pNext = pNext;
     this->m_pPrev = pPrev;
   }
