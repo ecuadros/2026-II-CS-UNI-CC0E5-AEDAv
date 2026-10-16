@@ -4,9 +4,9 @@
 #include "listnodes.h"
 #include "traversalops.h"
 
-template <typename Traits>
-class LinkedList : public TraversalOps<LinkedList<Traits>> {
-    friend class TraversalOps<LinkedList<Traits>>;
+template <typename Traits, bool Double = false, bool Circular = false>
+class LinkedList : public TraversalOps<LinkedList<Traits, Double, Circular>> {
+    friend class TraversalOps<LinkedList>;
 public:
     using traits_type       = Traits;
     using value_type        = typename Traits::value_type;
@@ -24,8 +24,36 @@ protected:
 
     NodePtr GetRoot() const { return m_pRoot; }
     void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
-    virtual void corregirPunteros() {};
-    virtual void completarInsercion(NodePtr, NodePtr) {};
+    void corregirPunteros() {
+        if constexpr (Circular) {
+            if (m_pTail)
+                m_pTail->m_pNext = m_pRoot;
+        }
+        if constexpr (Double) {
+            NodePtr previous = nullptr;
+            NodePtr current = m_pRoot;
+            while (current != nullptr) {
+                current->m_pPrev = previous;
+                previous = current;
+                current = current->m_pNext;
+                if (current == m_pRoot)
+                    break;
+            }
+            m_pTail = previous;
+            if (Circular && m_pRoot)
+                m_pRoot->m_pPrev = m_pTail;
+        }
+    }
+
+    void completarInsercion(NodePtr new_node, NodePtr previous) {
+        if constexpr (Double)
+            new_node->m_pPrev = previous;
+        if constexpr (Circular) {
+            new_node->m_pNext = m_pRoot;
+            if constexpr (Double)
+                m_pRoot->m_pPrev = new_node;
+        }
+    }
 
 public:
     LinkedList() = default;
@@ -36,14 +64,14 @@ public:
             push_back(v.first, v.second);
     }
 
-    virtual void clear();
-    virtual ~LinkedList(){ clear(); };
+    void clear();
+    ~LinkedList(){ clear(); };
 
-    virtual void push_back(const value_type& value, Ref ref);
+    void push_back(const value_type& value, Ref ref);
 
     bool empty() const { return m_pRoot == nullptr; }
 
-    virtual void insert(const value_type& value, Ref ref) {
+    void insert(const value_type& value, Ref ref) {
         scoped_lock lock(m_mutex);
         internalInsert(value, ref, m_pRoot);
         corregirPunteros();
@@ -52,7 +80,7 @@ public:
     std::ostream& write(std::ostream& os) { return os << *this; }
     std::istream& read(std::istream& is) { return is >> *this; }
 
-    friend std::ostream& operator <<(std::ostream& os, const LinkedList<Traits>& list) {
+    friend std::ostream& operator <<(std::ostream& os, const LinkedList& list) {
         lock_guard lock(list.m_mutex);
         auto first = true;
         os << "[";
@@ -65,7 +93,7 @@ public:
         return os << "]";
     }
     
-    friend std::istream &operator >>(std::istream &is, LinkedList<Traits> &list) {
+    friend std::istream &operator >>(std::istream &is, LinkedList &list) {
         Delim d;
         Node node;
         list.clear();
@@ -90,11 +118,14 @@ public:
     ForwardIterator begin() const { return ForwardIterator(m_pRoot); }
     ForwardIterator end() const { return ForwardIterator(nullptr); }
 
+    auto rbegin() const requires Double { return typename Traits::BackwardIterator(m_pTail); }
+    auto rend() const requires Double { return typename Traits::BackwardIterator(nullptr); }
+
 };
 
 
-template <typename Traits>
-LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ 
+template <typename Traits, bool Double, bool Circular>
+LinkedList<Traits, Double, Circular>& LinkedList<Traits, Double, Circular>::operator=(const LinkedList<Traits, Double, Circular>& other){ 
     if(this == &other)
         return *this;
     clear();
@@ -117,8 +148,8 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
     return *this;
 }
 
-template <typename Traits>
-void LinkedList<Traits>::clear(){
+template <typename Traits, bool Double, bool Circular>
+void LinkedList<Traits, Double, Circular>::clear(){
     scoped_lock lock(m_mutex);
     if(m_pTail && m_pTail->m_pNext == m_pRoot)
         m_pTail->m_pNext = nullptr;
@@ -132,8 +163,8 @@ void LinkedList<Traits>::clear(){
     m_pRoot = m_pTail = nullptr;
 }
 
-template<typename Traits>
-void LinkedList<Traits>::push_back(const value_type& value, Ref ref){
+template <typename Traits, bool Double, bool Circular>
+void LinkedList<Traits, Double, Circular>::push_back(const value_type& value, Ref ref){
     scoped_lock lock(m_mutex);
     NodePtr previous = m_pTail;
     NodePtr new_node = new Node(value, ref, nullptr);
@@ -149,8 +180,8 @@ internalInsert(...) recorre todos los nodos hasta llegar al final, y en la condi
 si el nodo padre es nullptr, crea uno nuevo con el valor y retorna
 insert(...) empieza desde el nodo raiz
 */
-template <typename Traits>
-void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
+template <typename Traits, bool Double, bool Circular>
+void LinkedList<Traits, Double, Circular>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
     if (rParent == nullptr || m_comp(value, rParent->getValue())) {
         NodePtr temp = rParent;
         rParent = new Node(value, ref, rParent);
@@ -171,4 +202,14 @@ void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePt
     internalInsert(value, ref, next);
     rParent->m_pNext = next;
 }
+
+template <typename Traits>
+using DoubleLinkedList = LinkedList<Traits, true, false>;
+
+template <typename Traits>
+using CircularLinkedList = LinkedList<Traits, false, true>;
+
+template <typename Traits>
+using CircularDoubleLinkedList = LinkedList<Traits, true, true>;
+
 #endif // __LINKEDLIST_H__

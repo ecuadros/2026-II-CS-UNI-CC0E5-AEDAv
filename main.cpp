@@ -9,9 +9,9 @@ using namespace std;
 int main() {
     // DemoVector();
     // DemoRaceCondition();
-    DemoLinkedList();
-    DemoCircularLinkedList();
+    // DemoLinkedList();
+    // DemoCircularLinkedList();
     DemoDoubleLinkedList();
-    DemoCircularDoubleLinkedList();
+    // DemoCircularDoubleLinkedList();
     return 0;
 }

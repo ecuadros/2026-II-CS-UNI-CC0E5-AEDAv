@@ -3,8 +3,7 @@
 
 #include "vector.h"
 #include "traits.h"
-#include "circularlinkedlist.h"
-#include "circulardoublelinkedlist.h"
+#include "linkedlist.h"
 
 template <typename T>
 using VectorAsc = Vector<VectorAscTraits<T>>;
