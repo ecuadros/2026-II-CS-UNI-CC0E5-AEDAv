@@ -6,6 +6,7 @@
 #include <vector>
 #include "foreach.h"
 #include "containers/vector.h"
+#include "containers/Heap.h"
 #include "containers/linkedlist.h"
 #include "Demos.h"
 using namespace std;
@@ -175,6 +176,71 @@ void DemoRaceCondition() {
     else
         cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
              << "sincroniza correctamente las inserciones concurrentes" << endl;
+}
+
+template <typename Container>
+void TestHeap(const string &label,
+              const vector<pair<typename Container::value_type, Ref>> &values) {
+    Container heap;
+    for (const auto &v : values)
+        heap.push(v.first, v.second);
+
+    cout << label << " arreglo interno: " << heap << endl;
+    cout << label << " top(): " << heap.top() << endl;
+    cout << label << " pop() hasta vaciar: [";
+    while (!heap.empty())
+        cout << heap.pop() << " ";
+    cout << "]" << endl;
+}
+
+template <typename Container>
+void TestHeapRaceCondition(const string &label, size_t N) {
+    using T = typename Container::value_type;
+    Container heap;
+
+    vector<thread> workers;
+    for (int t = 0; t < NThreads; ++t) {
+        workers.emplace_back([&heap, N, t](){
+            for (size_t i = t; i < N; i += NThreads)
+                heap.push(static_cast<T>(i), static_cast<Ref>(i));
+        });
+    }
+    for (auto &worker : workers)
+        worker.join();
+
+    size_t count = heap.size();
+    typename Container::Compare comp;
+    bool ordered = true;
+    T prev{};
+    for (size_t i = 0; !heap.empty(); ++i) {
+        T value = heap.pop().getValue();
+        if (i > 0 && comp(value, prev))
+            ordered = false;
+        prev = value;
+    }
+
+    cout << label << " concurrente: se esperaban " << N << " elementos, "
+         << "el heap quedo con " << count
+         << "; pop() en orden: " << (ordered ? "si" : "no") << endl;
+}
+
+void DemoHeap()
+{
+    const vector<pair<TX, Ref>> values = {{5, 15}, {1, 11}, {8, 18}, {3, 13}, {7, 17}, {3, 23}};
+
+    TestHeap<MinHeap<TX>>("MinHeap", values);
+    TestHeap<MaxHeap<TX>>("MaxHeap", values);
+    TestHeap<MaxHeap<string>>("MaxHeap<string>", {{"pera", 1}, {"manzana", 2}, {"uva", 3}, {"kiwi", 4}});
+
+    MinHeap<TX> empty;
+    try {
+        empty.pop();
+    } catch (const out_of_range &e) {
+        cout << "pop() sobre un heap vacio lanza: " << e.what() << endl;
+    }
+
+    TestHeapRaceCondition<MinHeap<TX>>("MinHeap", 100000);
+    TestHeapRaceCondition<MaxHeap<TX>>("MaxHeap", 100000);
 }
 
 // TODO: Implementar DemoLinkedList() para probar la lista enlazada y sus iteradores.

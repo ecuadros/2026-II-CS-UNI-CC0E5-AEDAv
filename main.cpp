@@ -9,6 +9,7 @@ using namespace std;
 int main() {
     DemoVector();
     DemoRaceCondition();
+    DemoHeap();
     DemoLinkedList();
     return 0;
 }
