@@ -18,7 +18,7 @@ public:
 protected:
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
-    
+
     Compare m_comp; // comparador para ordenar los nodos de la lista
     mutable std::mutex m_mutex; // mutex para sincronización
 
@@ -92,7 +92,7 @@ public:
         }
         return os << "]";
     }
-    
+
     friend std::istream &operator >>(std::istream &is, LinkedList &list) {
         Delim d;
         Node node;
@@ -106,12 +106,12 @@ public:
                 if (d == ']'){
                     break;
                 }
-            }    
+            }
         }
 
-        return is; 
+        return is;
     }
-    
+
     // Iterators
     // ForwardIterator begin() { return ForwardIterator(m_pRoot); }
     // ForwardIterator end() { return ForwardIterator(nullptr); }
@@ -125,7 +125,7 @@ public:
 
 
 template <typename Traits, bool Double, bool Circular>
-LinkedList<Traits, Double, Circular>& LinkedList<Traits, Double, Circular>::operator=(const LinkedList<Traits, Double, Circular>& other){ 
+LinkedList<Traits, Double, Circular>& LinkedList<Traits, Double, Circular>::operator=(const LinkedList<Traits, Double, Circular>& other){
     if(this == &other)
         return *this;
     clear();
