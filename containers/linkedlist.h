@@ -20,20 +20,28 @@ public:
     LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref), m_pNext(pNext) {}
 };
 
-template <typename Node>
-class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<Node>, Node> {
+template <typename Node, bool Circular = false, auto Link = &Node::m_pNext>
+class LinkedListIterator : public GeneralIterator<LinkedListIterator<Node, Circular, Link>, Node> {
 public:
     using value_type = Node;
-    using MySelf = LinkedListForwardIterator<Node>;
+    using MySelf = LinkedListIterator<Node, Circular, Link>;
     using Parent = GeneralIterator<MySelf, value_type>;
-    using Parent::Parent; // Inherit constructor
-    LinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
+private:
+    Node* m_pStart;
+public:
+    LinkedListIterator(Node* ptr) : Parent(ptr), m_pStart(ptr) {}
+    LinkedListIterator& operator++() {
+        Parent::m_ptr = Parent::m_ptr->*Link;
+        if (Circular && Parent::m_ptr == m_pStart)
+            Parent::m_ptr = nullptr;
+        return *this;
+    }
 };
 
 template <typename T>
 struct LinkedListStructure {
     using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<Node>;  // itera sobre Node, no sobre T
+    using ForwardIterator   = LinkedListIterator<Node>;  // itera sobre Node, no sobre T
     static constexpr bool circular = false;
     static constexpr bool doubly   = false;
 };
@@ -62,15 +70,14 @@ private:
 
     void internalInsert(const value_type& value, Ref ref);
     void internalPushBack(const value_type& value, Ref ref);
+    void internalLink(NodePtr pred, NodePtr node, NodePtr succ);
     void internalClear();
-
-protected:
-    NodePtr GetRoot() const { return m_pRoot; }
-    NodePtr GetTail() const { return m_pTail; }
-    unique_lock<mutex> Lock() const { return unique_lock<mutex>(m_mutex); }
     void append(initializer_list<pair<value_type, Ref>> values);
     void copyFrom(const LinkedList& another);
-    virtual void internalLink(NodePtr pred, NodePtr node, NodePtr succ);
+
+protected:
+    NodePtr GetTail() const { return m_pTail; }
+    unique_lock<mutex> Lock() const { return unique_lock<mutex>(m_mutex); }
 
 public:
     LinkedList() {}
@@ -215,6 +222,16 @@ void LinkedList<Traits>::internalLink(NodePtr pred, NodePtr node, NodePtr succ){
         m_pRoot = node;
     if (!succ)
         m_pTail = node;
+    if constexpr (Traits::doubly) {
+        node->m_pPrev = pred;
+        if (succ)
+            succ->m_pPrev = node;
+    }
+    if constexpr (Traits::circular) {
+        m_pTail->m_pNext = m_pRoot;
+        if constexpr (Traits::doubly)
+            m_pRoot->m_pPrev = m_pTail;
+    }
 }
 
 template <typename Traits>
