@@ -1,12 +1,12 @@
 
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
+#include <cstdio>
 #include <string>
 #include <thread>
 #include <vector>
+#include "containers/aliases.h"
 #include "foreach.h"
-#include "containers/vector.h"
-#include "containers/linkedlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -98,7 +98,7 @@ template <typename Container>
 void TestForwardTraversal(Container &container){
     using Node = typename Container::Node;
 
-    cout << "Prueba de función call con std::cout para LinkedList [";
+    cout << "Prueba de función call con std::cout para List [";
     container.call(PrintNode<Node>, cout);
     cout << "]" << endl;
 
@@ -115,6 +115,95 @@ void TestForwardTraversal(Container &container){
     }
 }
 
+template <typename Container>
+void TestBackwardTraversal(Container &container){
+    using Node = typename Container::Node;
+
+    cout << "Prueba de función rcall con std::cout para List [";
+    container.rcall(PrintNode<Node>, cout);
+    cout << "]" << endl;
+
+    cout << "Prueba de uso de iteradores inversos para impresión: [";
+    for (auto it = container.rbegin(); it != container.rend(); ++it)
+        cout << *it << " ";
+    cout << "]" << endl;
+}
+
+template <typename Iterator>
+void PrintCircularTraversal(Iterator begin, Iterator end) {
+    if (begin == end) {
+        cout << "[]\n";
+        return;
+    }
+
+    cout << *begin;
+    auto it = begin;
+    for (++it; it != end; ++it)
+        cout << " -> " << *it;
+    cout << " -> (vuelve a " << *begin << ")\n";
+}
+
+template <typename Container>
+void TestGenericContainer(Container &container) {
+    cout << "Vacio: " << container.empty() << '\n';
+
+    container.push_back(1, 101);
+    container.push_back(3, 103);
+    container.push_back(7, 107);
+    cout << "Luego de push_back: " << container << '\n';
+
+    container.insert(5, 105);
+    container.insert(2, 102);
+    container.insert(9, 109);
+    cout << "Luego de insert: " << container << '\n';
+
+    Container copia(container);
+    Container asignada;
+    asignada = container;
+    copia.insert(4, 104);
+    cout << "Original: " << container << '\n';
+    cout << "Copia modificada: " << copia << '\n';
+    cout << "Asignada: " << asignada << '\n';
+
+    const char *filename = "container.txt";
+    {
+        ofstream archivo(filename);
+        if (!archivo) {
+            cerr << "No se pudo crear " << filename << '\n';
+            return;
+        }
+        archivo << '[';
+        bool primero = true;
+        for (const auto &nodo : container) {
+            if (!primero)
+                archivo << ',';
+            archivo << nodo;
+            primero = false;
+        }
+        archivo << ']';
+    }
+    cout << "Escrito en " << filename << '\n';
+
+    Container leida;
+    {
+        ifstream archivo(filename);
+        if (!archivo) {
+            cerr << "No se pudo abrir " << filename << '\n';
+            std::remove(filename);
+            return;
+        }
+        leida.read(archivo);
+    }
+    cout << "Leido desde " << filename << ": " << leida << '\n';
+    if (std::remove(filename) != 0)
+        cerr << "No se pudo borrar " << filename << '\n';
+
+    asignada.clear();
+    cout << "Luego de clear, vacia: " << asignada.empty() << '\n';
+    asignada.push_back(10, 110);
+    cout << "Luego de reutilizarla: " << asignada << '\n';
+}
+
 void DemoVector() {
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
@@ -122,38 +211,27 @@ void DemoVector() {
 
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
-    Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    VectorAsc<TX> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
 
     ofstream("vector_str.txt", ios::trunc).close();
-    Vector<VectorAscTraits<string>> strVec;
+    VectorAsc<string> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
 }
 
-// Insertamos muchos elementos (generados en un loop, no a mano)
-// concurrentemente y comparamos cuantos deberian haber entrado contra
-// cuantos entraron realmente. Si push_back no estuviera sincronizado
-// (sin el mutex/lock_guard actual) esto perderia inserciones o crashearia;
-// con el mutex protegiendo push_back/resize, deberia dar siempre 0 perdidas.
-void DemoRaceCondition() {
-    const size_t N = 200000;
+template <typename Container>
+void TestRaceCondition(const string &name,
+                       const vector<pair<TX, Ref>> &values) {
+    Container container;
 
-    vector<pair<TX, Ref>> values(N);
-    for (size_t i = 0; i < N; ++i)
-        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
-
-    Vector<VectorAscTraits<TX>> vec;
-
-    // Insercion concurrente: NThreads workers insertando en paralelo sobre
-    // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
     size_t n = values.size();
     vector<thread> workers;
     for (int t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&vec, &values, n, t](){
+        workers.emplace_back([&container, &values, n, t](){
             for (size_t i = t; i < n; i += NThreads)
-                vec.push_back(values[i].first, values[i].second);
+                container.push_back(values[i].first, values[i].second);
         });
     }
     for (auto &worker : workers)
@@ -162,60 +240,108 @@ void DemoRaceCondition() {
     long long expectedSum = 0;
     for (auto &v : values) expectedSum += v.first;
 
+    size_t actualCount = 0;
     long long actualSum = 0;
-    for (size_t i = 0; i < vec.size(); ++i) actualSum += vec[i].getValue();
+    for (auto it = container.begin(); it != container.end(); ++it) {
+        ++actualCount;
+        actualSum += (*it).getValue();
+    }
 
-    cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
-         << "el Vector quedo con " << vec.size() << endl;
+    cout << "DemoRaceCondition (" << name << "): se esperaban " << n
+         << " elementos, el Container quedo con " << actualCount << endl;
     cout << "  suma esperada = " << expectedSum
          << ", suma obtenida = " << actualSum << endl;
 
-    if (vec.size() != N || actualSum != expectedSum)
-        cout << "  *** Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar) ***" << endl;
+    if (actualCount != n || actualSum != expectedSum)
+        cout << "  *** Race condition detectada: se perdieron inserciones (push_back sin sincronizar) ***" << endl;
     else
-        cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
+        cout << "  No se perdio ningun elemento: el mutex de push_back "
              << "sincroniza correctamente las inserciones concurrentes" << endl;
 }
 
-// TODO: Implementar DemoLinkedList() para probar la lista enlazada y sus iteradores.
-void DemoLinkedList()
-{
-    using IntLinkedList = LinkedList<LinkedListAscTraits<TX>>;
+template <typename Container>
+void DemoRaceCondition(const string &name) {
+    const size_t N = 200000;
+    vector<pair<TX, Ref>> values(N);
+    for (size_t i = 0; i < N; ++i)
+        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
 
-    ofstream("linkedlist.txt", ios::trunc).close();
+    cout << "DemoRaceCondition (" << NThreads << " hilos, push_back):\n";
+    TestRaceCondition<Container>(name, values);
+}
 
-    // Pruebas de pushback
-    IntLinkedList list;
-    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, "linkedlist.txt");
-    TestForwardTraversal(list);
+void DemoLinkedList() {
+    using List = LinkedAscList<TX>;
+    cout << "DemoLinkedList:\n";
+    List lista;
+    TestGenericContainer(lista);
+    TestForwardTraversal(lista);
 
-    auto elements = std::vector<pair<TX, Ref>>({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    for(auto& e : elements)
-        list.push_back(e.first, e.second);
+    lista.ApplyFunction(AddOne);
+    cout << "Tras AddOne: " << lista << '\n';
+    lista.ApplyFunction(AddX<TX>, TX(10));
+    cout << "Tras AddX(10): " << lista << '\n';
+    DemoRaceCondition<List>("LinkedList");
+}
 
-    // Pruebas de insert
-    list.insert(4, 12);
-    list.insert(11, 20);
-    list.insert(7, 6);
-    cout << "LinkedList luego de hacer 3 inserts " << list << endl;
+void DemoCircularLinkedList() {
+    using AscList = CircularLinkedAscList<TX>;
+    using DescList = CircularLinkedDescList<TX>;
+    cout << "DemoCircularLinkedList:\n";
+    AscList lista;
+    TestGenericContainer(lista);
+    cout << "Ciclo: ";
+    PrintCircularTraversal(lista.begin(), lista.end());
+    TestForwardTraversal(lista);
 
-    // Prueba de apply function
-    list.ApplyFunction(AddOne);
-    cout << "LinkedList tras usar Add One a sus elementos: " << list << endl;
-    list.ApplyFunction(AddX<TX>, TX(10));
-    cout << "LinkedList tras usar AddX(10) a sus elementos: " << list << endl;
+    DescList descendente;
+    descendente.insert(5, 105);
+    descendente.insert(3, 103);
+    descendente.insert(7, 107);
+    cout << "Lista descendente: " << descendente << '\n';
+    cout << "Ciclo descendente: ";
+    PrintCircularTraversal(descendente.begin(), descendente.end());
+    DemoRaceCondition<AscList>("CircularLinkedList");
+}
 
-    // Prueba de clear
-    list.clear();
-    cout << "LinkedList luego de usar clear" << list << endl;
-    list.push_back(10, 2);
-    cout << "LinkedList luego de un nuevo push_back " << list << endl;
+void DemoDoubleLinkedList() {
+    using AscList = DoubleLinkedAscList<TX>;
+    using DescList = DoubleLinkedDescList<TX>;
+    cout << "DemoDoubleLinkedList:\n";
+    AscList lista;
+    TestGenericContainer(lista);
+    TestForwardTraversal(lista);
+    TestBackwardTraversal(lista);
 
-    // Prueba de lectura
-    IntLinkedList new_list;
-    ifstream in("linkedlist.txt");
-    in >> new_list;
-    in.close();
-    cout << "LinkedList leida desde archivo: " << new_list << endl;
-    TestForwardTraversal(new_list);
+    DescList descendente;
+    descendente.insert(5, 105);
+    descendente.insert(3, 103);
+    descendente.insert(7, 107);
+    cout << "Lista descendente: " << descendente << '\n';
+    DemoRaceCondition<AscList>("DoubleLinkedList");
+}
+
+void DemoCircularDoubleLinkedList() {
+    using AscList = CircularDoubleLinkedAscList<TX>;
+    using DescList = CircularDoubleLinkedDescList<TX>;
+    cout << "DemoCircularDoubleLinkedList:\n";
+    AscList lista;
+    TestGenericContainer(lista);
+    cout << "Ciclo hacia adelante: ";
+    PrintCircularTraversal(lista.begin(), lista.end());
+    cout << "Ciclo hacia atras: ";
+    PrintCircularTraversal(lista.rbegin(), lista.rend());
+    TestForwardTraversal(lista);
+    TestBackwardTraversal(lista);
+
+    DescList descendente;
+    descendente.insert(5, 105);
+    descendente.insert(3, 103);
+    descendente.insert(7, 107);
+    cout << "Lista descendente: " << descendente << '\n';
+    cout << "Ciclo descendente hacia adelante: ";
+    PrintCircularTraversal(descendente.begin(), descendente.end());
+    cout << "Ciclo descendente hacia atras: ";
+    PrintCircularTraversal(descendente.rbegin(), descendente.rend());
+    DemoRaceCondition<AscList>("CircularDoubleLinkedList");
 }
