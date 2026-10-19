@@ -5,8 +5,10 @@
 #include "traversalops.h"
 
 template <typename Traits, bool Double = false, bool Circular = false>
-class LinkedList : public TraversalOps<LinkedList<Traits, Double, Circular>> {
-    friend class TraversalOps<LinkedList>;
+class LinkedList : public FullTraversalOps<LinkedList<Traits, Double, Circular>> {
+    friend class CallOp<LinkedList>;
+    friend class FirstThatOp<LinkedList>;
+    friend class ApplyFunctionOp<LinkedList>;
 public:
     using traits_type       = Traits;
     using value_type        = typename Traits::value_type;

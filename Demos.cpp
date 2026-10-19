@@ -5,34 +5,25 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "containers/Heap.h"
 #include "containers/aliases.h"
 #include "foreach.h"
 #include "Demos.h"
 using namespace std;
 
-void AddOne(GeneralNode<TX> &node) {
+void AddOne(GeneralNode<TX>& node) {
     node.value() += 1;
 }
 
-template <typename T>
-void AddX(GeneralNode<T> &node, T x) {
+template <typename T> void AddX(GeneralNode<T>& node, T x) {
     node.value() += x;
 }
 
-void Square(GeneralNode<TX> &node) {
+void Square(GeneralNode<TX>& node) {
     node.value() *= node.value();
 }
 
-// Predicado generico para FirstThat/call: true si el valor del nodo es
-// mayor que 'threshold'. Generico en Node y T para servir tanto a
-// Vector<VectorAscTraits<TX>> (int) como a Vector<VectorAscTraits<string>>.
-template <typename Node, typename T>
-bool IsGreaterThan(Node &node, T threshold) {
-    return node.getValue() > threshold;
-}
-
-template <typename Node>
-void PrintNode(Node &node, ostream &os) {
+template <typename Node> void PrintNode(Node& node, ostream& os) {
     os << node << " ";
 }
 const int NThreads = 5;
@@ -41,27 +32,28 @@ const int NThreads = 5;
 // Container, una por una. La insercion concurrente queda aislada en
 // DemoRaceCondition(), que es donde se estudia esa problematica.
 template <typename Container>
-void InsertElements(Container &container,
-                     const vector<pair<typename Container::value_type, Ref>> &values) {
-    for (const auto &v : values)
+void InsertElements(Container& container,
+                    const vector<pair<typename Container::value_type, Ref>>& values) {
+    for (const auto& v : values)
         container.push_back(v.first, v.second);
 }
 
 template <typename Container>
-void TestContainer(Container &container,
-                    const vector<pair<typename Container::value_type, Ref>> &values,
-                    const string &filename) {
+void TestContainer(Container& container,
+                   const vector<pair<typename Container::value_type, Ref>>& values,
+                   const string& filename) {
     InsertElements(container, values);
 
-    // Impresion usando write()
-    cout << "Container using write(): ";
-    container.write(cout);
-    cout << endl;
+    if constexpr (requires { container.write(cout); }) {
+        cout << "Container using write(): ";
+        container.write(cout);
+        cout << endl;
+    }
 
     // Escritura hacia un archivo, en modo append para acumular cada estado
     // (el archivo se deja vacio una vez al inicio, ver DemoVector)
     ofstream of(filename, ios::app);
-    container.write(of);
+    of << container;
     of << endl;
     of.close();
 
@@ -70,67 +62,42 @@ void TestContainer(Container &container,
     cout << container << endl;
 }
 
-// Prueba los recorridos del Container hacia adelante (begin/end) y hacia
-// atras (rbegin/rend) solamente, imprimiendo los elementos en cada sentido.
-template <typename Container>
-void TestTraversal(Container &container) {
+template <typename Container> void TestTraversal(Container& container) {
     using Node = typename Container::Node;
 
     cout << "Forward traversal:  [";
     container.call(PrintNode<Node>, cout);
     cout << "]" << endl;
 
-    cout << "Backward traversal: [";
-    container.rcall(PrintNode<Node>, cout);
-    cout << "]" << endl;
-
-    // Prueba de call()/FirstThat() con valor de retorno: busca el primer
-    // nodo cuyo valor sea mayor que el del primer elemento del container.
-    if (!container.empty()) {
-        auto threshold = (*container.begin()).getValue();
-        Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
-        cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
-    }
-}
-
-// Prueba los recorridos hacia únicamente hacia adelante, especialmente para una LinkedList
-template <typename Container>
-void TestForwardTraversal(Container &container){
-    using Node = typename Container::Node;
-
-    cout << "Prueba de función call con std::cout para List [";
-    container.call(PrintNode<Node>, cout);
-    cout << "]" << endl;
-
-    cout << "Prueba de uso de iteradores para impresión: [";
-    for (auto &&node : container)
+    cout << "Forward iterators:  [";
+    for (auto&& node : container)
         cout << node << " ";
     cout << "]" << endl;
 
-    // Prueba de FirstThat(): primer nodo cuyo valor sea mayor que el primero
-    if (container.begin() != container.end()) {
-        auto threshold = (*container.begin()).getValue();
-        Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
-        cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
+    if constexpr (requires(Container& c) {
+                      c.rbegin();
+                      c.rend();
+                  }) {
+        cout << "Backward traversal: [";
+        container.rcall(PrintNode<Node>, cout);
+        cout << "]" << endl;
+
+        cout << "Backward iterators: [";
+        for (auto it = container.rbegin(); it != container.rend(); ++it)
+            cout << *it << " ";
+        cout << "]" << endl;
+    }
+
+    auto it = container.begin();
+    if (it != container.end() && ++it != container.end()) {
+        Ref target = (*it).getRef();
+        Node& found =
+            container.FirstThat([](Node& node, Ref ref) { return node.getRef() == ref; }, target);
+        cout << "FirstThat (ref " << target << "): " << found << endl;
     }
 }
 
-template <typename Container>
-void TestBackwardTraversal(Container &container){
-    using Node = typename Container::Node;
-
-    cout << "Prueba de función rcall con std::cout para List [";
-    container.rcall(PrintNode<Node>, cout);
-    cout << "]" << endl;
-
-    cout << "Prueba de uso de iteradores inversos para impresión: [";
-    for (auto it = container.rbegin(); it != container.rend(); ++it)
-        cout << *it << " ";
-    cout << "]" << endl;
-}
-
-template <typename Iterator>
-void PrintCircularTraversal(Iterator begin, Iterator end) {
+template <typename Iterator> void PrintCircularTraversal(Iterator begin, Iterator end) {
     if (begin == end) {
         cout << "[]\n";
         return;
@@ -144,7 +111,7 @@ void PrintCircularTraversal(Iterator begin, Iterator end) {
 }
 
 template <typename Container>
-void TestGenericContainer(Container &container) {
+void TestGenericContainer(Container& container, const string& filename = "container.txt") {
     cout << "Vacio: " << container.empty() << '\n';
 
     container.push_back(1, 101);
@@ -152,35 +119,28 @@ void TestGenericContainer(Container &container) {
     container.push_back(7, 107);
     cout << "Luego de push_back: " << container << '\n';
 
-    container.insert(5, 105);
-    container.insert(2, 102);
-    container.insert(9, 109);
-    cout << "Luego de insert: " << container << '\n';
+    if constexpr (requires(Container& c) { c.insert(5, 105); }) {
+        container.insert(5, 105);
+        container.insert(2, 102);
+        container.insert(9, 109);
+        cout << "Luego de insert: " << container << '\n';
 
-    Container copia(container);
-    Container asignada;
-    asignada = container;
-    copia.insert(4, 104);
-    cout << "Original: " << container << '\n';
-    cout << "Copia modificada: " << copia << '\n';
-    cout << "Asignada: " << asignada << '\n';
+        Container copia(container);
+        Container asignada;
+        asignada = container;
+        copia.insert(4, 104);
+        cout << "Original: " << container << '\n';
+        cout << "Copia modificada: " << copia << '\n';
+        cout << "Asignada: " << asignada << '\n';
+    }
 
-    const char *filename = "container.txt";
     {
         ofstream archivo(filename);
         if (!archivo) {
             cerr << "No se pudo crear " << filename << '\n';
             return;
         }
-        archivo << '[';
-        bool primero = true;
-        for (const auto &nodo : container) {
-            if (!primero)
-                archivo << ',';
-            archivo << nodo;
-            primero = false;
-        }
-        archivo << ']';
+        archivo << container;
     }
     cout << "Escrito en " << filename << '\n';
 
@@ -189,19 +149,24 @@ void TestGenericContainer(Container &container) {
         ifstream archivo(filename);
         if (!archivo) {
             cerr << "No se pudo abrir " << filename << '\n';
-            std::remove(filename);
+            std::remove(filename.c_str());
             return;
         }
-        leida.read(archivo);
+        if (!(archivo >> leida)) {
+            cerr << "No se pudo leer " << filename << '\n';
+            std::remove(filename.c_str());
+            return;
+        }
     }
     cout << "Leido desde " << filename << ": " << leida << '\n';
-    if (std::remove(filename) != 0)
-        cerr << "No se pudo borrar " << filename << '\n';
+    if (std::remove(filename.c_str()) != 0) cerr << "No se pudo borrar " << filename << '\n';
 
-    asignada.clear();
-    cout << "Luego de clear, vacia: " << asignada.empty() << '\n';
-    asignada.push_back(10, 110);
-    cout << "Luego de reutilizarla: " << asignada << '\n';
+    Container reutilizada;
+    reutilizada.push_back(1, 101);
+    reutilizada.clear();
+    cout << "Luego de clear, vacia: " << reutilizada.empty() << '\n';
+    reutilizada.push_back(10, 110);
+    cout << "Luego de reutilizarla: " << reutilizada << '\n';
 }
 
 void DemoVector() {
@@ -222,23 +187,23 @@ void DemoVector() {
 }
 
 template <typename Container>
-void TestRaceCondition(const string &name,
-                       const vector<pair<TX, Ref>> &values) {
+void TestRaceCondition(const string& name, const vector<pair<TX, Ref>>& values) {
     Container container;
 
     size_t n = values.size();
     vector<thread> workers;
     for (int t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&container, &values, n, t](){
+        workers.emplace_back([&container, &values, n, t]() {
             for (size_t i = t; i < n; i += NThreads)
                 container.push_back(values[i].first, values[i].second);
         });
     }
-    for (auto &worker : workers)
+    for (auto& worker : workers)
         worker.join();
 
     long long expectedSum = 0;
-    for (auto &v : values) expectedSum += v.first;
+    for (auto& v : values)
+        expectedSum += v.first;
 
     size_t actualCount = 0;
     long long actualSum = 0;
@@ -249,18 +214,18 @@ void TestRaceCondition(const string &name,
 
     cout << "DemoRaceCondition (" << name << "): se esperaban " << n
          << " elementos, el Container quedo con " << actualCount << endl;
-    cout << "  suma esperada = " << expectedSum
-         << ", suma obtenida = " << actualSum << endl;
+    cout << "  suma esperada = " << expectedSum << ", suma obtenida = " << actualSum << endl;
 
     if (actualCount != n || actualSum != expectedSum)
-        cout << "  *** Race condition detectada: se perdieron inserciones (push_back sin sincronizar) ***" << endl;
+        cout << "  *** Race condition detectada: se perdieron inserciones (push_back sin "
+                "sincronizar) ***"
+             << endl;
     else
         cout << "  No se perdio ningun elemento: el mutex de push_back "
              << "sincroniza correctamente las inserciones concurrentes" << endl;
 }
 
-template <typename Container>
-void DemoRaceCondition(const string &name) {
+template <typename Container> void DemoRaceCondition(const string& name) {
     const size_t N = 200000;
     vector<pair<TX, Ref>> values(N);
     for (size_t i = 0; i < N; ++i)
@@ -275,7 +240,7 @@ void DemoLinkedList() {
     cout << "DemoLinkedList:\n";
     List lista;
     TestGenericContainer(lista);
-    TestForwardTraversal(lista);
+    TestTraversal(lista);
 
     lista.ApplyFunction(AddOne);
     cout << "Tras AddOne: " << lista << '\n';
@@ -292,7 +257,7 @@ void DemoCircularLinkedList() {
     TestGenericContainer(lista);
     cout << "Ciclo: ";
     PrintCircularTraversal(lista.begin(), lista.end());
-    TestForwardTraversal(lista);
+    TestTraversal(lista);
 
     DescList descendente;
     descendente.insert(5, 105);
@@ -310,8 +275,7 @@ void DemoDoubleLinkedList() {
     cout << "DemoDoubleLinkedList:\n";
     AscList lista;
     TestGenericContainer(lista);
-    TestForwardTraversal(lista);
-    TestBackwardTraversal(lista);
+    TestTraversal(lista);
 
     DescList descendente;
     descendente.insert(5, 105);
@@ -331,8 +295,7 @@ void DemoCircularDoubleLinkedList() {
     PrintCircularTraversal(lista.begin(), lista.end());
     cout << "Ciclo hacia atras: ";
     PrintCircularTraversal(lista.rbegin(), lista.rend());
-    TestForwardTraversal(lista);
-    TestBackwardTraversal(lista);
+    TestTraversal(lista);
 
     DescList descendente;
     descendente.insert(5, 105);
@@ -344,4 +307,32 @@ void DemoCircularDoubleLinkedList() {
     cout << "Ciclo descendente hacia atras: ";
     PrintCircularTraversal(descendente.rbegin(), descendente.rend());
     DemoRaceCondition<AscList>("CircularDoubleLinkedList");
+}
+
+void DemoHeap() {
+    const vector<pair<int, Ref>> values{{5, 50}, {1, 10}, {4, 40}, {2, 20}};
+
+    cout << "Demo MinHeap:\n";
+    MinHeap<int> minHeap;
+    ofstream("min_heap.txt", ios::trunc).close();
+    TestContainer(minHeap, values, "min_heap.txt");
+    TestTraversal(minHeap);
+    cout << "Top: " << minHeap.top() << '\n';
+    cout << "Orden de extraccion: ";
+    while (!minHeap.empty())
+        cout << minHeap.pop() << ' ';
+    cout << '\n';
+    TestGenericContainer(minHeap, "min_heap_persist.txt");
+
+    cout << "Demo MaxHeap:\n";
+    MaxHeap<int> maxHeap;
+    ofstream("max_heap.txt", ios::trunc).close();
+    TestContainer(maxHeap, values, "max_heap.txt");
+    TestTraversal(maxHeap);
+    cout << "Top: " << maxHeap.top() << '\n';
+    cout << "Orden de extraccion: ";
+    while (!maxHeap.empty())
+        cout << maxHeap.pop() << ' ';
+    cout << '\n';
+    TestGenericContainer(maxHeap, "max_heap_persist.txt");
 }
