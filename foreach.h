@@ -48,7 +48,7 @@ template <typename Iterator, typename Func, typename... Args>
 decltype(auto) FirstThat(Iterator begin, Iterator end, Func func, Args&&... args) {
     // for (auto iter = begin; iter != end; ++iter)
     //     func(*iter, std::forward<Args>(args)...);
-    ::call(begin, end, func, std::forward<Args>(args)...);
+    return ::call(begin, end, func, std::forward<Args>(args)...);
 }
 
 // // Iterator Level #3
@@ -58,10 +58,15 @@ decltype(auto) FirstThat(Iterator begin, Iterator end, Func func, Args&&... args
 // }
 
 // Iterator Level #4
+//Sbrecarga
 template <typename Container, typename Func, typename... Args>
-void ApplyFunction(Container &container, Func func, Args&&... args) {
-    for (auto &v : container)
-        func(v, std::forward<Args>(args)...);
+void ApplyFunction(Container& container, Func func, Args&&... args) {
+    ::ApplyFunction(
+        container.begin(),
+        container.end(),
+        func,
+        std::forward<Args>(args)...
+    );
 }
 
 #endif // __FOREACH_H__

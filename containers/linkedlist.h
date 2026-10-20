@@ -4,6 +4,8 @@
 #include "GeneralNode.h"
 #include "GeneralIterator.h"
 #include "../foreach.h"
+#include "../traits.h"
+#include "../container.h"
 
 template <typename T>
 class LinkedListNode : public GeneralNode<T> {
@@ -26,16 +28,6 @@ public:
     LinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
 };
 
-template <typename T, typename _Compare>
-struct DefaultTraits {
-    using value_type        = T;
-    using Compare           = _Compare;
-};
-template <typename T, typename _Compare = std::less<T>>
-struct AscendingTraits : public DefaultTraits<T, _Compare> {};
-
-template <typename T, typename _Compare = std::greater<T>>
-struct DescendingTraits : public DefaultTraits<T, _Compare> {};
 template <typename T>
 struct LinkedListAscTraits : public AscendingTraits<T> {
     using Node              = LinkedListNode<T>;
@@ -87,40 +79,36 @@ public:
         internalInsert(value, ref, m_pRoot);
     }
 
-    std::ostream& write(std::ostream& os) { return os << *this; }
-    std::istream& read(std::istream& is) { return is >> *this; }
+    //
+    std::ostream& write(std::ostream& os) const {
+    std::lock_guard lock(m_mutex);
 
-    friend std::ostream& operator <<(std::ostream& os, const LinkedList<Traits>& list) {
-        lock_guard lock(list.m_mutex);
-        auto first = true;
-        os << "[";
-        for (auto it = list.begin(); it != list.end(); ++it){
-            if (!first)
-                os << ",";
-            os << *it;
-            first = false;
-        }
-        return os << "]";
+    bool first = true;
+    os << "[";
+
+    for (auto it = begin(); it != end(); ++it) {
+        if (!first)
+            os << ",";
+
+        os << *it;
+        first = false;
     }
-    
-    friend std::istream &operator >>(std::istream &is, LinkedList<Traits> &list) {
-        Delim d;
-        Node node;
-        list.clear();
 
-        is >> d;
-        if (is >> d && d != ']'){
-            is.unget();
-            while(is >> node >> d){
-                list.push_back(node.getValue(), node.getRef());
-                if (d == ']'){
-                    break;
-                }
-            }    
-        }
+    return os << "]";
+}
+    //
+std::istream& read(std::istream& is) {
+    return ::ReadContainer(is, *this);
+}
 
-        return is; 
-    }
+ /*friend std::ostream& operator<<(
+    std::ostream& os,
+    const LinkedList<Traits>& list)
+{
+    return list.write(os);
+}
+    */
+
     
     // Iterators
     // ForwardIterator begin() { return ForwardIterator(m_pRoot); }
@@ -151,7 +139,7 @@ template <typename Traits>
 LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ 
     clear();
     if(!other.m_pRoot)
-        return;
+        return *this;
     std::lock_guard<std::mutex> lock(other.m_mutex);
 
     m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);
@@ -171,9 +159,12 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 template <typename Traits>
 void LinkedList<Traits>::clear(){
     scoped_lock lock(m_mutex);
-    for (auto it = begin(); it != end(); ++it){
-        delete& (*it);
-    }
+
+    for (auto it = begin(); it != end(); ) {
+    NodePtr current = &(*it);
+    ++it;
+    delete current;
+}
     m_pRoot = nullptr;
     m_pTail = nullptr;
 }
@@ -198,11 +189,20 @@ insert(...) empieza desde el nodo raiz
 */
 template <typename Traits>
 void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
-    if (rParent == nullptr || value < rParent->getValue()) {
+    if (rParent == nullptr || m_comp(value, rParent->getValue())) {
         rParent = new Node(value, ref, rParent);
         m_pTail = rParent;
         return;
     }
     internalInsert(value, ref, rParent->m_pNext);
 }
+
+/*template <typename Traits>
+std::ostream& operator<<(
+    std::ostream& os,
+    const LinkedList<Traits>& list)
+{
+    return list.write(os);
+}*/
+
 #endif // __LINKEDLIST_H__

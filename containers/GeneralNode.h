@@ -2,6 +2,8 @@
 #define __GENERAL_NODE_H__
 #include <iostream>
 #include "../types.h" // Ref
+#include <string>
+#include <type_traits>
 template <typename T>
 struct GeneralNode{
 private:
@@ -24,7 +26,16 @@ public:
 
     friend std::istream &operator >>(std::istream &is, GeneralNode<T> &node){
         Delim d;
-        is >> d >> node.m_value >> d >> node.m_ref >> d;
+        is >> d;
+
+        if constexpr (std::is_same_v<T, std::string>) {
+             std::getline(is, node.m_value, ',');
+    } else {
+        is >> node.m_value >> d;
+    }
+
+    is >> node.m_ref >> d;
+
         return is;
     }
 };

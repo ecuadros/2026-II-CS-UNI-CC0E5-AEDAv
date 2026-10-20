@@ -6,6 +6,8 @@
 #include "GeneralNode.h"
 #include "../foreach.h"
 #include "../types.h" // Ref
+#include "../traits.h"
+#include "../container.h"
 using namespace std;
 
 template <typename T>
@@ -31,13 +33,14 @@ public:
     // Prefix increment
     VectorBackwardIterator& operator++() { --Parent::m_ptr; return *this; }
 };
-
+//Herencia
 template <typename T>
-struct VectorAscTraits {
-    using value_type        = T;
+struct VectorAscTraits :public AscendingTraits<T> {
+    //using value_type        = T;
     using Node              = GeneralNode<T>;
     using ForwardIterator   = VectorForwardIterator<Node>;  // itera sobre Node, no sobre T
     using BackwardIterator  = VectorBackwardIterator<Node>; // itera sobre Node, no sobre T
+    using ConstForwardIterator = VectorForwardIterator<const Node>; // itera sobre Node, no sobre T
 };
 
 template <typename Traits>
@@ -47,11 +50,12 @@ public:
     using Node              = Traits::Node;
     using ForwardIterator   = Traits::ForwardIterator;
     using BackwardIterator  = Traits::BackwardIterator;
+    using ConstForwardIterator = typename Traits::ConstForwardIterator; // itera sobre Node, no sobre T
 private:
     Node        *m_data     = nullptr;   // puntero al arreglo dinámico
     size_t       m_size     = 0,         // cantidad actual
                  m_capacity = 0;         // capacidad
-    mutex        m_mutex;                // mutex para sincronización
+    mutable mutex        m_mutex;                // mutex para sincronización
 
     void resize(size_t new_cap) {
         if (new_cap <= m_capacity) return;
@@ -144,11 +148,22 @@ public:
     BackwardIterator rbegin() { return BackwardIterator(m_data + m_size - 1); }
     BackwardIterator rend()   { return BackwardIterator(m_data - 1); }
 
+    //
+    ConstForwardIterator begin() const {
+    return ConstForwardIterator(m_data);
+}
+
+ConstForwardIterator end() const {
+    return ConstForwardIterator(m_data + m_size);
+}
+
     // Persistencia
-    ostream &write(ostream &os){
+    ostream &write(ostream &os) const{
         // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
         lock_guard<mutex> lock(m_mutex);
         os << "[";
+        if (empty())
+            return os << "]";
         for (size_t i = 0; i < size()-1; ++i)
             os << m_data[i] << ",";
         if (size() > 0)
@@ -157,9 +172,10 @@ public:
     }
 
     // TODO: implementar la lectura de un vector desde un stream
-    istream &read(istream &is){
-        // Implementation for reading vector from stream
-    }
+    //
+    std::istream& read(std::istream& is) {
+    return ::ReadContainer(is, *this);
+}
 
     template <typename Func, typename... Args>
     void ApplyFunction(Func func, Args... args) {
@@ -190,14 +206,12 @@ public:
     }
 };
 
-template <typename T>
-ostream& operator<<(ostream &os, Vector<T> &vec) {
+/*template <typename T>
+ostream& operator<<(ostream &os, const Vector<T> &vec) {
     return vec.write(os);
 }
+*/
 
-template <typename T>
-istream& operator>>(istream &is, Vector<T> &vec) {
-    return vec.read(is);
-}
+
 
 #endif // __VECTOR_H__

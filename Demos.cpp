@@ -8,7 +8,9 @@
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
 #include "Demos.h"
+#include "containers/Heap.h"
 using namespace std;
+#include <sstream>
 
 void AddOne(GeneralNode<TX> &node) {
     node.value() += 1;
@@ -130,6 +132,29 @@ void DemoVector() {
     Vector<VectorAscTraits<string>> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
+    
+    //demo
+    Vector<VectorAscTraits<TX>> vecLeido;
+    vecLeido.push_back(99, 999);
+
+    ifstream archivo("vector.txt");
+    archivo >> vecLeido;
+
+    cout << "Vector leido desde archivo: " << vecLeido << '\n';
+
+    std::istringstream entradaVacia("[]");
+    entradaVacia >> vecLeido;
+
+    cout << "Vector tras leer entrada vacia: " << vecLeido << '\n';
+
+    //
+    Vector<VectorAscTraits<string>> vecTextoLeido;
+
+    ifstream archivoTexto("vector_str.txt");
+    archivoTexto >> vecTextoLeido;
+
+    cout << "Vector de cadenas leido: " << vecTextoLeido << '\n';
+    cout << "Fallo de lectura: " << archivoTexto.fail() << '\n';
 }
 
 // Insertamos muchos elementos (generados en un loop, no a mano)
@@ -137,6 +162,54 @@ void DemoVector() {
 // cuantos entraron realmente. Si push_back no estuviera sincronizado
 // (sin el mutex/lock_guard actual) esto perderia inserciones o crashearia;
 // con el mutex protegiendo push_back/resize, deberia dar siempre 0 perdidas.
+
+template <typename Func>
+void RunConcurrent(size_t n, Func func) {
+    vector<thread> workers;
+
+    for (int t = 0; t < NThreads; ++t) {
+        workers.emplace_back([&func, n, t]() {
+            for (size_t i = t; i < n; i += NThreads) {
+                func(i);
+            }
+        });
+    }
+
+    for (auto& worker : workers) {
+        worker.join();
+    }
+}
+
+//
+template <typename HeapType>
+void TestConcurrentHeap(HeapType& heap, size_t n) {
+    RunConcurrent(n, [&heap](size_t i) {
+        heap.push(
+            static_cast<TX>(i),
+            static_cast<Ref>(i)
+        );
+    });
+
+    typename HeapType::Compare comp;
+    const bool ascendente = comp(TX{0}, TX{1});
+    size_t errores = 0;
+
+    for (size_t i = 0; i < n; ++i) {
+        auto node = heap.pop();
+        size_t esperado = ascendente ? i : n - 1 - i;
+
+        if (node.getValue() != static_cast<TX>(esperado) ||
+            node.getRef() != static_cast<Ref>(esperado)) {
+            ++errores;
+        }
+    }
+
+    cout << "Nodos incorrectos: " << errores << '\n';
+}
+
+
+
+
 void DemoRaceCondition() {
     const size_t N = 200000;
 
@@ -148,16 +221,9 @@ void DemoRaceCondition() {
 
     // Insercion concurrente: NThreads workers insertando en paralelo sobre
     // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
-    size_t n = values.size();
-    vector<thread> workers;
-    for (int t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&vec, &values, n, t](){
-            for (size_t i = t; i < n; i += NThreads)
-                vec.push_back(values[i].first, values[i].second);
-        });
-    }
-    for (auto &worker : workers)
-        worker.join();
+   RunConcurrent(values.size(), [&vec, &values](size_t i) {
+    vec.push_back(values[i].first, values[i].second);
+});
 
     long long expectedSum = 0;
     for (auto &v : values) expectedSum += v.first;
@@ -218,4 +284,69 @@ void DemoLinkedList()
     in.close();
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+
+    //demo dos listas
+       LinkedList<LinkedListAscTraits<TX>> asc;
+    LinkedList<LinkedListDescTraits<TX>> desc;
+
+    for (const auto& p : {
+        pair<TX, Ref>{5, 15},
+        pair<TX, Ref>{1, 11},
+        pair<TX, Ref>{8, 18},
+        pair<TX, Ref>{3, 13}
+    }) {
+        asc.insert(p.first, p.second);
+        desc.insert(p.first, p.second);
+    }
+
+    cout << "Ascendente: " << asc << '\n';
+    cout << "Descendente: " << desc << '\n';
+}
+
+//demo plantilla de heap
+template <typename HeapType>
+void TestHeap(HeapType& heap) {
+    heap.push(5, 15);
+    heap.push(1, 11);
+    heap.push(8, 18);
+    heap.push(3, 13);
+    heap.push(4, 14);
+    heap.push(6, 16);
+    heap.push(7, 17);
+
+    ifstream archivoHeap("linkedlist.txt");
+    archivoHeap >> heap;
+    // Aplicamos funciones a los elementos del heap
+    heap.ApplyFunction(AddX<TX>, TX(-6));
+    heap.ApplyFunction(Square);
+
+    cout << "Heap antes de extraer: " << heap << '\n';
+
+    cout << "Extracciones: ";
+    for (int i = 0; i < 4; ++i)
+        cout << heap.pop() << " ";
+
+    cout << '\n';
+    cout << "Heap despues de extraer: " << heap << '\n';
+}
+
+//demo de heap
+void DemoHeap() {
+    MinHeap<TX> minHeap;
+    MaxHeap<TX> maxHeap;
+
+    cout << "MinHeap: ";
+    TestHeap(minHeap);
+
+    cout << "MaxHeap: ";
+    TestHeap(maxHeap);
+
+    MinHeap<TX> minConcurrente;
+    MaxHeap<TX> maxConcurrente;
+
+    cout << "Prueba concurrente MinHeap: ";
+    TestConcurrentHeap(minConcurrente, 20000);
+
+    cout << "Prueba concurrente MaxHeap: ";
+    TestConcurrentHeap(maxConcurrente, 20000);
 }
