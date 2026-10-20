@@ -56,15 +56,16 @@ public:
     using ForwardIterator   = typename Traits::ForwardIterator;
     using Compare           = typename Traits::Compare;
     using Delim             = typename Node::Delim;
-private:
+    NodePtr GetRoot() const { return m_pRoot; }
+protected: 
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
     
     Compare m_comp; // comparador para ordenar los nodos de la lista
     mutable std::mutex m_mutex; // mutex para sincronización
 
-    NodePtr GetRoot() const { return m_pRoot; }
-    void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
+    template <typename NodePtrT>
+    void internalInsert(const value_type& value, Ref ref, NodePtrT& rParent);
 
 public:
     LinkedList() {}
@@ -75,10 +76,10 @@ public:
             push_back(v.first, v.second);
     }
 
-    void clear();
+    virtual void clear();
     virtual ~LinkedList(){ clear(); };
 
-    void push_back(const value_type& value, Ref ref);
+    virtual void push_back(const value_type& value, Ref ref);
 
     bool empty() const { return m_pRoot == nullptr; }
 
@@ -151,7 +152,7 @@ template <typename Traits>
 LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ 
     clear();
     if(!other.m_pRoot)
-        return;
+        return *this;
     std::lock_guard<std::mutex> lock(other.m_mutex);
 
     m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);
@@ -170,9 +171,15 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 
 template <typename Traits>
 void LinkedList<Traits>::clear(){
-    scoped_lock lock(m_mutex);
-    for (auto it = begin(); it != end(); ++it){
-        delete& (*it);
+    lock_guard<mutex> lock(m_mutex);
+    if (m_pTail != nullptr) {
+        m_pTail->m_pNext = nullptr;
+    }
+    LinkedListNode<value_type> *current = m_pRoot;
+    while (current != nullptr) {
+        LinkedListNode<value_type> *pNext = current->m_pNext;
+        delete current;
+        current = pNext;
     }
     m_pRoot = nullptr;
     m_pTail = nullptr;
@@ -197,10 +204,13 @@ si el nodo padre es nullptr, crea uno nuevo con el valor y retorna
 insert(...) empieza desde el nodo raiz
 */
 template <typename Traits>
-void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
+template <typename NodePtrT>
+void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePtrT& rParent) {
     if (rParent == nullptr || value < rParent->getValue()) {
         rParent = new Node(value, ref, rParent);
-        m_pTail = rParent;
+        if constexpr (is_same_v<NodePtrT, NodePtr>) {
+            m_pTail = rParent;
+        }
         return;
     }
     internalInsert(value, ref, rParent->m_pNext);

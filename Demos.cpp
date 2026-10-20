@@ -1,12 +1,16 @@
 
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
+#include "containers/circularlist.h"
+#include "containers/doublylist.h"
+#include "containers/doublecircularlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -218,4 +222,118 @@ void DemoLinkedList()
     in.close();
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+}
+
+void DemoCircularLinkedList()
+{
+    // uso
+    LC<TX> list;
+    list.push_back(3, 30);
+    list.push_back(1, 10);
+    list.push_back(2, 20);
+    cout << "LC luego de push_back x3: " << list << endl;
+
+    list.insert(2, 25);
+    cout << "LC luego de insert(2,25): " << list << endl;
+
+    // bucle nativo
+    cout << "Bucle nativo sobre el anillo: ";
+    LinkedListNode<TX> *p = list.GetRoot();
+    do {
+        cout << *p << " ";
+        p = p->m_pNext;
+    } while (p != list.GetRoot());
+    cout << endl;
+
+    // persistencia
+    stringstream ss;
+    list.write(ss);
+    cout << "LC write: " << ss.str() << endl;
+
+    LC<TX> copy;
+    ss >> copy;
+    cout << "LC read:  " << copy << endl;
+
+    // call
+    list.ApplyFunction(AddOne);
+    cout << "LC tras ApplyFunction(AddOne): " << list << endl;
+
+    list.call(AddX<TX>, TX(10));
+    cout << "LC tras call(AddX, 10):        " << list << endl;
+
+    cout << "LC FirstThat(>5): " << list.FirstThat([](GeneralNode<TX> &n){ return n.getValue() > 5; }) << endl;
+
+    try {
+        list.FirstThat([](GeneralNode<TX> &n){ return n.getValue() > 100; });
+    } catch (const runtime_error &e) {
+        cout << "LC FirstThat sin match: " << e.what() << endl;
+    }
+
+    // concurrencia
+    list.clear();
+    const int NThreads = 4;
+    vector<thread> workers;
+    for (int t = 0; t < NThreads; ++t) {
+        workers.emplace_back([&list, t]() {
+            for (int i = 0; i < 100; ++i)
+                list.push_back(t * 100 + i, t * 1000 + i);
+        });
+    }
+    for (auto &worker : workers)
+        worker.join();
+
+    int count = 0;
+    p = list.GetRoot();
+    do {
+        ++count;
+        p = p->m_pNext;
+    } while (p != list.GetRoot());
+
+    cout << "LC concurrencia: " << NThreads * 100 << " inserciones, el anillo quedo con "
+         << count << " nodos" << (count == NThreads * 100 ? " (integro)" : " (ROTO)") << endl;
+}
+
+void DemoDoubleLinkedList()
+{
+    // uso
+    DoubleLinkedList<DoubleLinkedListTraits<TX>> list;
+    list.push_back(3, 30);
+    list.push_back(1, 10);
+    list.push_back(2, 20);
+    cout << "DoubleLinkedList luego de push_back x3: " << list << endl;
+
+    list.insert(0, 5);
+    cout << "DoubleLinkedList luego de insert(0,5):  " << list << endl;
+
+    // backward
+    cout << "Recorrido backward: ";
+    for (auto it = list.rbegin(); it != list.rend(); ++it)
+        cout << *it << " ";
+    cout << endl;
+}
+
+void DemoDoubleCircularLinkedList()
+{
+    // uso
+    DoubleCircularLinkedList<TX> list;
+    list.push_back(3, 30);
+    list.push_back(1, 10);
+    list.push_back(2, 20);
+    list.insert(0, 5);
+    cout << "DCL luego de push_back e insert: " << list << endl;
+
+    // persistencia
+    stringstream ss;
+    list.write(ss);
+    cout << "DCL write: " << ss.str() << endl;
+
+    DoubleCircularLinkedList<TX> copy;
+    ss >> copy;
+    cout << "DCL read:  " << copy << endl;
+
+    // backward
+    cout << "Recorrido backward: ";
+    for (auto it = list.rbegin(); it != list.rend(); ++it)
+        cout << *it << " ";
+    cout << endl;
 }
