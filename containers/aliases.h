@@ -1,6 +1,8 @@
 #ifndef CONTAINERS_ALIASES_H
 #define CONTAINERS_ALIASES_H
 
+#include "binarytree.h"
+#include "Heap.h"
 #include "vector.h"
 #include "traits.h"
 #include "linkedlist.h"
@@ -31,5 +33,14 @@ using CircularDoubleLinkedAscList = CircularDoubleLinkedList<DoubleLinkedListAsc
 
 template <typename T>
 using CircularDoubleLinkedDescList = CircularDoubleLinkedList<DoubleLinkedListDescTraits<T>>;
+
+template <typename T>
+using BinarySearchTree = BinaryTree<BinaryTreeTraits<T>>;
+
+template <typename T>
+using MinHeap = Heap<MinHeapTraits<T>>;
+
+template <typename T>
+using MaxHeap = Heap<MaxHeapTraits<T>>;
 
 #endif

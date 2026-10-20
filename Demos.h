@@ -9,5 +9,6 @@ void DemoCircularLinkedList();
 void DemoDoubleLinkedList();
 void DemoCircularDoubleLinkedList();
 void DemoHeap();
+void DemoBinaryTree();
 
 #endif // __DEMOS_H__

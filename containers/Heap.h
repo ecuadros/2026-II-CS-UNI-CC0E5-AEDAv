@@ -4,22 +4,84 @@
 #include "traversalops.h"
 #include "heaptraits.h"
 #include "vector.h"
+#include "container_stream.h"
+#include <cstddef>
 #include <initializer_list>
+#include <iterator>
 #include <mutex>
+
+template <typename Node> class HeapConstIterator {
+    VectorForwardIterator<Node> m_iterator;
+
+public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = Node;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const Node*;
+    using reference = const Node&;
+
+    HeapConstIterator() : m_iterator(nullptr) {}
+    explicit HeapConstIterator(VectorForwardIterator<Node> iterator) : m_iterator(iterator) {}
+
+    reference operator*() const { return *m_iterator; }
+    pointer operator->() const { return &*m_iterator; }
+
+    HeapConstIterator& operator++() {
+        ++m_iterator;
+        return *this;
+    }
+
+    HeapConstIterator operator++(int) {
+        auto previous = *this;
+        ++*this;
+        return previous;
+    }
+
+    friend bool operator==(const HeapConstIterator& a, const HeapConstIterator& b) {
+        return a.m_iterator == b.m_iterator;
+    }
+};
 
 template <typename Traits> class Heap : public SearchTraversalOps<Heap<Traits>> {
     friend class CallOp<Heap>;
     friend class FirstThatOp<Heap>;
 
 public:
+    using container_stream_tag = void;
     using value_type = typename Traits::value_type;
     using Node = typename Traits::Node;
     using NodePtr = Node*;
     using Compare = typename Traits::compare_type;
+    using ForwardIterator = typename Traits::ForwardIterator;
 
 private:
-    mutable Vector<VectorAscTraits<value_type>> m_data;
+    Vector<VectorAscTraits<value_type>> m_data;
     mutable std::mutex m_mutex;
+
+    void HeapifyUp(size_t index) {
+        Compare compare;
+        while (index > 0) {
+            size_t parentIndex = (index - 1) / 2;
+            if (!compare(m_data[index].getValue(), m_data[parentIndex].getValue())) break;
+            std::swap(m_data[index], m_data[parentIndex]);
+            index = parentIndex;
+        }
+    }
+
+    void HeapifyDown(size_t index) {
+        Compare compare;
+        const size_t n = m_data.size();
+        while (index < n && index < n / 2) {
+            const size_t left = 2 * index + 1;
+            const size_t right = left + 1;
+            size_t best = index;
+            if (left < n && compare(m_data[left].getValue(), m_data[best].getValue())) best = left;
+            if (right < n && compare(m_data[right].getValue(), m_data[best].getValue())) best = right;
+            if (best == index) break;
+            std::swap(m_data[index], m_data[best]);
+            index = best;
+        }
+    }
 
 public:
     Heap() = default;
@@ -30,58 +92,22 @@ public:
         }
     }
 
-    decltype(auto) begin() const { return m_data.begin(); }
+    ForwardIterator begin() const { return ForwardIterator(m_data.begin()); }
 
-    decltype(auto) end() const { return m_data.end(); }
+    ForwardIterator end() const { return ForwardIterator(m_data.end()); }
 
-    friend ostream& operator<<(ostream& os, const Heap<Traits>& heap) {
-        std::lock_guard<std::mutex> lock(heap.m_mutex);
-        os << "[";
-        for (auto it = heap.begin(); it != heap.end(); ++it) {
-            os << *it;
-            if (std::next(it) != heap.end()) {
-                os << ", ";
-            }
-        }
-        return os << "]";
+    std::ostream& write(std::ostream& os) const {
+        std::lock_guard lock(m_mutex);
+        return container_stream::write(os, begin(), end());
     }
 
-    friend std::istream& operator>>(std::istream& is, Heap<Traits>& heap) {
+    std::istream& read(std::istream& is) {
+        std::vector<std::pair<value_type, Ref>> values;
+        if (!container_stream::read(is, values)) return is;
         Heap<Traits> parsed;
-        auto expect = [&is](char expected) {
-            char actual;
-            if (!(is >> actual)) return false;
-            if (actual == expected) return true;
-            is.setstate(std::ios::failbit);
-            return false;
-        };
-
-        if (!expect('[')) return is;
-        is >> std::ws;
-        if (is.peek() == ']') {
-            is.get();
-        } else {
-            while (true) {
-                value_type value;
-                Ref ref;
-                if (!expect('(') || !(is >> value) || !expect(',') || !(is >> ref) ||
-                    !expect(')'))
-                    return is;
-
-                parsed.push(value, ref);
-
-                char separator;
-                if (!(is >> separator)) return is;
-                if (separator == ']') break;
-                if (separator != ',') {
-                    is.setstate(std::ios::failbit);
-                    return is;
-                }
-            }
-        }
-
-        std::lock_guard<std::mutex> lock(heap.m_mutex);
-        heap.m_data = std::move(parsed.m_data);
+        for (const auto& [value, ref] : values) parsed.push(value, ref);
+        std::lock_guard lock(m_mutex);
+        m_data.swap(parsed.m_data);
         return is;
     }
 
@@ -92,42 +118,6 @@ public:
     }
 
     void push_back(const value_type& value, Ref ref) { push(value, ref); }
-
-    void HeapifyUp(size_t index) {
-        while (index > 0) {
-            size_t parentIndex = (index - 1) / 2;
-            if (Compare()(m_data[index].getValue(), m_data[parentIndex].getValue())) {
-                std::swap(m_data[index], m_data[parentIndex]);
-                index = parentIndex;
-            } else {
-                break;
-            }
-        }
-    }
-
-    void HeapifyDown(size_t index) {
-        size_t n = m_data.size();
-        while (true) {
-            size_t leftIndex = 2 * index + 1;
-            size_t rightIndex = 2 * index + 2;
-            size_t bestIndex = index;
-
-            if (leftIndex < n &&
-                Compare()(m_data[leftIndex].getValue(), m_data[bestIndex].getValue()))
-                bestIndex = leftIndex;
-
-            if (rightIndex < n &&
-                Compare()(m_data[rightIndex].getValue(), m_data[bestIndex].getValue()))
-                bestIndex = rightIndex;
-
-            if (bestIndex != index) {
-                std::swap(m_data[index], m_data[bestIndex]);
-                index = bestIndex;
-            } else {
-                break;
-            }
-        }
-    }
 
     Node pop() {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -161,18 +151,6 @@ public:
         std::lock_guard<std::mutex> lock(m_mutex);
         m_data.clear();
     }
-};
-
-template <typename T> class MinHeap : public Heap<MinHeapTraits<T>> {
-public:
-    using Parent = Heap<MinHeapTraits<T>>;
-    using Parent::Parent;
-};
-
-template <typename T> class MaxHeap : public Heap<MaxHeapTraits<T>> {
-public:
-    using Parent = Heap<MaxHeapTraits<T>>;
-    using Parent::Parent;
 };
 
 #endif // __HEAP_H__

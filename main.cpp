@@ -11,8 +11,9 @@ int main() {
     // DemoRaceCondition();
     // DemoLinkedList();
     // DemoCircularLinkedList();
-    DemoDoubleLinkedList();
+    // DemoDoubleLinkedList();
     // DemoCircularDoubleLinkedList();
     DemoHeap();
+    DemoBinaryTree();
     return 0;
 }

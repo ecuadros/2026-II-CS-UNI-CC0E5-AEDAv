@@ -2,10 +2,14 @@
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
 #include <cstdio>
+#include <cerrno>
 #include <string>
 #include <thread>
 #include <vector>
-#include "containers/Heap.h"
+#include <algorithm>
+#include <random>
+#include <sstream>
+#include <stdexcept>
 #include "containers/aliases.h"
 #include "foreach.h"
 #include "Demos.h"
@@ -23,10 +27,25 @@ void Square(GeneralNode<TX>& node) {
     node.value() *= node.value();
 }
 
-template <typename Node> void PrintNode(Node& node, ostream& os) {
+template <typename Node> void PrintNode(const Node& node, ostream& os) {
     os << node << " ";
 }
 const int NThreads = 5;
+
+// Borra el archivo temporal cuando termina el demo, incluso si sale antes.
+class ScopedDemoFile {
+    string m_filename;
+
+public:
+    explicit ScopedDemoFile(string filename) : m_filename(std::move(filename)) {}
+    ScopedDemoFile(const ScopedDemoFile&) = delete;
+    ScopedDemoFile& operator=(const ScopedDemoFile&) = delete;
+
+    ~ScopedDemoFile() {
+        if (std::remove(m_filename.c_str()) != 0 && errno != ENOENT)
+            cerr << "No se pudo borrar " << m_filename << '\n';
+    }
+};
 
 // Inserta secuencialmente cada pareja (valor, ref) de 'values' en el
 // Container, una por una. La insercion concurrente queda aislada en
@@ -43,6 +62,7 @@ void TestContainer(Container& container,
                    const vector<pair<typename Container::value_type, Ref>>& values,
                    const string& filename) {
     InsertElements(container, values);
+    ScopedDemoFile cleanup(filename);
 
     if constexpr (requires { container.write(cout); }) {
         cout << "Container using write(): ";
@@ -50,12 +70,12 @@ void TestContainer(Container& container,
         cout << endl;
     }
 
-    // Escritura hacia un archivo, en modo append para acumular cada estado
-    // (el archivo se deja vacio una vez al inicio, ver DemoVector)
-    ofstream of(filename, ios::app);
-    of << container;
-    of << endl;
-    of.close();
+    {
+        ofstream of(filename, ios::trunc);
+        if (!of) throw runtime_error("No se pudo crear " + filename);
+        of << container << endl;
+        if (!of) throw runtime_error("No se pudo escribir " + filename);
+    }
 
     // Escritura en pantalla usando cout directamente (operator<<)
     cout << "Container using cout directly: ";
@@ -91,8 +111,8 @@ template <typename Container> void TestTraversal(Container& container) {
     auto it = container.begin();
     if (it != container.end() && ++it != container.end()) {
         Ref target = (*it).getRef();
-        Node& found =
-            container.FirstThat([](Node& node, Ref ref) { return node.getRef() == ref; }, target);
+        const Node& found = container.FirstThat(
+            [](const Node& node, Ref ref) { return node.getRef() == ref; }, target);
         cout << "FirstThat (ref " << target << "): " << found << endl;
     }
 }
@@ -112,6 +132,7 @@ template <typename Iterator> void PrintCircularTraversal(Iterator begin, Iterato
 
 template <typename Container>
 void TestGenericContainer(Container& container, const string& filename = "container.txt") {
+    ScopedDemoFile cleanup(filename);
     cout << "Vacio: " << container.empty() << '\n';
 
     container.push_back(1, 101);
@@ -149,17 +170,14 @@ void TestGenericContainer(Container& container, const string& filename = "contai
         ifstream archivo(filename);
         if (!archivo) {
             cerr << "No se pudo abrir " << filename << '\n';
-            std::remove(filename.c_str());
             return;
         }
         if (!(archivo >> leida)) {
             cerr << "No se pudo leer " << filename << '\n';
-            std::remove(filename.c_str());
             return;
         }
     }
     cout << "Leido desde " << filename << ": " << leida << '\n';
-    if (std::remove(filename.c_str()) != 0) cerr << "No se pudo borrar " << filename << '\n';
 
     Container reutilizada;
     reutilizada.push_back(1, 101);
@@ -169,21 +187,59 @@ void TestGenericContainer(Container& container, const string& filename = "contai
     cout << "Luego de reutilizarla: " << reutilizada << '\n';
 }
 
-void DemoVector() {
-    // Dejamos los archivos vacios para que TestContainer acumule (append)
-    // el estado del container tras cada paso
-    ofstream("vector.txt", ios::trunc).close();
+template <typename List>
+void VerifyLinkedList(const string& name) {
+    List list;
+    list.clear();
+    list.push_back(8, 80);
+    list.clear();
+    list.clear();
+    if (!list.empty() || list.begin() != list.end())
+        throw runtime_error(name + ": clear no dejo la lista vacia");
 
+    list.push_back(3, 30);
+    list.insert(1, 10);
+    list.insert(5, 50);
+    List copy(list);
+    list = list;
+    if (copy.empty() || list.empty())
+        throw runtime_error(name + ": fallo la copia");
+
+    ostringstream before;
+    before << list;
+    istringstream invalid("[(7,70),broken]");
+    if (invalid >> list)
+        throw runtime_error(name + ": se acepto una lectura invalida");
+    ostringstream after;
+    after << list;
+    if (before.str() != after.str())
+        throw runtime_error(name + ": la lectura invalida altero la lista");
+
+    list.clear();
+    list.push_back(9, 90);
+    if (list.empty() || (*list.begin()).getValue() != 9)
+        throw runtime_error(name + ": no se pudo reutilizar la lista");
+    cout << name << ": clear, copia y lectura invalida OK\n";
+}
+
+void DemoVector() {
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
     VectorAsc<TX> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
 
-    ofstream("vector_str.txt", ios::trunc).close();
     VectorAsc<string> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
+
+    VectorAsc<TX> emptyVector;
+    if (emptyVector.rbegin() != emptyVector.rend())
+        throw runtime_error("Vector vacio: recorrido inverso incorrecto");
+    istringstream invalidVector("[(7,70),oops]");
+    if (invalidVector >> vec || vec.size() != 10)
+        throw runtime_error("Vector: lectura invalida altero los datos");
+    cout << "Vector: recorrido vacio y lectura invalida OK\n";
 }
 
 template <typename Container>
@@ -247,6 +303,7 @@ void DemoLinkedList() {
     lista.ApplyFunction(AddX<TX>, TX(10));
     cout << "Tras AddX(10): " << lista << '\n';
     DemoRaceCondition<List>("LinkedList");
+    VerifyLinkedList<List>("LinkedList");
 }
 
 void DemoCircularLinkedList() {
@@ -267,6 +324,7 @@ void DemoCircularLinkedList() {
     cout << "Ciclo descendente: ";
     PrintCircularTraversal(descendente.begin(), descendente.end());
     DemoRaceCondition<AscList>("CircularLinkedList");
+    VerifyLinkedList<AscList>("CircularLinkedList");
 }
 
 void DemoDoubleLinkedList() {
@@ -283,6 +341,7 @@ void DemoDoubleLinkedList() {
     descendente.insert(7, 107);
     cout << "Lista descendente: " << descendente << '\n';
     DemoRaceCondition<AscList>("DoubleLinkedList");
+    VerifyLinkedList<AscList>("DoubleLinkedList");
 }
 
 void DemoCircularDoubleLinkedList() {
@@ -307,14 +366,57 @@ void DemoCircularDoubleLinkedList() {
     cout << "Ciclo descendente hacia atras: ";
     PrintCircularTraversal(descendente.rbegin(), descendente.rend());
     DemoRaceCondition<AscList>("CircularDoubleLinkedList");
+    VerifyLinkedList<AscList>("CircularDoubleLinkedList");
+}
+
+template <typename HeapType, typename Compare>
+void VerifyHeap(const string& name, Compare compare) {
+    HeapType heap;
+    vector<int> expected;
+    mt19937 rng(2026);
+    uniform_int_distribution<int> distribution(-500, 500);
+    for (int i = 0; i < 1500; ++i) {
+        int value = distribution(rng);
+        expected.push_back(value);
+        heap.push(value, i);
+    }
+    sort(expected.begin(), expected.end(), compare);
+    for (int value : expected) {
+        if (heap.top().getValue() != value || heap.pop().getValue() != value)
+            throw runtime_error(name + ": orden de extraccion incorrecto");
+    }
+
+    vector<thread> workers;
+    for (int t = 0; t < 4; ++t)
+        workers.emplace_back([&heap, t] {
+            for (int i = 0; i < 1000; ++i)
+                heap.push(t * 1000 + i, i);
+        });
+    for (auto& worker : workers) worker.join();
+    if (heap.size() != 4000)
+        throw runtime_error(name + ": se perdieron inserciones concurrentes");
+    int previous = heap.pop().getValue();
+    while (!heap.empty()) {
+        int current = heap.pop().getValue();
+        if (compare(current, previous))
+            throw runtime_error(name + ": heapify down incorrecto");
+        previous = current;
+    }
+
+    heap.push(42, 7);
+    istringstream invalid("[(1,2),broken]");
+    if (invalid >> heap || heap.top().getValue() != 42)
+        throw runtime_error(name + ": lectura invalida altero el heap");
+    cout << name << ": extraccion, concurrencia y lectura invalida OK\n";
 }
 
 void DemoHeap() {
+    using Min = MinHeap<int>;
+    using Max = MaxHeap<int>;
     const vector<pair<int, Ref>> values{{5, 50}, {1, 10}, {4, 40}, {2, 20}};
 
     cout << "Demo MinHeap:\n";
-    MinHeap<int> minHeap;
-    ofstream("min_heap.txt", ios::trunc).close();
+    Min minHeap;
     TestContainer(minHeap, values, "min_heap.txt");
     TestTraversal(minHeap);
     cout << "Top: " << minHeap.top() << '\n';
@@ -323,10 +425,10 @@ void DemoHeap() {
         cout << minHeap.pop() << ' ';
     cout << '\n';
     TestGenericContainer(minHeap, "min_heap_persist.txt");
+    VerifyHeap<Min>("MinHeap", less<int>{});
 
     cout << "Demo MaxHeap:\n";
-    MaxHeap<int> maxHeap;
-    ofstream("max_heap.txt", ios::trunc).close();
+    Max maxHeap;
     TestContainer(maxHeap, values, "max_heap.txt");
     TestTraversal(maxHeap);
     cout << "Top: " << maxHeap.top() << '\n';
@@ -335,4 +437,22 @@ void DemoHeap() {
         cout << maxHeap.pop() << ' ';
     cout << '\n';
     TestGenericContainer(maxHeap, "max_heap_persist.txt");
+    VerifyHeap<Max>("MaxHeap", greater<int>{});
+}
+
+void DemoBinaryTree() {
+    using Tree = BinarySearchTree<TX>;
+    const vector<pair<TX, Ref>> values{{5, 50}, {1, 10}, {4, 40},
+                                       {2, 20}, {7, 70}, {5, 51}};
+
+    cout << "DemoBinaryTree:\n";
+    Tree tree;
+    TestContainer(tree, values, "binary_tree.txt");
+    TestTraversal(tree);
+    cout << "Estructura del arbol:\n";
+    tree.printIndented(cout);
+
+    Tree genericTree;
+    TestGenericContainer(genericTree, "binary_tree_persist.txt");
+    TestRaceCondition<Tree>("BinaryTree", values);
 }
