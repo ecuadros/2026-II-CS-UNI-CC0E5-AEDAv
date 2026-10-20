@@ -172,6 +172,15 @@ void TestBackwardIterator(Container &container) {
     cout << "]" << endl;
 }
 
+template <typename Container>
+void TestRead(Container &container, const string &label, const string &filename) {
+    ifstream in(filename);
+    in >> container;
+    in.close();
+    cout << label << " desde archivo: " << container << endl;
+    TestTraversal(container);
+}
+
 template <typename Container, typename Checker>
 void TestListOperations(Container &list, const string &label, const string &filename, Checker check) {
     list.insert(4, 12);
@@ -204,11 +213,7 @@ void TestListOperations(Container &list, const string &label, const string &file
     check(list);
 
     Container read_list;
-    ifstream in(filename);
-    in >> read_list;
-    in.close();
-    cout << label << " leida desde archivo: " << read_list << endl;
-    TestTraversal(read_list);
+    TestRead(read_list, label, filename);
     check(read_list);
 }
 
@@ -231,6 +236,9 @@ void DemoVector() {
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
 
+    Vector<VectorAscTraits<TX>> readVec;
+    TestRead(readVec, "Vector", "vector.txt");
+
     ofstream("vector_str.txt", ios::trunc).close();
     Vector<VectorAscTraits<string>> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
@@ -242,23 +250,21 @@ void DemoVector() {
 // cuantos entraron realmente. Si push_back no estuviera sincronizado
 // (sin el mutex/lock_guard actual) esto perderia inserciones o crashearia;
 // con el mutex protegiendo push_back/resize, deberia dar siempre 0 perdidas.
-void DemoRaceCondition() {
-    const size_t N = 200000;
+template <typename Container>
+void TestRaceCondition(Container &container, const string &label, size_t N) {
+    using T = typename Container::value_type;
 
-    vector<pair<TX, Ref>> values(N);
+    vector<pair<T, Ref>> values(N);
     for (size_t i = 0; i < N; ++i)
-        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
-
-    Vector<VectorAscTraits<TX>> vec;
+        values[i] = {static_cast<T>(i), static_cast<Ref>(i)};
 
     // Insercion concurrente: NThreads workers insertando en paralelo sobre
-    // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
-    size_t n = values.size();
+    // el mismo Container, cada uno con un subconjunto entrelazado (stride)
     vector<thread> workers;
     for (int t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&vec, &values, n, t](){
-            for (size_t i = t; i < n; i += NThreads)
-                vec.push_back(values[i].first, values[i].second);
+        workers.emplace_back([&container, &values, N, t](){
+            for (size_t i = t; i < N; i += NThreads)
+                container.push_back(values[i].first, values[i].second);
         });
     }
     for (auto &worker : workers)
@@ -268,28 +274,27 @@ void DemoRaceCondition() {
     for (auto &v : values) expectedSum += v.first;
 
     long long actualSum = 0;
-    for (size_t i = 0; i < vec.size(); ++i) actualSum += vec[i].getValue();
+    for (auto &node : container) actualSum += node.getValue();
 
-    cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
-         << "el Vector quedo con " << vec.size() << endl;
+    cout << label << ": se esperaban " << N << " elementos, "
+         << "el container quedo con " << container.size() << endl;
     cout << "  suma esperada = " << expectedSum
          << ", suma obtenida = " << actualSum << endl;
 
-    if (vec.size() != N || actualSum != expectedSum)
+    if (container.size() != N || actualSum != expectedSum)
         cout << "  *** Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar) ***" << endl;
     else
         cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
              << "sincroniza correctamente las inserciones concurrentes" << endl;
 }
 
-template <typename Container>
-void TestHeap(const string &label,
-              const vector<pair<typename Container::value_type, Ref>> &values) {
-    Container heap;
-    for (const auto &v : values)
-        heap.push(v.first, v.second);
+void DemoRaceCondition() {
+    Vector<VectorAscTraits<TX>> vec;
+    TestRaceCondition(vec, "Vector", 200000);
+}
 
-    cout << label << " arreglo interno: " << heap << endl;
+template <typename Container>
+void TestHeap(Container &heap, const string &label) {
     cout << label << " top(): " << heap.top() << endl;
     cout << label << " pop() hasta vaciar: [";
     while (!heap.empty())
@@ -298,21 +303,8 @@ void TestHeap(const string &label,
 }
 
 template <typename Container>
-void TestHeapRaceCondition(const string &label, size_t N) {
+void TestPopOrder(Container &heap, const string &label) {
     using T = typename Container::value_type;
-    Container heap;
-
-    vector<thread> workers;
-    for (int t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&heap, N, t](){
-            for (size_t i = t; i < N; i += NThreads)
-                heap.push(static_cast<T>(i), static_cast<Ref>(i));
-        });
-    }
-    for (auto &worker : workers)
-        worker.join();
-
-    size_t count = heap.size();
     typename Container::Compare comp;
     bool ordered = true;
     T prev{};
@@ -322,19 +314,38 @@ void TestHeapRaceCondition(const string &label, size_t N) {
             ordered = false;
         prev = value;
     }
-
-    cout << label << " concurrente: se esperaban " << N << " elementos, "
-         << "el heap quedo con " << count
-         << "; pop() en orden: " << (ordered ? "si" : "no") << endl;
+    cout << label << " pop() en orden: " << (ordered ? "si" : "no") << endl;
 }
 
 void DemoHeap()
 {
+    ofstream("heap.txt", ios::trunc).close();
+    ofstream("heap_str.txt", ios::trunc).close();
+
     const vector<pair<TX, Ref>> values = {{5, 15}, {1, 11}, {8, 18}, {3, 13}, {7, 17}, {3, 23}};
 
-    TestHeap<MinHeap<TX>>("MinHeap", values);
-    TestHeap<MaxHeap<TX>>("MaxHeap", values);
-    TestHeap<MaxHeap<string>>("MaxHeap<string>", {{"pera", 1}, {"manzana", 2}, {"uva", 3}, {"kiwi", 4}});
+    MinHeap<TX> minHeap;
+    TestContainer(minHeap, values, "heap.txt");
+    TestTraversal(minHeap);
+    TestHeap(minHeap, "MinHeap");
+
+    MaxHeap<TX> maxHeap;
+    TestContainer(maxHeap, values, "heap.txt");
+    TestHeap(maxHeap, "MaxHeap");
+
+    MaxHeap<string> strHeap;
+    TestContainer(strHeap, {{"pera", 1}, {"manzana", 2}, {"uva", 3}, {"kiwi", 4}}, "heap_str.txt");
+    TestHeap(strHeap, "MaxHeap<string>");
+
+    MinHeap<TX> readHeap;
+    TestRead(readHeap, "MinHeap", "heap.txt");
+
+    MinHeap<TX> squares;
+    InsertElements(squares, {{-4, 1}, {-3, 2}, {1, 3}, {2, 4}});
+    cout << "MinHeap antes de ApplyFunction(Square): " << squares << endl;
+    squares.ApplyFunction(Square);
+    cout << "MinHeap tras ApplyFunction(Square): " << squares << endl;
+    TestHeap(squares, "MinHeap tras Square");
 
     MinHeap<TX> empty;
     try {
@@ -343,8 +354,13 @@ void DemoHeap()
         cout << "pop() sobre un heap vacio lanza: " << e.what() << endl;
     }
 
-    TestHeapRaceCondition<MinHeap<TX>>("MinHeap", 100000);
-    TestHeapRaceCondition<MaxHeap<TX>>("MaxHeap", 100000);
+    MinHeap<TX> minRace;
+    TestRaceCondition(minRace, "MinHeap", 100000);
+    TestPopOrder(minRace, "MinHeap");
+
+    MaxHeap<TX> maxRace;
+    TestRaceCondition(maxRace, "MaxHeap", 100000);
+    TestPopOrder(maxRace, "MaxHeap");
 }
 
 // TODO: Implementar DemoLinkedList() para probar la lista enlazada y sus iteradores.
