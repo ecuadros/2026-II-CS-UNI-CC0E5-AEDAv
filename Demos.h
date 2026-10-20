@@ -6,5 +6,9 @@ void DemoVector();
 void DemoRaceCondition();
 void DemoHeap();
 void DemoLinkedList();
+void DemoCircularLinkedList();
+void DemoDoublyLinkedList();
+void DemoCircularDoublyLinkedList();
+void DemoTraits();
 
 #endif // __DEMOS_H__
