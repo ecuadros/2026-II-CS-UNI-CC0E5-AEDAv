@@ -3,6 +3,8 @@
 #include <mutex>
 #include <stdexcept>
 #include "vector.h"
+#include "GeneralContainer.h"
+#include "stream.h"
 #include "traits.h"
 
 template <typename T>
@@ -18,7 +20,9 @@ template <typename T>
 using MaxHeapTraits = ListTraits<DescendingTraits<T>, HeapStructure<T>>;
 
 template <typename Traits>
-class Heap {
+class Heap : public GeneralContainer<Heap<Traits>> {
+    using Base = GeneralContainer<Heap<Traits>>;
+    friend Base;
 public:
     using value_type        = typename Traits::value_type;
     using Node              = typename Traits::Node;
@@ -27,7 +31,7 @@ public:
 private:
     Container     m_data;
     Compare       m_comp;
-    mutable mutex m_mutex;
+    using Base::m_mutex;
 
     void HeapifyUp(size_t index) {
         while (index > 0) {
@@ -58,8 +62,13 @@ private:
         }
     }
 
+    void AfterApply() {
+        for (size_t i = m_data.size() / 2; i-- > 0; )
+            HeapifyDown(i);
+    }
+
 public:
-    void push(const value_type &value, Ref ref) {
+    void push_back(const value_type &value, Ref ref) {
         lock_guard<mutex> lock(m_mutex);
         m_data.push_back(value, ref);
         HeapifyUp(m_data.size() - 1);
@@ -84,12 +93,24 @@ public:
     size_t size()  const { lock_guard<mutex> lock(m_mutex); return m_data.size();  }
     bool   empty() const { lock_guard<mutex> lock(m_mutex); return m_data.empty(); }
 
-    ostream &write(ostream &os) {
+    void clear() {
+        lock_guard<mutex> lock(m_mutex);
+        m_data.clear();
+    }
+
+    auto begin() const { return m_data.begin(); }
+    auto end()   const { return m_data.end();   }
+
+    ostream &write(ostream &os) const {
         lock_guard<mutex> lock(m_mutex);
         os << "[";
         for (size_t i = 0; i < m_data.size(); ++i)
             os << (i ? "," : "") << m_data[i];
         return os << "]";
+    }
+
+    istream &read(istream &is) {
+        return ReadContainer(is, *this);
     }
 };
 
@@ -98,10 +119,5 @@ using MinHeap = Heap<MinHeapTraits<T>>;
 
 template <typename T>
 using MaxHeap = Heap<MaxHeapTraits<T>>;
-
-template <typename Traits>
-ostream& operator<<(ostream &os, Heap<Traits> &heap) {
-    return heap.write(os);
-}
 
 #endif // __HEAP_H__

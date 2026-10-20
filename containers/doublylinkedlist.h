@@ -26,20 +26,14 @@ template <typename T>
 using DoublyLinkedListDescTraits = ListTraits<DescendingTraits<T>, DoublyLinkedListStructure<T>>;
 
 template <typename Traits>
-class DoublyLinkedList : public LinkedList<Traits> {
-    using Base = LinkedList<Traits>;
+class DoublyLinkedList : public LinkedList<Traits, DoublyLinkedList<Traits>> {
+    using Base = LinkedList<Traits, DoublyLinkedList<Traits>>;
     using Base::Base;
 public:
     using BackwardIterator  = typename Traits::BackwardIterator;
 
     BackwardIterator rbegin() const { return BackwardIterator(this->GetTail()); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
-
-    template<typename Func, typename... Args>
-    decltype(auto) rcall(Func func, Args&&... args)
-    {    auto lock = this->Lock();
-        return ::call(rbegin(), rend(), std::move(func), std::forward<Args>(args)...);
-    }
 };
 
 #endif
