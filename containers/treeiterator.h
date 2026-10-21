@@ -4,31 +4,56 @@
 #include "GeneralIterator.h"
 #include <stack>
 
-template <typename Node, bool Reverse = false>
-class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<Node, Reverse>, Node> {
-    using Parent = GeneralIterator<BinaryTreeIterator<Node, Reverse>, Node>;
-    std::stack<Node*> m_path;
+enum class TreeTraversalOrder { PreOrder, InOrder, PostOrder };
 
-    void pushPath(Node* node) {
-        while (node) {
-            m_path.push(node);
-            node = Reverse ? node->m_pChild[1]
-                           : node->m_pChild[0]; // Right for reverse, left for forward
+template <typename Node, bool Reverse = false, TreeTraversalOrder Order = TreeTraversalOrder::InOrder>
+class BinaryTreeIterator
+    : public GeneralIterator<BinaryTreeIterator<Node, Reverse, Order>, Node> {
+    using Parent = GeneralIterator<BinaryTreeIterator<Node, Reverse, Order>, Node>;
+
+    struct Step {
+        Node* node;
+        bool visit;
+    };
+
+    std::stack<Step> m_pending;
+
+    void advance() {
+        Parent::m_ptr = nullptr;
+        while (!m_pending.empty()) {
+            auto [node, visit] = m_pending.top();
+            m_pending.pop();
+            if (visit) {
+                Parent::m_ptr = node;
+                return;
+            }
+
+            Node* first = node->m_pChild[Reverse ? 1 : 0];
+            Node* second = node->m_pChild[Reverse ? 0 : 1];
+            if constexpr (Order == TreeTraversalOrder::PreOrder) {
+                if (second) m_pending.push({second, false});
+                if (first) m_pending.push({first, false});
+                m_pending.push({node, true});
+            } else if constexpr (Order == TreeTraversalOrder::InOrder) {
+                if (second) m_pending.push({second, false});
+                m_pending.push({node, true});
+                if (first) m_pending.push({first, false});
+            } else {
+                m_pending.push({node, true});
+                if (second) m_pending.push({second, false});
+                if (first) m_pending.push({first, false});
+            }
         }
     }
 
 public:
     explicit BinaryTreeIterator(Node* root) : Parent(nullptr) {
-        pushPath(root);
-        Parent::m_ptr = m_path.empty() ? nullptr : m_path.top();
+        if (root) m_pending.push({root, false});
+        advance();
     }
 
     BinaryTreeIterator& operator++() {
-        if (m_path.empty()) return *this;
-        Node* current = m_path.top();
-        m_path.pop();
-        pushPath(current->m_pChild[Reverse ? 0 : 1]);
-        Parent::m_ptr = m_path.empty() ? nullptr : m_path.top();
+        advance();
         return *this;
     }
 };

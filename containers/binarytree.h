@@ -25,6 +25,8 @@ template <typename T> struct BinaryTreeTraits {
     using Node = BinaryTreeNode<T>;
     using ForwardIterator = BinaryTreeIterator<Node>;
     using BackwardIterator = BinaryTreeIterator<Node, true>;
+    using PreOrderIterator = BinaryTreeIterator<Node, false, TreeTraversalOrder::PreOrder>;
+    using PostOrderIterator = BinaryTreeIterator<Node, false, TreeTraversalOrder::PostOrder>;
 };
 
 template <typename Traits> class BinaryTree : public SearchTraversalOps<BinaryTree<Traits>> {
@@ -38,6 +40,17 @@ public:
     using NodePtr = Node*;
     using ForwardIterator = typename Traits::ForwardIterator;
     using BackwardIterator = typename Traits::BackwardIterator;
+    using PreOrderIterator = typename Traits::PreOrderIterator;
+    using PostOrderIterator = typename Traits::PostOrderIterator;
+
+    template <typename Iterator> class TraversalView {
+        NodePtr m_root;
+
+    public:
+        explicit TraversalView(NodePtr root) : m_root(root) {}
+        Iterator begin() const { return Iterator(m_root); }
+        Iterator end() const { return Iterator(nullptr); }
+    };
 
 private:
     NodePtr m_root = nullptr; // root of the binary tree
@@ -150,23 +163,25 @@ public:
     ForwardIterator end() const { return ForwardIterator(nullptr); }
     BackwardIterator rbegin() const { return BackwardIterator(m_root); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
-
-private:
-    void writePreOrder(std::ostream& os, NodePtr node, bool& first) const {
-        if (!node) return;
-        if (!first) os << ", ";
-        os << *node;
-        first = false;
-        writePreOrder(os, node->m_pChild[0], first);
-        writePreOrder(os, node->m_pChild[1], first);
+    TraversalView<PreOrderIterator> preorder() const {
+        return TraversalView<PreOrderIterator>(m_root);
+    }
+    TraversalView<ForwardIterator> inorder() const {
+        return TraversalView<ForwardIterator>(m_root);
+    }
+    TraversalView<PostOrderIterator> postorder() const {
+        return TraversalView<PostOrderIterator>(m_root);
     }
 
-public:
     std::ostream& write(std::ostream& os) const {
         std::lock_guard lock(m_mutex);
-        bool first = true;
         os << '[';
-        writePreOrder(os, m_root, first);
+        bool first = true;
+        for (const auto& node : preorder()) {
+            if (!first) os << ", ";
+            os << node;
+            first = false;
+        }
         return os << ']';
     }
 

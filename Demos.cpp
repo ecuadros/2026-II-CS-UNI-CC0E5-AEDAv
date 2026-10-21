@@ -445,10 +445,40 @@ void DemoBinaryTree() {
     const vector<pair<TX, Ref>> values{{5, 50}, {1, 10}, {4, 40},
                                        {2, 20}, {7, 70}, {5, 51}};
 
+    auto showOrder = [](const string& name, const auto& view) {
+        cout << name << ": [";
+        for (const auto& node : view) cout << node << ' ';
+        cout << "]\n";
+    };
+
+    auto verifyOrder = [](const auto& view, const vector<Ref>& expected) {
+        vector<Ref> actual;
+        for (const auto& node : view) actual.push_back(node.getRef());
+        if (actual != expected) throw runtime_error("Orden de recorrido incorrecto");
+    };
+
     cout << "DemoBinaryTree:\n";
     Tree tree;
     TestContainer(tree, values, "binary_tree.txt");
     TestTraversal(tree);
+    showOrder("Preorder", tree.preorder());
+    showOrder("Inorder", tree.inorder());
+    showOrder("Postorder", tree.postorder());
+    verifyOrder(tree.preorder(), {50, 10, 40, 20, 51, 70});
+    verifyOrder(tree.inorder(), {10, 20, 40, 51, 50, 70});
+    verifyOrder(tree.postorder(), {20, 51, 40, 10, 70, 50});
+
+    Tree emptyTree;
+    if (emptyTree.preorder().begin() != emptyTree.preorder().end() ||
+        emptyTree.inorder().begin() != emptyTree.inorder().end() ||
+        emptyTree.postorder().begin() != emptyTree.postorder().end())
+        throw runtime_error("Recorrido de arbol vacio");
+
+    Tree singleNode{{8, 80}};
+    verifyOrder(singleNode.preorder(), {80});
+    verifyOrder(singleNode.inorder(), {80});
+    verifyOrder(singleNode.postorder(), {80});
+
     cout << "Estructura del arbol:\n";
     tree.printIndented(cout);
 
