@@ -5,5 +5,7 @@
 void DemoVector();
 void DemoRaceCondition();
 void DemoLinkedList();
+void DemoHeap();
+void DemoBinaryTree();
 
 #endif // __DEMOS_H__

@@ -1,21 +1,39 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
+//#include "traits.h"
+#include "vector.h"
+
+template <typename T, typename _Compare>
+struct HeapDefaultTraits {
+    using Node = GeneralNode<T>;
+    using value_type        = T;
+    using Compare           = _Compare;
+    using ForwardIterator   = VectorForwardIterator<Node>;  // itera sobre Node, no sobre T
+    using BackwardIterator  = VectorBackwardIterator<Node>;
+};
+
+template <typename T, typename _Compare = std::less<T>>
+struct HeapAscTraits : public HeapDefaultTraits<T, _Compare> {};
+
+template <typename T, typename _Compare = std::greater<T>>
+struct HeapDescTraits : public HeapDefaultTraits<T, _Compare> {};
 
 template <typename Traits>
 class Heap {
-    
+
 public:
     using value_type        = typename Traits::value_type;
     using Node              = typename Traits::Node;
     using NodePtr           = Node *;
     using Compare           = typename Traits::Compare;
 private:
-    Vector<Node> m_data;
+    Vector<Traits> m_data;
     decltype(auto) begin() { return m_data.begin(); }
     decltype(auto) end()   { return m_data.end();   }
 
 public:
-    friend ostream &operator <<(ostream &os, const Heap<Traits> &heap) {
+    Heap () {};
+    /*friend ostream &operator <<(ostream &os, const Heap<Traits> &heap) {
         os << "[";
         for (auto it = heap.begin(); it != heap.end(); ++it) {
             os << *it;
@@ -24,7 +42,7 @@ public:
             }
         }
         return os << "]";
-    }
+    }*/
     void push(const value_type &value, Ref ref) {
         m_data.push_back(Node(value));
         HeapifyUp(m_data.size() - 1);
@@ -41,12 +59,12 @@ public:
             }
         }
     }
-    Node pop() {
+    /*Node pop() {
         if (m_data.empty()) return;
         std::swap(m_data[0], m_data[m_data.size() - 1]);
         m_data.pop_back();
         HeapifyDown(0);
-    }
+        }*/
 
 };
 
@@ -57,7 +75,7 @@ class MinHeap : public Heap<Traits> {
 
 template <typename Traits>
 class MaxHeap : public Heap<Traits> {
-    
+
 };
 
 

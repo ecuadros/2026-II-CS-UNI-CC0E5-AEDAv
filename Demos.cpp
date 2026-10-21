@@ -11,6 +11,7 @@
 #include "containers/circularlinkedlist.h"
 #include "containers/circulardoublelinkedlist.h"
 #include "Demos.h"
+#include "containers/Heap.h"
 using namespace std;
 
 void AddOne(GeneralNode<TX> &node) {
@@ -252,4 +253,13 @@ void DemoLinkedList()
     CircularDoubleLinkedList<DoubleLinkedListAscTraits<TX>> cdlist;
     TestLinkedList(cdlist, "circulardoublelinkedlist.txt");
     TestDoubleLinkedListSpecifics(cdlist);
+}
+
+void DemoHeap() {
+    cout << "\nPruebas para LinkedList" << endl;
+    Heap<HeapAscTraits<TX>> heap;
+}
+
+void DemoBinaryTree() {
+    ;
 }

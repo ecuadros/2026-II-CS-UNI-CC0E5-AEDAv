@@ -7,8 +7,10 @@ using namespace std;
 // Compilar asi: make
 // Ejecutar asi: ./main
 int main() {
-    DemoVector();
-    DemoRaceCondition();
-    DemoLinkedList();
+    //DemoVector();
+    //DemoRaceCondition();
+    //DemoLinkedList();
+    DemoHeap();
+    DemoBinaryTree();
     return 0;
 }
