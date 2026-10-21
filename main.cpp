@@ -9,6 +9,11 @@ using namespace std;
 int main() {
     DemoVector();
     DemoRaceCondition();
+    DemoHeap();
     DemoLinkedList();
+    DemoCircularLinkedList();
+    DemoDoublyLinkedList();
+    DemoCircularDoublyLinkedList();
+    DemoTraits();
     return 0;
 }
