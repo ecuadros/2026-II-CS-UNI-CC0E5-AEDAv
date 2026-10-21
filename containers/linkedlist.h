@@ -1,6 +1,7 @@
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
 #include <mutex>
+#include "Traits.h"
 #include "GeneralNode.h"
 #include "GeneralIterator.h"
 #include "../foreach.h"
@@ -26,16 +27,6 @@ public:
     LinkedListForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pNext; return *this; }
 };
 
-template <typename T, typename _Compare>
-struct DefaultTraits {
-    using value_type        = T;
-    using Compare           = _Compare;
-};
-template <typename T, typename _Compare = std::less<T>>
-struct AscendingTraits : public DefaultTraits<T, _Compare> {};
-
-template <typename T, typename _Compare = std::greater<T>>
-struct DescendingTraits : public DefaultTraits<T, _Compare> {};
 template <typename T>
 struct LinkedListAscTraits : public AscendingTraits<T> {
     using Node              = LinkedListNode<T>;
@@ -151,7 +142,7 @@ template <typename Traits>
 LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ 
     clear();
     if(!other.m_pRoot)
-        return;
+        return *this;
     std::lock_guard<std::mutex> lock(other.m_mutex);
 
     m_pRoot = new Node(other.GetRoot()->getValue(), other.GetRoot()->getRef(), nullptr);

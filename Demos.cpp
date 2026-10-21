@@ -7,6 +7,7 @@
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
+#include "containers/Heap.h"
 #include "Demos.h"
 using namespace std;
 
@@ -218,4 +219,43 @@ void DemoLinkedList()
     in.close();
     cout << "LinkedList leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+}
+
+void DemoHeap() {
+    MaxHeap<TX> maxHeap;
+    for (TX v : {5, 3, 8, 1, 9}) {
+        maxHeap.push(v, v * 10);
+        cout << "MaxHeap tras push(" << v << "): " << maxHeap << endl;
+    }
+    cout << "MaxHeap top = " << maxHeap.top() << endl;
+    cout << "MaxHeap pop = " << maxHeap.pop() << " -> " << maxHeap << endl;
+
+    MinHeap<TX> minHeap;
+    for (TX v : {5, 3, 8, 1, 9, 2, 7})
+        minHeap.push(v, v * 10);
+    cout << "MinHeap: " << minHeap << endl;
+    cout << "MinHeap vaciado con pop: ";
+    while (!minHeap.empty())
+        cout << minHeap.pop().getValue() << " ";
+    cout << endl << "MinHeap vacio: " << minHeap << endl;
+
+    const size_t N = 100000;
+    MinHeap<TX> heap;
+    vector<thread> workers;
+    for (int t = 0; t < NThreads; ++t)
+        workers.emplace_back([&heap, N, t]() {
+            for (size_t i = t; i < N; i += NThreads)
+                heap.push(static_cast<TX>(i), static_cast<Ref>(i));
+        });
+    for (auto &worker : workers)
+        worker.join();
+    size_t count = heap.size();
+    bool ordered = true;
+    TX prev = heap.top().getValue();
+    while (!heap.empty()) {
+        TX v = heap.pop().getValue();
+        if (v < prev) ordered = false;
+        prev = v;
+    }
+    cout << "DemoHeap concurrente: se esperaban " << N << " elementos, el Heap quedo con " << count << (ordered ? " y salen ordenados" : " y  NO salen ordenados") << endl;
 }
