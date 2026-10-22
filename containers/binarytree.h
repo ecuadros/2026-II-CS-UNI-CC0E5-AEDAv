@@ -17,7 +17,7 @@ public:
     using Parent::Parent;
     using NodePtr = BinaryTreeNode<T>*;
 
-    NodePtr m_pChild[2] = {nullptr, nullptr}; // left and right children
+    NodePtr m_pChild[2] = {nullptr, nullptr};
 };
 
 template <typename T> struct BinaryTreeTraits {
@@ -186,10 +186,8 @@ public:
     }
 
     std::istream& read(std::istream& is) {
-        std::vector<std::pair<value_type, Ref>> values;
-        if (!container_stream::read(is, values)) return is;
         BinaryTree parsed;
-        for (const auto& [value, ref] : values) parsed.insert(value, ref);
+        if (!container_stream::read(is, parsed)) return is;
         std::lock_guard lock(m_mutex);
         std::swap(m_root, parsed.m_root);
         std::swap(m_size, parsed.m_size);

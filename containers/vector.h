@@ -19,7 +19,13 @@ public:
     using Parent::Parent; // Inherit constructor
 
     // Prefix increment
+    T* operator->() const { return Parent::m_ptr; }
     VectorForwardIterator& operator++() { ++Parent::m_ptr; return *this; }
+    VectorForwardIterator operator++(int) {
+        auto previous = *this;
+        ++*this;
+        return previous;
+    }
 };
 
 template <typename T>
@@ -32,7 +38,13 @@ public:
     using reference = T&;
     explicit VectorBackwardIterator(pointer base) : m_base(base) {}
     reference operator*() const { return *(m_base - 1); }
+    pointer operator->() const { return m_base - 1; }
     VectorBackwardIterator& operator++() { --m_base; return *this; }
+    VectorBackwardIterator operator++(int) {
+        auto previous = *this;
+        ++*this;
+        return previous;
+    }
     friend bool operator==(const VectorBackwardIterator& a, const VectorBackwardIterator& b) {
         return a.m_base == b.m_base;
     }
@@ -59,6 +71,8 @@ public:
     using Node              = Traits::Node;
     using ForwardIterator   = Traits::ForwardIterator;
     using BackwardIterator  = Traits::BackwardIterator;
+    using ConstForwardIterator = VectorForwardIterator<const Node>;
+    using ConstBackwardIterator = VectorBackwardIterator<const Node>;
 private:
     Node        *m_data     = nullptr;   // puntero al arreglo dinámico
     size_t       m_size     = 0,         // cantidad actual
@@ -174,10 +188,19 @@ public:
         m_capacity = 0;
     }
 
-    ForwardIterator begin() const { return ForwardIterator(m_data); }
-    ForwardIterator end() const { return ForwardIterator(m_data ? m_data + m_size : nullptr); }
-    BackwardIterator rbegin() const { return BackwardIterator(m_data ? m_data + m_size : nullptr); }
-    BackwardIterator rend() const { return BackwardIterator(m_data); }
+    ForwardIterator begin() { return ForwardIterator(m_data); }
+    ForwardIterator end() { return ForwardIterator(m_data ? m_data + m_size : nullptr); }
+    BackwardIterator rbegin() { return BackwardIterator(m_data ? m_data + m_size : nullptr); }
+    BackwardIterator rend() { return BackwardIterator(m_data); }
+
+    ConstForwardIterator begin() const { return ConstForwardIterator(m_data); }
+    ConstForwardIterator end() const {
+        return ConstForwardIterator(m_data ? m_data + m_size : nullptr);
+    }
+    ConstBackwardIterator rbegin() const {
+        return ConstBackwardIterator(m_data ? m_data + m_size : nullptr);
+    }
+    ConstBackwardIterator rend() const { return ConstBackwardIterator(m_data); }
 
     // Persistencia
     ostream &write(ostream &os) const {
@@ -187,10 +210,8 @@ public:
 
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is) {
-        std::vector<std::pair<value_type, Ref>> values;
-        if (!container_stream::read(is, values)) return is;
         Vector parsed;
-        for (const auto& [value, ref] : values) parsed.push_back(value, ref);
+        if (!container_stream::read(is, parsed)) return is;
         swap(parsed);
         return is;
     }

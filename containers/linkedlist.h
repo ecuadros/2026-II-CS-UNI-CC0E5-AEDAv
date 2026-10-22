@@ -87,10 +87,8 @@ public:
     }
 
     std::istream& read(std::istream& is) {
-        std::vector<std::pair<value_type, Ref>> values;
-        if (!container_stream::read(is, values)) return is;
         LinkedList parsed;
-        for (const auto& [value, ref] : values) parsed.push_back(value, ref);
+        if (!container_stream::read(is, parsed)) return is;
         std::scoped_lock lock(m_mutex, parsed.m_mutex);
         std::swap(m_pRoot, parsed.m_pRoot);
         std::swap(m_pTail, parsed.m_pTail);

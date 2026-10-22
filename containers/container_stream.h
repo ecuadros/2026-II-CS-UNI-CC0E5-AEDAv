@@ -4,13 +4,10 @@
 #include "../types.h"
 #include <istream>
 #include <ostream>
-#include <utility>
-#include <vector>
 
 namespace container_stream {
 
-template <class It>
-std::ostream& write(std::ostream& os, It first, It last) {
+template <class It> std::ostream& write(std::ostream& os, It first, It last) {
     os << '[';
     for (bool separator = false; first != last; ++first) {
         if (separator) os << ',';
@@ -20,8 +17,7 @@ std::ostream& write(std::ostream& os, It first, It last) {
     return os << ']';
 }
 
-template <class T>
-bool read(std::istream& is, std::vector<std::pair<T, Ref>>& values) {
+template <class Container> bool read(std::istream& is, Container& destination) {
     auto expect = [&is](char wanted) {
         char actual;
         if (!(is >> actual)) return false;
@@ -36,11 +32,11 @@ bool read(std::istream& is, std::vector<std::pair<T, Ref>>& values) {
         return true;
     }
     while (true) {
-        T value;
+        typename Container::value_type value;
         Ref ref;
         if (!expect('(') || !(is >> value) || !expect(',') || !(is >> ref) || !expect(')'))
             return false;
-        values.emplace_back(std::move(value), ref);
+        destination.push_back(value, ref);
         char separator;
         if (!(is >> separator)) return false;
         if (separator == ']') return true;
@@ -50,7 +46,7 @@ bool read(std::istream& is, std::vector<std::pair<T, Ref>>& values) {
         }
     }
 }
-} 
+} // namespace container_stream
 
 template <class Container>
     requires requires { typename Container::container_stream_tag; }

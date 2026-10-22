@@ -2,6 +2,7 @@
 #define __CONTAINERS_TRAITS_H__
 
 #include "listnodes.h"
+#include "GeneralNode.h"
 #include <functional>
 
 template <typename T, typename NodeType, typename Comparator>
@@ -31,5 +32,18 @@ using DoubleLinkedListAscTraits = DoubleLinkedListTraits<T, std::less<T>>;
 
 template <class T>
 using DoubleLinkedListDescTraits = DoubleLinkedListTraits<T, std::greater<T>>;
+
+template <typename T, typename Comparator = std::less<T>>
+struct HeapTraits {
+  using value_type = T;
+  using Node = GeneralNode<T>;
+  using compare_type = Comparator;
+};
+
+template <typename T>
+struct MinHeapTraits : HeapTraits<T, std::less<T>> {};
+
+template <typename T>
+struct MaxHeapTraits : HeapTraits<T, std::greater<T>> {};
 
 #endif // __CONTAINERS_TRAITS_H__

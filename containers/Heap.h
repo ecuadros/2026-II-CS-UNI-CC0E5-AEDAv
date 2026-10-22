@@ -1,46 +1,13 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
 
-#include "traversalops.h"
-#include "heaptraits.h"
+#include "traits.h"
 #include "vector.h"
 #include "container_stream.h"
+#include "traversalops.h"
 #include <cstddef>
 #include <initializer_list>
-#include <iterator>
 #include <mutex>
-
-template <typename Node> class HeapConstIterator {
-    VectorForwardIterator<Node> m_iterator;
-
-public:
-    using iterator_category = std::forward_iterator_tag;
-    using value_type = Node;
-    using difference_type = std::ptrdiff_t;
-    using pointer = const Node*;
-    using reference = const Node&;
-
-    HeapConstIterator() : m_iterator(nullptr) {}
-    explicit HeapConstIterator(VectorForwardIterator<Node> iterator) : m_iterator(iterator) {}
-
-    reference operator*() const { return *m_iterator; }
-    pointer operator->() const { return &*m_iterator; }
-
-    HeapConstIterator& operator++() {
-        ++m_iterator;
-        return *this;
-    }
-
-    HeapConstIterator operator++(int) {
-        auto previous = *this;
-        ++*this;
-        return previous;
-    }
-
-    friend bool operator==(const HeapConstIterator& a, const HeapConstIterator& b) {
-        return a.m_iterator == b.m_iterator;
-    }
-};
 
 template <typename Traits> class Heap : public SearchTraversalOps<Heap<Traits>> {
     friend class CallOp<Heap>;
@@ -52,7 +19,11 @@ public:
     using Node = typename Traits::Node;
     using NodePtr = Node*;
     using Compare = typename Traits::compare_type;
-    using ForwardIterator = typename Traits::ForwardIterator;
+
+    using ForwardIterator =
+        typename Vector<VectorAscTraits<value_type>>::ConstForwardIterator;
+    using BackwardIterator =
+        typename Vector<VectorAscTraits<value_type>>::ConstBackwardIterator;
 
 private:
     Vector<VectorAscTraits<value_type>> m_data;
@@ -92,20 +63,25 @@ public:
         }
     }
 
-    ForwardIterator begin() const { return ForwardIterator(m_data.begin()); }
-
-    ForwardIterator end() const { return ForwardIterator(m_data.end()); }
+    ForwardIterator begin() const { return m_data.begin(); }
+    ForwardIterator end() const { return m_data.end(); }
+    BackwardIterator rbegin() const { return m_data.rbegin(); }
+    BackwardIterator rend() const { return m_data.rend(); }
 
     std::ostream& write(std::ostream& os) const {
         std::lock_guard lock(m_mutex);
-        return container_stream::write(os, begin(), end());
+        os << '[';
+        const auto count = m_data.size();
+        for (std::size_t i = 0; i < count; ++i) {
+            if (i != 0) os << ',';
+            os << m_data[i];
+        }
+        return os << ']';
     }
 
     std::istream& read(std::istream& is) {
-        std::vector<std::pair<value_type, Ref>> values;
-        if (!container_stream::read(is, values)) return is;
         Heap<Traits> parsed;
-        for (const auto& [value, ref] : values) parsed.push(value, ref);
+        if (!container_stream::read(is, parsed)) return is;
         std::lock_guard lock(m_mutex);
         m_data.swap(parsed.m_data);
         return is;
