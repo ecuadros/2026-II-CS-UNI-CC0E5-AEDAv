@@ -10,5 +10,6 @@ void DemoCircularLinkedList();
 void DemoDoublyLinkedList();
 void DemoCircularDoublyLinkedList();
 void DemoTraits();
+void DemoBinaryTree();
 
 #endif // __DEMOS_H__

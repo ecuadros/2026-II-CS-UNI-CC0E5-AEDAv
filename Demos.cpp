@@ -1,9 +1,12 @@
 
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
+#include <cstdlib>
+#include <unistd.h>
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/Heap.h"
@@ -11,8 +14,29 @@
 #include "containers/circularlinkedlist.h"
 #include "containers/doublylinkedlist.h"
 #include "containers/circulardoublylinkedlist.h"
+#include "containers/binarytree.h"
 #include "Demos.h"
 using namespace std;
+
+const bool UseColors = isatty(STDOUT_FILENO) && getenv("NO_COLOR") == nullptr;
+
+void PrintHeader(const string &color, const string &text) {
+    cout << endl;
+    if (UseColors)
+        cout << color;
+    cout << text;
+    if (UseColors)
+        cout << "\033[0m";
+    cout << endl;
+}
+
+void PrintTitle(const string &title) {
+    PrintHeader("\033[1;36m", "===== " + title + " =====");
+}
+
+void PrintSubtitle(const string &subtitle) {
+    PrintHeader("\033[1;33m", "--- " + subtitle + " ---");
+}
 
 void AddOne(GeneralNode<TX> &node) {
     node.value() += 1;
@@ -182,6 +206,21 @@ void TestRead(Container &container, const string &label, const string &filename)
 }
 
 template <typename Container, typename Checker>
+void TestCopy(Container &container, const string &label, Checker check) {
+    Container copy(container);
+    check(copy);
+    copy.push_back(99, 9);
+    cout << label << " copia con un push_back extra: " << copy << endl;
+    cout << label << " original sin cambios: " << container << endl;
+    check(copy);
+
+    Container assigned;
+    assigned = copy;
+    cout << label << " tras la asignacion: " << assigned << endl;
+    check(assigned);
+}
+
+template <typename Container, typename Checker>
 void TestListOperations(Container &list, const string &label, const string &filename, Checker check) {
     list.insert(4, 12);
     list.insert(11, 20);
@@ -194,17 +233,7 @@ void TestListOperations(Container &list, const string &label, const string &file
     list.ApplyFunction(AddX<TX>, TX(10));
     cout << label << " tras usar AddX(10) a sus elementos: " << list << endl;
 
-    Container copy(list);
-    check(copy);
-    copy.push_back(99, 9);
-    cout << label << " copia con un push_back extra: " << copy << endl;
-    cout << label << " original sin cambios: " << list << endl;
-    check(copy);
-
-    Container assigned;
-    assigned = copy;
-    cout << label << " tras la asignacion: " << assigned << endl;
-    check(assigned);
+    TestCopy(list, label, check);
 
     list.clear();
     cout << label << " luego de usar clear " << list << endl;
@@ -226,19 +255,23 @@ void TestOrderedInsert(const string &label, const vector<pair<typename Container
 }
 
 void DemoVector() {
+    PrintTitle("Pruebas para Vector");
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
     ofstream("vector.txt", ios::trunc).close();
 
+    PrintSubtitle("Vector<int>");
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
     Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
 
+    PrintSubtitle("Vector<int> leido desde archivo");
     Vector<VectorAscTraits<TX>> readVec;
     TestRead(readVec, "Vector", "vector.txt");
 
+    PrintSubtitle("Vector<string>");
     ofstream("vector_str.txt", ios::trunc).close();
     Vector<VectorAscTraits<string>> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
@@ -289,6 +322,7 @@ void TestRaceCondition(Container &container, const string &label, size_t N) {
 }
 
 void DemoRaceCondition() {
+    PrintTitle("Pruebas de concurrencia para Vector");
     Vector<VectorAscTraits<TX>> vec;
     TestRaceCondition(vec, "Vector", 200000);
 }
@@ -319,27 +353,33 @@ void TestPopOrder(Container &heap, const string &label) {
 
 void DemoHeap()
 {
+    PrintTitle("Pruebas para Heap");
     ofstream("heap.txt", ios::trunc).close();
     ofstream("heap_str.txt", ios::trunc).close();
 
     const vector<pair<TX, Ref>> values = {{5, 15}, {1, 11}, {8, 18}, {3, 13}, {7, 17}, {3, 23}};
 
+    PrintSubtitle("MinHeap<int>");
     MinHeap<TX> minHeap;
     TestContainer(minHeap, values, "heap.txt");
     TestTraversal(minHeap);
     TestHeap(minHeap, "MinHeap");
 
+    PrintSubtitle("MaxHeap<int>");
     MaxHeap<TX> maxHeap;
     TestContainer(maxHeap, values, "heap.txt");
     TestHeap(maxHeap, "MaxHeap");
 
+    PrintSubtitle("MaxHeap<string>");
     MaxHeap<string> strHeap;
     TestContainer(strHeap, {{"pera", 1}, {"manzana", 2}, {"uva", 3}, {"kiwi", 4}}, "heap_str.txt");
     TestHeap(strHeap, "MaxHeap<string>");
 
+    PrintSubtitle("MinHeap<int> leido desde archivo");
     MinHeap<TX> readHeap;
     TestRead(readHeap, "MinHeap", "heap.txt");
 
+    PrintSubtitle("ApplyFunction(Square) sobre un MinHeap");
     MinHeap<TX> squares;
     InsertElements(squares, {{-4, 1}, {-3, 2}, {1, 3}, {2, 4}});
     cout << "MinHeap antes de ApplyFunction(Square): " << squares << endl;
@@ -347,6 +387,7 @@ void DemoHeap()
     cout << "MinHeap tras ApplyFunction(Square): " << squares << endl;
     TestHeap(squares, "MinHeap tras Square");
 
+    PrintSubtitle("pop() sobre un heap vacio");
     MinHeap<TX> empty;
     try {
         empty.pop();
@@ -354,6 +395,7 @@ void DemoHeap()
         cout << "pop() sobre un heap vacio lanza: " << e.what() << endl;
     }
 
+    PrintSubtitle("Concurrencia: MinHeap y MaxHeap");
     MinHeap<TX> minRace;
     TestRaceCondition(minRace, "MinHeap", 100000);
     TestPopOrder(minRace, "MinHeap");
@@ -368,6 +410,7 @@ void DemoLinkedList()
 {
     using IntLinkedList = LinkedList<LinkedListAscTraits<TX>>;
 
+    PrintTitle("Pruebas para LinkedList");
     ofstream("linkedlist.txt", ios::trunc).close();
 
     // Pruebas de pushback
@@ -410,6 +453,7 @@ void DemoCircularLinkedList()
 {
     using IntCircularList = CircularLinkedList<CircularLinkedListAscTraits<TX>>;
 
+    PrintTitle("Pruebas para CircularLinkedList");
     ofstream("list_circular.txt", ios::trunc).close();
 
     IntCircularList list;
@@ -424,6 +468,7 @@ void DemoDoublyLinkedList()
 {
     using IntDoublyList = DoublyLinkedList<DoublyLinkedListAscTraits<TX>>;
 
+    PrintTitle("Pruebas para DoublyLinkedList");
     ofstream("list_doubly.txt", ios::trunc).close();
 
     IntDoublyList list;
@@ -442,6 +487,7 @@ void DemoCircularDoublyLinkedList()
 {
     using IntDoublyCircularList = CircularDoublyLinkedList<CircularDoublyLinkedListAscTraits<TX>>;
 
+    PrintTitle("Pruebas para CircularDoublyLinkedList");
     ofstream("list_doubly_circular.txt", ios::trunc).close();
 
     IntDoublyCircularList list;
@@ -462,6 +508,7 @@ void DemoTraits()
 {
     const vector<pair<TX, Ref>> values = {{5, 15}, {1, 11}, {8, 18}, {3, 13}, {7, 17}, {3, 23}};
 
+    PrintTitle("Pruebas de Traits: insert ordenado en las cuatro listas");
     cout << "Insertando " << values.size() << " valores (5, 1, 8, 3, 7, 3) solo con insert()" << endl;
     TestOrderedInsert<LinkedList<LinkedListAscTraits<TX>>>("LinkedList Asc", values);
     TestOrderedInsert<LinkedList<LinkedListDescTraits<TX>>>("LinkedList Desc", values);
@@ -471,4 +518,130 @@ void DemoTraits()
     TestOrderedInsert<DoublyLinkedList<DoublyLinkedListDescTraits<TX>>>("DoublyLinkedList Desc", values);
     TestOrderedInsert<CircularDoublyLinkedList<CircularDoublyLinkedListAscTraits<TX>>>("CircularDoublyLinkedList Asc", values);
     TestOrderedInsert<CircularDoublyLinkedList<CircularDoublyLinkedListDescTraits<TX>>>("CircularDoublyLinkedList Desc", values);
+}
+
+template <typename Container>
+string ToString(const Container &container) {
+    ostringstream os;
+    os << container;
+    return os.str();
+}
+
+template <typename Container>
+void TestSorted(Container &container, const string &label) {
+    using Node = typename Container::Node;
+    typename Container::Compare comp;
+    Node *prev = nullptr;
+    bool sorted = true;
+    for (auto &node : container) {
+        if (prev && comp(node.getValue(), prev->getValue()))
+            sorted = false;
+        prev = &node;
+    }
+    cout << label << " recorrido en orden: " << (sorted ? "si" : "no") << endl;
+}
+
+template <typename Container>
+void TestMove(Container &container, const string &label) {
+    auto first = container.begin();
+    Container moved(std::move(container));
+    cout << label << " destino del move constructor: " << moved << endl;
+    cout << label << " origen tras el move: " << container << ", size() = " << container.size() << endl;
+    cout << label << " mismos nodos, sin copiar: " << (moved.begin() == first ? "si" : "no") << endl;
+
+    container = std::move(moved);
+    cout << label << " devuelto con move assignment: " << container << endl;
+    cout << label << " origen del move assignment: " << moved << ", size() = " << moved.size() << endl;
+}
+
+struct Tracked {
+    static inline long alive = 0;
+    TX value;
+    Tracked(TX v = 0) : value(v) { ++alive; }
+    Tracked(const Tracked &other) : value(other.value) { ++alive; }
+    Tracked &operator=(const Tracked &other) = default;
+    ~Tracked() { --alive; }
+    friend bool operator<(const Tracked &a, const Tracked &b) { return a.value < b.value; }
+};
+
+template <typename Container>
+void TestDestructor(const string &label, TX depth) {
+    {
+        Container tree;
+        for (TX v : {5, 1, 8, 3, 7})
+            tree.insert(v, v);
+        cout << label << " con 5 nodos, valores vivos: " << Tracked::alive << endl;
+        {
+            Container copy(tree);
+            cout << label << " mas una copia, valores vivos: " << Tracked::alive << endl;
+        }
+        cout << label << " tras destruir la copia, valores vivos: " << Tracked::alive << endl;
+        Container moved(std::move(tree));
+        cout << label << " tras el move, valores vivos: " << Tracked::alive << endl;
+    }
+    cout << label << " tras destruir el original y el movido, valores vivos: " << Tracked::alive << endl;
+
+    {
+        Container chain;
+        for (TX v = 0; v < depth; ++v)
+            chain.insert(v, v);
+        cout << label << " degenerado de " << depth << " niveles, valores vivos: " << Tracked::alive << endl;
+    }
+    cout << label << " tras destruir el degenerado, valores vivos: " << Tracked::alive << endl;
+}
+
+void DemoBinaryTree()
+{
+    using IntTree = BinaryTree<BinaryTreeAscTraits<TX>>;
+
+    PrintTitle("Pruebas para BinaryTree");
+    ofstream("binarytree.txt", ios::trunc).close();
+
+    const vector<pair<TX, Ref>> values = {{5, 15}, {1, 11}, {8, 18}, {3, 13}, {7, 17}, {3, 23}, {9, 19}};
+
+    PrintSubtitle("BinaryTree<int> ascendente: operator<< en preorden e impresion con indentacion");
+    IntTree tree;
+    TestContainer(tree, values, "binarytree.txt");
+    tree.print(cout);
+
+    PrintSubtitle("ForwardIterator y BackwardIterator");
+    TestTraversal(tree);
+    TestBackwardIterator(tree);
+
+    PrintSubtitle("operator>>: lectura desde archivo");
+    IntTree readTree;
+    TestRead(readTree, "BinaryTree", "binarytree.txt");
+    cout << "Misma forma que el original: " << (ToString(readTree) == ToString(tree) ? "si" : "no") << endl;
+
+    PrintSubtitle("Constructor copia y operator= copia");
+    TestCopy(tree, "BinaryTree", [](auto &t) { TestSorted(t, "BinaryTree"); });
+
+    PrintSubtitle("Move constructor y move assignment");
+    TestMove(tree, "BinaryTree");
+
+    PrintSubtitle("Destructor seguro");
+    TestDestructor<BinaryTree<BinaryTreeAscTraits<Tracked>>>("BinaryTree", 2000);
+
+    PrintSubtitle("ApplyFunction, call, rcall y FirstThat heredados de GeneralContainer");
+    tree.ApplyFunction(AddX<TX>, TX(10));
+    cout << "BinaryTree tras ApplyFunction(AddX, 10): " << tree << endl;
+    IntTree squares;
+    InsertElements(squares, {{-4, 1}, {-3, 2}, {1, 3}, {2, 4}});
+    cout << "BinaryTree antes de ApplyFunction(Square): " << squares << endl;
+    squares.ApplyFunction(Square);
+    cout << "BinaryTree tras ApplyFunction(Square): " << squares << endl;
+    squares.print(cout);
+    TestTraversal(squares);
+
+    PrintSubtitle("BinaryTree<int> descendente");
+    BinaryTree<BinaryTreeDescTraits<TX>> descTree;
+    TestContainer(descTree, values, "binarytree.txt");
+    descTree.print(cout);
+    TestSorted(descTree, "BinaryTree descendente");
+    TestBackwardIterator(descTree);
+
+    PrintSubtitle("Concurrencia");
+    IntTree raceTree;
+    TestRaceCondition(raceTree, "BinaryTree", 5000);
+    TestSorted(raceTree, "BinaryTree");
 }
