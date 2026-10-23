@@ -68,13 +68,7 @@ public:
 
     std::ostream& write(std::ostream& os) const {
         std::lock_guard lock(m_mutex);
-        os << '[';
-        const auto count = m_data.size();
-        for (std::size_t i = 0; i < count; ++i) {
-            if (i != 0) os << ',';
-            os << m_data[i];
-        }
-        return os << ']';
+        return container_stream::write(os, m_data.begin(), m_data.end());
     }
 
     std::istream& read(std::istream& is) {
