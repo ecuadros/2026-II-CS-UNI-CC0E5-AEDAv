@@ -4,6 +4,7 @@
 #include "GeneralNode.h"
 #include "GeneralIterator.h"
 #include "../foreach.h"
+#include "traits.h"
 
 template <typename T>
 class LinkedListNode : public GeneralNode<T> {
@@ -24,13 +25,13 @@ public:
     using MySelf = LinkedListForwardIterator<T>;
     using Parent = GeneralIterator<MySelf, Node>;
     using Parent::Parent; // Inherit constructor
-    LinkedListForwardIterator& operator++() { 
+    LinkedListForwardIterator& operator++() {
         Parent::m_ptr = Parent::m_ptr->m_pNext == Parent::m_pStart ? nullptr : Parent::m_ptr->m_pNext;
         return *this;
     }
 };
 
-template <typename T, typename _Compare>
+/*template <typename T, typename _Compare>
 struct DefaultTraits {
     using value_type        = T;
     using Compare           = _Compare;
@@ -39,7 +40,8 @@ template <typename T, typename _Compare = std::less<T>>
 struct AscendingTraits : public DefaultTraits<T, _Compare> {};
 
 template <typename T, typename _Compare = std::greater<T>>
-struct DescendingTraits : public DefaultTraits<T, _Compare> {};
+struct DescendingTraits : public DefaultTraits<T, _Compare> {};*/
+
 template <typename T>
 struct LinkedListAscTraits : public AscendingTraits<T> {
     using Node              = LinkedListNode<T>;
@@ -110,7 +112,7 @@ public:
         }
         return os << "]";
     }
-    
+
     friend std::istream &operator >>(std::istream &is, LinkedList<Traits> &list) {
         Delim d;
         Node node;
@@ -124,12 +126,12 @@ public:
                 if (d == ']'){
                     break;
                 }
-            }    
+            }
         }
 
-        return is; 
+        return is;
     }
-    
+
     // Iterators
     // ForwardIterator begin() { return ForwardIterator(m_pRoot); }
     // ForwardIterator end() { return ForwardIterator(nullptr); }
@@ -156,7 +158,7 @@ public:
 
 
 template <typename Traits>
-LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){ 
+LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other){
     if (this == &other) return *this;
     clear();
     std::lock_guard<std::mutex> lock(other.m_mutex);

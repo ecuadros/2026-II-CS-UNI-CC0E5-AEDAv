@@ -12,6 +12,7 @@
 #include "containers/circulardoublelinkedlist.h"
 #include "Demos.h"
 #include "containers/Heap.h"
+#include "containers/binarytree.h"
 using namespace std;
 
 void AddOne(GeneralNode<TX> &node) {
@@ -256,8 +257,21 @@ void DemoLinkedList()
 }
 
 void DemoHeap() {
-    cout << "\nPruebas para LinkedList" << endl;
-    Heap<HeapAscTraits<TX>> heap;
+    cout << "\nPruebas para Heap" << endl;
+    MinHeap<TX> minheap;
+    auto elements = std::vector<pair<TX, Ref>>({{40, 0}, {50, 1}, {60, 2}, {70, 3}, {55, 4}, {10, 5}, {77, 6}, {5, 7}});
+    for(auto& e : elements)
+        minheap.push(e.first, e.second);
+    minheap.write(cout);
+    cout << "\n";
+    minheap.pop();
+    minheap.write(cout);
+    cout << "\n\n";
+    MaxHeap<TX> maxheap;
+    for(auto& e : elements)
+        maxheap.push(e.first, e.second);
+    maxheap.write(cout);
+    cout << "\n";
 }
 
 void DemoBinaryTree() {
