@@ -52,6 +52,7 @@ public:
     //
 
     void push(const value_type &value, Ref ref) {
+        std::scoped_lock lock(this->m_mutex);
         m_data.push_back(value, ref);
         HeapifyUp(m_data.size() - 1);
     }
@@ -68,7 +69,7 @@ public:
         }
     }
     Node pop() {
-        //if (m_data.empty()) return;
+        std::scoped_lock lock(this->m_mutex);
         auto node_pop = Node(m_data[0].getValue(), m_data[0].getRef());
         std::swap(m_data[0], m_data[m_data.size() - 1]);
         m_data.pop_back();
@@ -95,6 +96,7 @@ public:
     }
 
     void clear() {
+        std::scoped_lock lock(this->m_mutex);
         m_data.clear();
     }
 
