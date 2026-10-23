@@ -3,7 +3,8 @@
 #include <mutex>
 #include "GeneralNode.h"
 #include "GeneralIterator.h"
-#include "../foreach.h"
+#include "GeneralTraits.h"
+#include "GeneralContainer.h"
 
 template <typename T>
 class LinkedListNode : public GeneralNode<T> {
@@ -30,16 +31,6 @@ public:
     }
 };
 
-template <typename T, typename _Compare>
-struct DefaultTraits {
-    using value_type        = T;
-    using Compare           = _Compare;
-};
-template <typename T, typename _Compare = std::less<T>>
-struct AscendingTraits : public DefaultTraits<T, _Compare> {};
-
-template <typename T, typename _Compare = std::greater<T>>
-struct DescendingTraits : public DefaultTraits<T, _Compare> {};
 template <typename T>
 struct LinkedListAscTraits : public AscendingTraits<T> {
     using Node              = LinkedListNode<T>;
@@ -51,8 +42,11 @@ struct LinkedListDescTraits : public DescendingTraits<T> {
     using Node              = LinkedListNode<T>;
     using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
 };
+// call, ApplyFunction, FirstThat, write, read, << y >> vienen de la base.
+// 'virtual': DoubleLinkedList tambien llega a GeneralContainer por ReversibleContainer
+// y ambos caminos deben compartir UNA sola base (un solo mutex).
 template <typename Traits>
-class LinkedList {
+class LinkedList : virtual public GeneralContainer<Traits> {
 public:
     using value_type        = typename Traits::value_type;
     using Node              = typename Traits::Node;
@@ -65,7 +59,7 @@ protected:
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
 
     Compare m_comp; // comparador para ordenar los nodos de la lista
-    mutable std::mutex m_mutex; // mutex para sincronización
+    using GeneralContainer<Traits>::m_mutex; // el mutex es de la base (no tener otro)
 
     virtual void linkNode(NodePtr pNew, NodePtr pPrev, NodePtr pNext = nullptr) {}
 private:
@@ -82,10 +76,10 @@ public:
             push_back(v.first, v.second);
     }
 
-    void clear();
+    void clear() override;
     virtual ~LinkedList(){ clear(); };
 
-    void push_back(const value_type& value, Ref ref);
+    void push_back(const value_type& value, Ref ref) override;
 
     bool empty() const { return m_pRoot == nullptr; }
 
@@ -95,63 +89,9 @@ public:
         internalInsert(value, ref, m_pRoot);
     }
 
-    std::ostream& write(std::ostream& os) { return os << *this; }
-    std::istream& read(std::istream& is) { return is >> *this; }
-
-    friend std::ostream& operator <<(std::ostream& os, const LinkedList<Traits>& list) {
-        lock_guard lock(list.m_mutex);
-        auto first = true;
-        os << "[";
-        for (auto it = list.begin(); it != list.end(); ++it){
-            if (!first)
-                os << ",";
-            os << *it;
-            first = false;
-        }
-        return os << "]";
-    }
-    
-    friend std::istream &operator >>(std::istream &is, LinkedList<Traits> &list) {
-        Delim d;
-        Node node;
-        list.clear();
-
-        is >> d;
-        if (is >> d && d != ']'){
-            is.unget();
-            while(is >> node >> d){
-                list.push_back(node.getValue(), node.getRef());
-                if (d == ']'){
-                    break;
-                }
-            }    
-        }
-
-        return is; 
-    }
-    
     // Iterators
-    // ForwardIterator begin() { return ForwardIterator(m_pRoot); }
-    // ForwardIterator end() { return ForwardIterator(nullptr); }
-    ForwardIterator begin() const { return ForwardIterator(m_pRoot); }
-    ForwardIterator end() const { return ForwardIterator(nullptr); }
-
-    template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
-        call(func, std::forward<Args>(args)...);
-    }
-    template <typename Func, typename... Args>
-    Node& FirstThat(Func func, Args... args) {
-        return call(func, std::forward<Args>(args)...);
-    }
-    template<typename Func, typename... Args>
-    decltype(auto) call(Func func, Args&&... args)
-    {    lock_guard<mutex> lock(m_mutex);
-        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
-            ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
-        else // return type is not void:
-            return ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
-    }
+    ForwardIterator begin() const override { return ForwardIterator(m_pRoot); }
+    ForwardIterator end()   const override { return ForwardIterator(nullptr); }
 };
 
 

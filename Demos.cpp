@@ -10,8 +10,26 @@
 #include "containers/doublelinkedlist.h"
 #include "containers/circularlinkedlist.h"
 #include "containers/circulardoublelinkedlist.h"
+#include "containers/Heap.h"
+#include "containers/binarytree.h"
 #include "Demos.h"
 using namespace std;
+
+enum class Color { Rojo = 31, Verde = 32, Amarillo = 33, Azul = 34, Magenta = 35, Cian = 36 };
+
+template <typename T>
+void PrintColor(const T &value, Color color, ostream &os = cout) {
+    os << "\033[" << static_cast<int>(color) << "m" << value << "\033[0m";
+}
+
+void PrintTitle(const string &title, Color color = Color::Cian) {
+    cout << "\n\033[1;" << static_cast<int>(color) << "m=== " << title << " ===\033[0m" << endl;
+}
+
+void PrintResult(bool ok, const string &message) {
+    PrintColor(ok ? "[OK] " : "[FALLO] ", ok ? Color::Verde : Color::Rojo);
+    cout << message << endl;
+}
 
 void AddOne(GeneralNode<TX> &node) {
     node.value() += 1;
@@ -101,7 +119,7 @@ template <typename Container>
 void TestForwardTraversal(Container &container){
     using Node = typename Container::Node;
 
-    cout << "Prueba de función call con std::cout para LinkedList [";
+    cout << "Prueba de función call con std::cout: [";
     container.call(PrintNode<Node>, cout);
     cout << "]" << endl;
 
@@ -119,7 +137,7 @@ void TestForwardTraversal(Container &container){
 }
 
 void DemoVector() {
-    cout << "Pruebas del contenedor Vector" << endl;
+    PrintTitle("Pruebas del contenedor Vector");
     // Dejamos los archivos vacios para que TestContainer acumule (append)
     // el estado del container tras cada paso
     ofstream("vector.txt", ios::trunc).close();
@@ -169,16 +187,17 @@ void DemoRaceCondition() {
     long long actualSum = 0;
     for (size_t i = 0; i < vec.size(); ++i) actualSum += vec[i].getValue();
 
+    PrintTitle("Race condition en Vector");
     cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
          << "el Vector quedo con " << vec.size() << endl;
     cout << "  suma esperada = " << expectedSum
          << ", suma obtenida = " << actualSum << endl;
 
     if (vec.size() != N || actualSum != expectedSum)
-        cout << "  *** Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar) ***" << endl;
+        PrintResult(false, "Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar)");
     else
-        cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
-             << "sincroniza correctamente las inserciones concurrentes" << endl;
+        PrintResult(true, "No se perdio ningun elemento: el mutex de push_back/resize "
+                          "sincroniza correctamente las inserciones concurrentes");
 }
 
 template <typename Container>
@@ -235,21 +254,121 @@ void TestDoubleLinkedListSpecifics(DoubleContainer &list) {
 
 void DemoLinkedList()
 {
-    cout << "\nPruebas para LinkedList" << endl;
+    PrintTitle("Pruebas para LinkedList", Color::Azul);
     LinkedList<LinkedListAscTraits<TX>> list;
     TestLinkedList(list, "linkedlist.txt");
 
-    cout << "\nPruebas para DoubleLinkedList" << endl;
+    PrintTitle("Pruebas para DoubleLinkedList", Color::Azul);
     DoubleLinkedList<DoubleLinkedListAscTraits<TX>> dlist;
     TestLinkedList(dlist, "doublelinkedlist.txt");
     TestDoubleLinkedListSpecifics(dlist);
 
-    cout << "\nPruebas para CircularLinkedList" << endl;
+    PrintTitle("Pruebas para CircularLinkedList", Color::Azul);
     CircularLinkedList<LinkedListAscTraits<TX>> clist;
     TestLinkedList(clist, "circularlinkedlist.txt");
 
-    cout << "\nPruebas para CircularDoubleLinkedList" << endl;
+    PrintTitle("Pruebas para CircularDoubleLinkedList", Color::Azul);
     CircularDoubleLinkedList<DoubleLinkedListAscTraits<TX>> cdlist;
     TestLinkedList(cdlist, "circulardoublelinkedlist.txt");
     TestDoubleLinkedListSpecifics(cdlist);
+}
+
+template <typename Heap>
+void PopAll(Heap &heap) {
+    cout << "Pop hasta vaciar: ";
+    while (!heap.empty())
+        cout << heap.pop() << " ";
+    cout << endl;
+}
+
+void DemoHeap() {
+    PrintTitle("Pruebas para MaxHeap", Color::Magenta);
+    ofstream("maxheap.txt", ios::trunc).close();
+    MaxHeap<TX> maxHeap;
+    TestContainer(maxHeap, {{5, 50}, {3, 30}, {8, 80}, {1, 10}, {9, 90}}, "maxheap.txt");
+    cout << "top = " << maxHeap.top() << endl;
+    maxHeap.ApplyFunction(AddX<TX>, 100);   // sumar lo mismo a todos conserva el orden
+    cout << "Tras ApplyFunction(AddX, 100): " << maxHeap << endl;
+    PopAll(maxHeap);
+
+    PrintTitle("Pruebas para MinHeap", Color::Magenta);
+    ofstream("minheap.txt", ios::trunc).close();
+    MinHeap<TX> minHeap;
+    TestContainer(minHeap, {{5, 50}, {3, 30}, {8, 80}, {1, 10}, {9, 90}, {2, 20}, {7, 70}}, "minheap.txt");
+    TestForwardTraversal(minHeap);          // call, iteradores y FirstThat heredados 
+
+    MinHeap<TX> leido;
+    ifstream in("minheap.txt");
+    in >> leido;
+    cout << "MinHeap leido desde archivo: " << leido << endl;
+    PopAll(leido);
+
+    PrintTitle("MinHeap concurrente", Color::Magenta);
+    const size_t N = 100000;
+    MinHeap<TX> heap;
+    vector<thread> workers;
+    for (int t = 0; t < NThreads; ++t)
+        workers.emplace_back([&heap, N, t]() {
+            for (size_t i = t; i < N; i += NThreads)
+                heap.push_back(static_cast<TX>(i), static_cast<Ref>(i));
+        });
+    for (auto &worker : workers)
+        worker.join();
+
+
+    size_t count = heap.size();
+    bool ordered = true;
+    TX prev = heap.pop().getValue();
+    while (!heap.empty()) {
+        TX v = heap.pop().getValue();
+        if (v < prev) ordered = false;
+        prev = v;
+    }
+    PrintResult(count == N && ordered,
+                "Concurrencia: se esperaban " + to_string(N) + " elementos, el Heap quedo con " +
+                to_string(count) + (ordered ? " y salen ordenados" : " y NO salen ordenados"));
+}
+
+void DemoBinaryTree() {
+    PrintTitle("Pruebas para BinaryTree", Color::Verde);
+    ofstream("binarytree.txt", ios::trunc).close();
+    AscBinaryTree<TX> tree;
+    TestContainer(tree, {{50, 500}, {30, 300}, {70, 700}, {20, 200}, {40, 400},
+                         {60, 600}, {80, 800}, {35, 350}, {45, 450}, {65, 650}}, "binarytree.txt");
+    TestTraversal(tree);              
+
+    PrintTitle("BinaryTree (Desc)", Color::Verde);
+    DescBinaryTree<TX> desc;
+    InsertElements(desc, {{50, 500}, {30, 300}, {70, 700}, {20, 200}, {40, 400}});
+    cout << "Desc: " << desc << endl;
+
+    PrintTitle("BinaryTree: lectura desde archivo", Color::Verde);
+    AscBinaryTree<TX> leido;
+    ifstream in("binarytree.txt");
+    in >> leido;
+    cout << "El arbol binario: " << leido << endl;
+    
+    PrintTitle("BinaryTree concurrente", Color::Verde);
+    const size_t N = 100000;
+    AscBinaryTree<TX> concurrente;
+    vector<thread> workers;
+    for (int t = 0; t < NThreads; ++t)
+        workers.emplace_back([&concurrente, N, t]() {
+            for (size_t i = t; i < N; i += NThreads)
+                concurrente.push_back((i * 7919) % N, i);
+        });
+    for (auto &worker : workers)
+        worker.join();
+
+    size_t count = 0;
+    bool ordered = true;
+    TX prev = -1;
+    for (auto it = concurrente.begin(); it != concurrente.end(); ++it) {
+        if ((*it).getValue() < prev) ordered = false;
+        prev = (*it).getValue();
+        ++count;
+    }
+    PrintResult(count == N && ordered,
+                "Concurrencia: se esperaban " + to_string(N) + " elementos, el BinaryTree quedo con " +
+                to_string(count) + (ordered ? " y en inorden salen ordenados" : " y NO salen ordenados"));
 }
