@@ -7,7 +7,17 @@
 #include <functional>
 #include <utility>
 
+template <typename T> class VectorForwardIterator;
+template <typename T> class VectorBackwardIterator;
+template <typename Traits> class Vector;
 template <typename T> class BinaryTreeNode;
+
+template <typename T> struct VectorAscTraits {
+    using value_type = T;
+    using Node = GeneralNode<T>;
+    using ForwardIterator = VectorForwardIterator<Node>;
+    using BackwardIterator = VectorBackwardIterator<Node>;
+};
 
 template <typename T> struct BinaryTreeTraits {
     using value_type = T;
@@ -17,6 +27,8 @@ template <typename T> struct BinaryTreeTraits {
     using PreOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PreOrder>;
     using PostOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PostOrder>;
 };
+
+
 
 template <typename T, typename NodeType, typename Comparator> struct ListTraits {
     using value_type = T;
