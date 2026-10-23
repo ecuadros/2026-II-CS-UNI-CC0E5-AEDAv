@@ -2,7 +2,6 @@
 #define __HEAP_H__
 
 #include "traits.h"
-#include "vector.h"
 #include "container_stream.h"
 #include "traversalops.h"
 #include <cstddef>
@@ -15,18 +14,17 @@ template <typename Traits> class Heap : public SearchTraversalOps<Heap<Traits>> 
 
 public:
     using container_stream_tag = void;
+    using traits_type = Traits;
     using value_type = typename Traits::value_type;
     using Node = typename Traits::Node;
     using NodePtr = Node*;
     using Compare = typename Traits::compare_type;
-
-    using ForwardIterator =
-        typename Vector<VectorAscTraits<value_type>>::ConstForwardIterator;
-    using BackwardIterator =
-        typename Vector<VectorAscTraits<value_type>>::ConstBackwardIterator;
+    using Storage = typename Traits::Storage;
+    using ForwardIterator = typename Traits::ForwardIterator;
+    using BackwardIterator = typename Traits::BackwardIterator;
 
 private:
-    Vector<VectorAscTraits<value_type>> m_data;
+    Storage m_data;
     mutable std::mutex m_mutex;
 
     void HeapifyUp(size_t index) {

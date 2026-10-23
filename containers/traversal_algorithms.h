@@ -38,12 +38,12 @@ decltype(auto) legacy_call(It first, It last, Func&& func, Args&&... args) {
         return;
     } else {
         static_assert(std::is_convertible_v<Result, bool>,
-                      "call requiere void o un predicado booleano");
+                      "call requiere void o un booleano");
         return traversal_detail::first_that(first, last, std::forward<Func>(func),
                                             std::forward<Args>(args)...);
     }
 }
 
-} // namespace traversal_detail
+} 
 
 #endif // TRAVERSAL_ALGORITHMS_H

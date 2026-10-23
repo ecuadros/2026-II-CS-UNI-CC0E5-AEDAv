@@ -17,16 +17,22 @@ public:
     using Parent::Parent;
     using NodePtr = BinaryTreeNode<T>*;
 
+    const BinaryTreeNode<T>* child(bool right) const { return m_pChild[right]; }
+
+private:
+    template <typename> friend class BinaryTree;
+    template <typename, bool, TreeTraversalOrder> friend class BinaryTreeIterator;
+
     NodePtr m_pChild[2] = {nullptr, nullptr};
 };
 
 template <typename T> struct BinaryTreeTraits {
     using value_type = T;
     using Node = BinaryTreeNode<T>;
-    using ForwardIterator = BinaryTreeIterator<Node>;
-    using BackwardIterator = BinaryTreeIterator<Node, true>;
-    using PreOrderIterator = BinaryTreeIterator<Node, false, TreeTraversalOrder::PreOrder>;
-    using PostOrderIterator = BinaryTreeIterator<Node, false, TreeTraversalOrder::PostOrder>;
+    using ForwardIterator = BinaryTreeIterator<const Node>;
+    using BackwardIterator = BinaryTreeIterator<const Node, true>;
+    using PreOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PreOrder>;
+    using PostOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PostOrder>;
 };
 
 template <typename Traits> class BinaryTree : public SearchTraversalOps<BinaryTree<Traits>> {

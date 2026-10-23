@@ -46,7 +46,7 @@ template <class Container> bool read(std::istream& is, Container& destination) {
         }
     }
 }
-} // namespace container_stream
+} 
 
 template <class Container>
     requires requires { typename Container::container_stream_tag; }

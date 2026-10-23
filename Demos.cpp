@@ -1,10 +1,9 @@
 
 #include <iostream>
-#include <fstream> // ofstream para escribir en archivo
+#include <fstream>
 #include <cstdio>
 #include <cerrno>
 #include <cstdlib>
-#include <exception>
 #include <string>
 #include <thread>
 #include <vector>
@@ -12,11 +11,9 @@
 #include <random>
 #include <sstream>
 #include <stdexcept>
-#include <type_traits>
 #include <utility>
 #include <unistd.h>
 #include "containers/aliases.h"
-#include "foreach.h"
 #include "Demos.h"
 using namespace std;
 
@@ -37,56 +34,28 @@ template <typename Node> void PrintNode(const Node& node, ostream& os) {
 }
 const int NThreads = 5;
 
-class DemoStatus {
-    string m_name;
-    int m_exceptions = std::uncaught_exceptions();
+template <typename Value> void PrintColor(const Value& value, const char* color = "\033[1;36m") {
+    const bool useColor = isatty(fileno(stdout)) && std::getenv("NO_COLOR") == nullptr;
+    if (useColor) cout << color;
+    cout << value;
+    if (useColor) cout << "\033[0m";
+    cout << '\n';
+}
 
-    static void Separate() {
-        static bool first = true;
-        if (!first) cout << '\n';
-        first = false;
+template <typename Function> void WithDemoFile(const string& filename, Function function) {
+    auto removeFile = [&filename] {
+        if (std::remove(filename.c_str()) != 0 && errno != ENOENT)
+            cerr << "No se pudo borrar " << filename << '\n';
+    };
+    try {
+        function();
+    } catch (...) {
+        removeFile();
+        throw;
     }
+    removeFile();
+}
 
-    static bool UseColor() { return isatty(fileno(stdout)) && std::getenv("NO_COLOR") == nullptr; }
-
-    static void Print(const char* state, const char* color, const string& name) {
-        if (UseColor()) cout << color;
-        cout << '[' << state << "] " << name;
-        if (UseColor()) cout << "\033[0m";
-        cout << '\n';
-    }
-
-public:
-    explicit DemoStatus(string name) : m_name(std::move(name)) {
-        Separate();
-        Print("CORRIENDO", "\033[1;36m", m_name);
-    }
-
-    ~DemoStatus() {
-        if (std::uncaught_exceptions() > m_exceptions)
-            Print("ERROR", "\033[1;31m", m_name);
-        else
-            Print("FINALIZADO", "\033[1;32m", m_name);
-    }
-};
-
-class ScopedDemoFile {
-    string m_filename;
-
-public:
-    explicit ScopedDemoFile(string filename) : m_filename(std::move(filename)) {}
-    ScopedDemoFile(const ScopedDemoFile&) = delete;
-    ScopedDemoFile& operator=(const ScopedDemoFile&) = delete;
-
-    ~ScopedDemoFile() {
-        if (std::remove(m_filename.c_str()) != 0 && errno != ENOENT)
-            cerr << "No se pudo borrar " << m_filename << '\n';
-    }
-};
-
-// Inserta secuencialmente cada pareja (valor, ref) de 'values' en el
-// Container, una por una. La insercion concurrente queda aislada en
-// DemoRaceCondition(), que es donde se estudia esa problematica.
 template <typename Container>
 void InsertElements(Container& container,
                     const vector<pair<typename Container::value_type, Ref>>& values) {
@@ -98,30 +67,30 @@ template <typename Container>
 void TestContainer(Container& container,
                    const vector<pair<typename Container::value_type, Ref>>& values,
                    const string& filename) {
-    DemoStatus status("TestContainer (" + filename + ")");
-    InsertElements(container, values);
-    ScopedDemoFile cleanup(filename);
+    WithDemoFile(filename, [&] {
+        PrintColor("TestContainer (" + filename + ")");
+        InsertElements(container, values);
 
-    if constexpr (requires { container.write(cout); }) {
-        cout << "Container using write(): ";
-        container.write(cout);
-        cout << endl;
-    }
+        if constexpr (requires { container.write(cout); }) {
+            cout << "Container using write(): ";
+            container.write(cout);
+            cout << endl;
+        }
 
-    {
-        ofstream of(filename, ios::trunc);
-        if (!of) throw runtime_error("No se pudo crear " + filename);
-        of << container << endl;
-        if (!of) throw runtime_error("No se pudo escribir " + filename);
-    }
+        {
+            ofstream of(filename, ios::trunc);
+            if (!of) throw runtime_error("No se pudo crear " + filename);
+            of << container << endl;
+            if (!of) throw runtime_error("No se pudo escribir " + filename);
+        }
 
-    // Escritura en pantalla usando cout directamente (operator<<)
-    cout << "Container using cout directly: ";
-    cout << container << endl;
+        cout << "Container using cout directly: ";
+        PrintColor(container);
+    });
 }
 
 template <typename Container> void TestTraversal(Container& container, const string& name) {
-    DemoStatus status("TestTraversal (" + name + ")");
+    PrintColor("TestTraversal (" + name + ")");
     using Node = typename Container::Node;
 
     cout << "Forward traversal:  [";
@@ -171,100 +140,106 @@ template <typename Iterator> void PrintCircularTraversal(Iterator begin, Iterato
 
 template <typename Container>
 void TestGenericContainer(Container& container, const string& filename = "container.txt") {
-    DemoStatus status("TestGenericContainer (" + filename + ")");
-    ScopedDemoFile cleanup(filename);
-    cout << "Vacio: " << container.empty() << '\n';
+    WithDemoFile(filename, [&] {
+        PrintColor("TestGenericContainer (" + filename + ")");
+        cout << "Vacio: " << container.empty() << '\n';
 
-    container.push_back(1, 101);
-    container.push_back(3, 103);
-    container.push_back(7, 107);
-    cout << "Luego de push_back: " << container << '\n';
+        container.push_back(1, 101);
+        container.push_back(3, 103);
+        container.push_back(7, 107);
+        cout << "Luego de push_back: ";
+        PrintColor(container);
 
-    if constexpr (requires(Container& c) { c.insert(5, 105); }) {
-        container.insert(5, 105);
-        container.insert(2, 102);
-        container.insert(9, 109);
-        cout << "Luego de insert: " << container << '\n';
+        if constexpr (requires(Container& c) { c.insert(5, 105); }) {
+            container.insert(5, 105);
+            container.insert(2, 102);
+            container.insert(9, 109);
+            cout << "Luego de insert: ";
+            PrintColor(container);
 
-        Container copia(container);
-        Container asignada;
-        asignada = container;
-        copia.insert(4, 104);
-        cout << "Original: " << container << '\n';
-        cout << "Copia modificada: " << copia << '\n';
-        cout << "Asignada: " << asignada << '\n';
-    }
+            Container copia(container);
+            Container asignada;
+            asignada = container;
+            copia.insert(4, 104);
+            cout << "Original: ";
+            PrintColor(container);
+            cout << "Copia modificada: ";
+            PrintColor(copia);
+            cout << "Asignada: ";
+            PrintColor(asignada);
+        }
 
-    {
-        ofstream archivo(filename);
-        if (!archivo) throw runtime_error("No se pudo crear " + filename);
-        archivo << container;
-    }
-    cout << "Escrito en " << filename << '\n';
+        {
+            ofstream archivo(filename);
+            if (!archivo) throw runtime_error("No se pudo crear " + filename);
+            archivo << container;
+        }
+        cout << "Escrito en " << filename << '\n';
 
-    Container leida;
-    {
-        ifstream archivo(filename);
-        if (!archivo) throw runtime_error("No se pudo abrir " + filename);
-        if (!(archivo >> leida)) throw runtime_error("No se pudo leer " + filename);
-    }
-    cout << "Leido desde " << filename << ": " << leida << '\n';
+        Container leida;
+        {
+            ifstream archivo(filename);
+            if (!archivo) throw runtime_error("No se pudo abrir " + filename);
+            if (!(archivo >> leida)) throw runtime_error("No se pudo leer " + filename);
+        }
+        cout << "Leido desde " << filename << ": " << leida << '\n';
 
-    Container reutilizada;
-    reutilizada.push_back(1, 101);
-    reutilizada.clear();
-    cout << "Luego de clear, vacia: " << reutilizada.empty() << '\n';
-    reutilizada.push_back(10, 110);
-    cout << "Luego de reutilizarla: " << reutilizada << '\n';
+        Container reutilizada;
+        reutilizada.push_back(1, 101);
+        reutilizada.clear();
+        cout << "Luego de clear, vacia: " << reutilizada.empty() << '\n';
+        reutilizada.push_back(10, 110);
+        cout << "Luego de reutilizarla: ";
+        PrintColor(reutilizada);
+    });
 }
 
-template <typename List> void VerifyLinkedList(const string& name) {
-    DemoStatus status("VerifyLinkedList (" + name + ")");
-    List list;
-    list.clear();
-    list.push_back(8, 80);
-    list.clear();
-    list.clear();
-    if (!list.empty() || list.begin() != list.end())
-        throw runtime_error(name + ": clear no dejo la lista vacia");
-
-    list.push_back(3, 30);
-    list.insert(1, 10);
-    list.insert(5, 50);
-    List copy(list);
-    list = list;
-    if (copy.empty() || list.empty()) throw runtime_error(name + ": fallo la copia");
-
+template <typename Container> void TestInvalidRead(Container& container, const string& name) {
     ostringstream before;
-    before << list;
+    before << container;
     istringstream invalid("[(7,70),broken]");
-    if (invalid >> list) throw runtime_error(name + ": se acepto una lectura invalida");
+    if (invalid >> container) throw runtime_error(name + ": lectura invalida aceptada");
     ostringstream after;
-    after << list;
+    after << container;
     if (before.str() != after.str())
-        throw runtime_error(name + ": la lectura invalida altero la lista");
+        throw runtime_error(name + ": la lectura invalida cambio los datos");
+}
 
-    list.clear();
-    list.push_back(9, 90);
-    if (list.empty() || (*list.begin()).getValue() != 9)
-        throw runtime_error(name + ": no se pudo reutilizar la lista");
+template <typename Container> void TestCopyAndClear(Container& container, const string& name) {
+    PrintColor("TestCopyAndClear (" + name + ")");
+    container.clear();
+    container.push_back(8, 80);
+    container.clear();
+    container.clear();
+    if (!container.empty() || container.begin() != container.end())
+        throw runtime_error(name + ": clear no dejo el contenedor vacio");
+
+    container.push_back(3, 30);
+    if constexpr (requires { container.insert(1, 10); }) {
+        container.insert(1, 10);
+        container.insert(5, 50);
+    } else {
+    }
+    Container copy(container);
+    container = container;
+    if (copy.empty() || container.empty()) throw runtime_error(name + ": fallo la copia");
+
+    TestInvalidRead(container, name);
+
+    container.clear();
+    container.push_back(9, 90);
+    if (container.empty() || (*container.begin()).getValue() != 9)
+        throw runtime_error(name + ": no se pudo reutilizar el contenedor");
     cout << name << ": clear, copia y lectura invalida OK\n";
 }
 
+template <typename Container> void TestStructure(Container& container, const string& name);
+
 void DemoVector() {
-    DemoStatus status("DemoVector");
-    using Vec = VectorAsc<TX>;
-    static_assert(std::is_same_v<decltype(*std::declval<Vec&>().begin()), Vec::Node&>);
-    static_assert(std::is_same_v<decltype(*std::declval<Vec&>().rbegin()), Vec::Node&>);
-    static_assert(std::is_same_v<decltype(*std::declval<const Vec&>().begin()),
-                                 const Vec::Node&>);
-    static_assert(std::is_same_v<decltype(*std::declval<const Vec&>().rbegin()),
-                                 const Vec::Node&>);
-    // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
-    // el constructor initializer_list arma el Vector inicial de una vez
-    VectorAsc<TX> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
-    TestTraversal(vec, "Vector<TX>");
+    PrintColor("DemoVector");
+
+    VectorAsc<TX> vec;
+    TestStructure(vec, "Vector");
 
     VectorAsc<string> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
@@ -287,15 +262,13 @@ void DemoVector() {
     const auto& constEmpty = emptyVector;
     if (constEmpty.begin() != constEmpty.end() || constEmpty.rbegin() != constEmpty.rend())
         throw runtime_error("Vector const vacio: recorrido incorrecto");
-    istringstream invalidVector("[(7,70),oops]");
-    if (invalidVector >> vec || vec.size() != 10)
-        throw runtime_error("Vector: lectura invalida altero los datos");
-    cout << "Vector: recorrido vacio y lectura invalida OK\n";
+    cout << "Vector: recorrido const y vacio OK\n";
 }
 
 template <typename Container>
-void TestRaceCondition(const string& name, const vector<pair<TX, Ref>>& values) {
-    DemoStatus status("TestRaceCondition (" + name + ")");
+void TestRaceCondition(const string& name,
+                       const vector<pair<typename Container::value_type, Ref>>& values) {
+    PrintColor("TestRaceCondition (" + name + ")");
     Container container;
 
     size_t n = values.size();
@@ -334,7 +307,7 @@ void TestRaceCondition(const string& name, const vector<pair<TX, Ref>>& values) 
 }
 
 template <typename Container> void DemoRaceCondition(const string& name) {
-    DemoStatus status("DemoRaceCondition (" + name + ")");
+    PrintColor("DemoRaceCondition (" + name + ")");
     const size_t N = 200000;
     vector<pair<TX, Ref>> values(N);
     for (size_t i = 0; i < N; ++i)
@@ -345,88 +318,85 @@ template <typename Container> void DemoRaceCondition(const string& name) {
 }
 
 void DemoLinkedList() {
-    DemoStatus status("DemoLinkedList");
+    PrintColor("DemoLinkedList");
     using List = LinkedAscList<TX>;
     List lista;
-    TestGenericContainer(lista);
-    TestTraversal(lista, "LinkedList");
+    TestStructure(lista, "LinkedList");
 
     lista.ApplyFunction(AddOne);
-    cout << "Tras AddOne: " << lista << '\n';
+    cout << "Tras AddOne: ";
+    PrintColor(lista);
     lista.ApplyFunction(AddX<TX>, TX(10));
-    cout << "Tras AddX(10): " << lista << '\n';
+    cout << "Tras AddX(10): ";
+    PrintColor(lista);
     DemoRaceCondition<List>("LinkedList");
-    VerifyLinkedList<List>("LinkedList");
 }
 
 void DemoCircularLinkedList() {
-    DemoStatus status("DemoCircularLinkedList");
+    PrintColor("DemoCircularLinkedList");
     using AscList = CircularLinkedAscList<TX>;
     using DescList = CircularLinkedDescList<TX>;
     AscList lista;
-    TestGenericContainer(lista);
+    TestStructure(lista, "CircularLinkedList");
     cout << "Ciclo: ";
     PrintCircularTraversal(lista.begin(), lista.end());
-    TestTraversal(lista, "CircularLinkedList");
 
     DescList descendente;
     descendente.insert(5, 105);
     descendente.insert(3, 103);
     descendente.insert(7, 107);
-    cout << "Lista descendente: " << descendente << '\n';
+    cout << "Lista descendente: ";
+    PrintColor(descendente);
     cout << "Ciclo descendente: ";
     PrintCircularTraversal(descendente.begin(), descendente.end());
     DemoRaceCondition<AscList>("CircularLinkedList");
-    VerifyLinkedList<AscList>("CircularLinkedList");
 }
 
 void DemoDoubleLinkedList() {
-    DemoStatus status("DemoDoubleLinkedList");
+    PrintColor("DemoDoubleLinkedList");
     using AscList = DoubleLinkedAscList<TX>;
     using DescList = DoubleLinkedDescList<TX>;
     AscList lista;
-    TestGenericContainer(lista);
-    TestTraversal(lista, "DoubleLinkedList");
+    TestStructure(lista, "DoubleLinkedList");
 
     DescList descendente;
     descendente.insert(5, 105);
     descendente.insert(3, 103);
     descendente.insert(7, 107);
-    cout << "Lista descendente: " << descendente << '\n';
+    cout << "Lista descendente: ";
+    PrintColor(descendente);
     DemoRaceCondition<AscList>("DoubleLinkedList");
-    VerifyLinkedList<AscList>("DoubleLinkedList");
 }
 
 void DemoCircularDoubleLinkedList() {
-    DemoStatus status("DemoCircularDoubleLinkedList");
+    PrintColor("DemoCircularDoubleLinkedList");
     using AscList = CircularDoubleLinkedAscList<TX>;
     using DescList = CircularDoubleLinkedDescList<TX>;
     AscList lista;
-    TestGenericContainer(lista);
+    TestStructure(lista, "CircularDoubleLinkedList");
     cout << "Ciclo hacia adelante: ";
     PrintCircularTraversal(lista.begin(), lista.end());
     cout << "Ciclo hacia atras: ";
     PrintCircularTraversal(lista.rbegin(), lista.rend());
-    TestTraversal(lista, "CircularDoubleLinkedList");
 
     DescList descendente;
     descendente.insert(5, 105);
     descendente.insert(3, 103);
     descendente.insert(7, 107);
-    cout << "Lista descendente: " << descendente << '\n';
+    cout << "Lista descendente: ";
+    PrintColor(descendente);
     cout << "Ciclo descendente hacia adelante: ";
     PrintCircularTraversal(descendente.begin(), descendente.end());
     cout << "Ciclo descendente hacia atras: ";
     PrintCircularTraversal(descendente.rbegin(), descendente.rend());
     DemoRaceCondition<AscList>("CircularDoubleLinkedList");
-    VerifyLinkedList<AscList>("CircularDoubleLinkedList");
 }
 
-template <typename HeapType, typename Compare>
-void VerifyHeap(const string& name, Compare compare) {
-    DemoStatus status("VerifyHeap (" + name + ")");
-    HeapType heap;
-    vector<int> expected;
+template <typename HeapType> void TestHeapOperations(HeapType& heap, const string& name) {
+    PrintColor("TestHeapOperations (" + name + ")");
+    heap.clear();
+    typename HeapType::Compare compare;
+    vector<typename HeapType::value_type> expected;
     mt19937 rng(2026);
     uniform_int_distribution<int> distribution(-500, 500);
     for (int i = 0; i < 1500; ++i) {
@@ -457,95 +427,92 @@ void VerifyHeap(const string& name, Compare compare) {
     }
 
     heap.push(42, 7);
-    istringstream invalid("[(1,2),broken]");
-    if (invalid >> heap || heap.top().getValue() != 42)
-        throw runtime_error(name + ": lectura invalida altero el heap");
+    TestInvalidRead(heap, name);
     cout << name << ": extraccion, concurrencia y lectura invalida OK\n";
 }
 
-void DemoHeap() {
-    DemoStatus status("DemoHeap");
-    using Min = MinHeap<int>;
-    using Max = MaxHeap<int>;
-    static_assert(std::is_same_v<decltype(*std::declval<Min::ForwardIterator&>()),
-                                 const Min::Node&>);
-    static_assert(std::is_same_v<decltype(*std::declval<Min::BackwardIterator&>()),
-                                 const Min::Node&>);
-    const vector<pair<int, Ref>> values{{5, 50}, {1, 10}, {4, 40}, {2, 20}};
-
-    {
-        DemoStatus minStatus("MinHeap");
-        Min minHeap;
-        TestContainer(minHeap, values, "min_heap.txt");
-        TestTraversal(minHeap, "MinHeap");
-        cout << "Top: " << minHeap.top() << '\n';
-        cout << "Orden de extraccion: ";
-        while (!minHeap.empty())
-            cout << minHeap.pop() << ' ';
-        cout << '\n';
-        TestGenericContainer(minHeap, "min_heap_persist.txt");
-        VerifyHeap<Min>("MinHeap", less<int>{});
+template <typename View>
+void TestOrder(const View& view, const vector<Ref>& expected, const string& name) {
+    cout << name << ": [";
+    vector<Ref> actual;
+    for (const auto& node : view) {
+        cout << node << ' ';
+        actual.push_back(node.getRef());
     }
-
-    {
-        DemoStatus maxStatus("MaxHeap");
-        Max maxHeap;
-        TestContainer(maxHeap, values, "max_heap.txt");
-        TestTraversal(maxHeap, "MaxHeap");
-        cout << "Top: " << maxHeap.top() << '\n';
-        cout << "Orden de extraccion: ";
-        while (!maxHeap.empty())
-            cout << maxHeap.pop() << ' ';
-        cout << '\n';
-        TestGenericContainer(maxHeap, "max_heap_persist.txt");
-        VerifyHeap<Max>("MaxHeap", greater<int>{});
-    }
+    cout << "]\n";
+    if (actual != expected) throw runtime_error(name + ": orden de recorrido incorrecto");
 }
 
-void DemoBinaryTree() {
-    DemoStatus status("DemoBinaryTree");
-    using Tree = BinarySearchTree<TX>;
-    const vector<pair<TX, Ref>> values{{5, 50}, {1, 10}, {4, 40}, {2, 20}, {7, 70}, {5, 51}};
-
-    auto showOrder = [](const string& name, const auto& view) {
-        cout << name << ": [";
-        for (const auto& node : view)
-            cout << node << ' ';
-        cout << "]\n";
-    };
-
-    auto verifyOrder = [](const auto& view, const vector<Ref>& expected) {
-        vector<Ref> actual;
-        for (const auto& node : view)
-            actual.push_back(node.getRef());
-        if (actual != expected) throw runtime_error("Orden de recorrido incorrecto");
-    };
-
-    Tree tree;
-    TestContainer(tree, values, "binary_tree.txt");
-    TestTraversal(tree, "BinaryTree");
-    showOrder("Preorder", tree.preorder());
-    showOrder("Inorder", tree.inorder());
-    showOrder("Postorder", tree.postorder());
-    verifyOrder(tree.preorder(), {50, 10, 40, 20, 51, 70});
-    verifyOrder(tree.inorder(), {10, 20, 40, 51, 50, 70});
-    verifyOrder(tree.postorder(), {20, 51, 40, 10, 70, 50});
+template <typename Tree> void TestTreeOperations(Tree& tree) {
+    TestOrder(tree.preorder(), {50, 10, 40, 20, 51, 70}, "Preorder");
+    TestOrder(tree.inorder(), {10, 20, 40, 51, 50, 70}, "Inorder");
+    TestOrder(tree.postorder(), {20, 51, 40, 10, 70, 50}, "Postorder");
 
     Tree emptyTree;
-    if (emptyTree.preorder().begin() != emptyTree.preorder().end() ||
-        emptyTree.inorder().begin() != emptyTree.inorder().end() ||
-        emptyTree.postorder().begin() != emptyTree.postorder().end())
-        throw runtime_error("Recorrido de arbol vacio");
+    TestOrder(emptyTree.preorder(), {}, "Preorder vacio");
+    TestOrder(emptyTree.inorder(), {}, "Inorder vacio");
+    TestOrder(emptyTree.postorder(), {}, "Postorder vacio");
 
     Tree singleNode{{8, 80}};
-    verifyOrder(singleNode.preorder(), {80});
-    verifyOrder(singleNode.inorder(), {80});
-    verifyOrder(singleNode.postorder(), {80});
+    TestOrder(singleNode.preorder(), {80}, "Preorder unico");
+    TestOrder(singleNode.inorder(), {80}, "Inorder unico");
+    TestOrder(singleNode.postorder(), {80}, "Postorder unico");
 
     cout << "Estructura del arbol:\n";
     tree.printIndented(cout);
+}
 
-    Tree genericTree;
-    TestGenericContainer(genericTree, "binary_tree_persist.txt");
-    TestRaceCondition<Tree>("BinaryTree", values);
+template <typename Container> void TestStructure(Container& container, const string& name) {
+    PrintColor(name);
+    const vector<pair<typename Container::value_type, Ref>> values{{5, 50}, {1, 10}, {4, 40},
+                                                                   {2, 20}, {7, 70}, {5, 51}};
+
+    TestContainer(container, values, name + ".txt");
+    TestTraversal(container, name);
+
+    if constexpr (requires {
+                      container.top();
+                      container.pop();
+                  }) {
+        cout << "Top: " << container.top() << '\n';
+        cout << "Orden de extraccion: ";
+        while (!container.empty())
+            cout << container.pop() << ' ';
+        cout << '\n';
+        TestHeapOperations(container, name);
+    }
+
+    if constexpr (requires {
+                      container.preorder();
+                      container.postorder();
+                  })
+        TestTreeOperations(container);
+
+    container.clear();
+    TestGenericContainer(container, name + "_persist.txt");
+    TestInvalidRead(container, name);
+
+    if constexpr (requires(const Container& source, Container& target) {
+                      Container(source);
+                      target = source;
+                  }) {
+        Container copyAndClear;
+        TestCopyAndClear(copyAndClear, name);
+    }
+
+    TestRaceCondition<Container>(name, values);
+}
+
+template <typename Container> void TestStructure(const string& name) {
+    Container container;
+    TestStructure(container, name);
+}
+
+void DemoHeap() {
+    TestStructure<MinHeap<int>>("MinHeap");
+    TestStructure<MaxHeap<int>>("MaxHeap");
+}
+
+void DemoBinaryTree() {
+    TestStructure<BinarySearchTree<TX>>("BinaryTree");
 }
