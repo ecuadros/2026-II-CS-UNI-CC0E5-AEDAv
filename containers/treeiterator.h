@@ -28,8 +28,10 @@ class BinaryTreeIterator
                 return;
             }
 
-            Node* first = node->m_pChild[Reverse ? 1 : 0];
-            Node* second = node->m_pChild[Reverse ? 0 : 1];
+            constexpr auto reverse = Reverse;
+            Node* first = node->m_pChild[reverse];
+            Node* second = node->m_pChild[1 - reverse];
+
             if constexpr (Order == TreeTraversalOrder::PreOrder) {
                 if (second) m_pending.push({second, false});
                 if (first) m_pending.push({first, false});
