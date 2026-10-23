@@ -181,14 +181,8 @@ public:
 
     std::ostream& write(std::ostream& os) const {
         std::lock_guard lock(m_mutex);
-        os << '[';
-        bool first = true;
-        for (const auto& node : preorder()) {
-            if (!first) os << ", ";
-            os << node;
-            first = false;
-        }
-        return os << ']';
+        auto view = preorder();
+        return container_stream::write(os, view.begin(), view.end());
     }
 
     std::istream& read(std::istream& is) {
