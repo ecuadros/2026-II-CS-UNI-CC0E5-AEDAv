@@ -7,6 +7,7 @@
 #include "container_stream.h"
 #include "traversalops.h"
 #include "../foreach.h"
+#include "traits.h"
 #include "../types.h" // Ref
 using namespace std;
 
