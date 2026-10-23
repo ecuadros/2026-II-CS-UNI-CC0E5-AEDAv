@@ -282,12 +282,12 @@ void TestRaceCondition(const string& name,
     for (auto& worker : workers)
         worker.join();
 
-    long long expectedSum = 0;
+    Ref expectedSum = 0;
     for (auto& v : values)
         expectedSum += v.first;
 
     size_t actualCount = 0;
-    long long actualSum = 0;
+    Ref actualSum = 0;
     for (auto it = container.begin(); it != container.end(); ++it) {
         ++actualCount;
         actualSum += (*it).getValue();
