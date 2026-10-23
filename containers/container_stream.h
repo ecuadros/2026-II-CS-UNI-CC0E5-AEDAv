@@ -8,18 +8,18 @@
 namespace container_stream {
 
 template <class It> std::ostream& write(std::ostream& os, It first, It last) {
-    os << '[';
+    os << Delim{'['};
     for (bool separator = false; first != last; ++first) {
-        if (separator) os << ',';
+        if (separator) os << Delim{','};
         os << *first;
         separator = true;
     }
-    return os << ']';
+    return os << Delim{']'};
 }
 
 template <class Container> bool read(std::istream& is, Container& destination) {
-    auto expect = [&is](char wanted) {
-        char actual;
+    auto expect = [&is](Delim wanted) {
+        Delim actual;
         if (!(is >> actual)) return false;
         if (actual == wanted) return true;
         is.setstate(std::ios::failbit);
@@ -37,7 +37,7 @@ template <class Container> bool read(std::istream& is, Container& destination) {
         if (!expect('(') || !(is >> value) || !expect(',') || !(is >> ref) || !expect(')'))
             return false;
         destination.push_back(value, ref);
-        char separator;
+        Delim separator;
         if (!(is >> separator)) return false;
         if (separator == ']') return true;
         if (separator != ',') {
