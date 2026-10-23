@@ -2,6 +2,7 @@
 #define __BINARYTREE_H__
 
 #include "GeneralNode.h"
+#include "traits.h"
 #include "treeiterator.h"
 #include "traversalops.h"
 #include "container_stream.h"
@@ -24,15 +25,6 @@ private:
     template <typename, bool, TreeTraversalOrder> friend class BinaryTreeIterator;
 
     NodePtr m_pChild[2] = {nullptr, nullptr};
-};
-
-template <typename T> struct BinaryTreeTraits {
-    using value_type = T;
-    using Node = BinaryTreeNode<T>;
-    using ForwardIterator = BinaryTreeIterator<const Node>;
-    using BackwardIterator = BinaryTreeIterator<const Node, true>;
-    using PreOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PreOrder>;
-    using PostOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PostOrder>;
 };
 
 template <typename Traits> class BinaryTree : public SearchTraversalOps<BinaryTree<Traits>> {
