@@ -1,25 +1,23 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
-//#include "traits.h"
+#include "GeneralTraits.h"
 #include "vector.h"
 #include "../persistence.h"
 #include "containers.h"
 #include <cstddef>
 
-template <typename T, typename _Compare>
-struct HeapDefaultTraits {
+template <typename T>
+struct HeapNodeTraits {
     using Node = GeneralNode<T>;
-    using value_type        = T;
-    using Compare           = _Compare;
-    using ForwardIterator   = VectorForwardIterator<Node>;  // itera sobre Node, no sobre T
+    using ForwardIterator   = VectorForwardIterator<Node>;
     using BackwardIterator  = VectorBackwardIterator<Node>;
 };
 
 template <typename T, typename _Compare = std::less<T>>
-struct HeapAscTraits : public HeapDefaultTraits<T, _Compare> {};
+struct HeapAscTraits : public AscendingTraits<T, _Compare>, HeapNodeTraits<T> {};
 
 template <typename T, typename _Compare = std::greater<T>>
-struct HeapDescTraits : public HeapDefaultTraits<T, _Compare> {};
+struct HeapDescTraits : public DescendingTraits<T, _Compare>, HeapNodeTraits<T> {};
 
 template <typename Traits>
 class Heap: public Applicable<Heap<Traits>,Traits> {
@@ -34,10 +32,18 @@ public:
     using Delim             = typename Node::Delim;
 private:
     Vector<Traits> m_data;
+
+    // Reconstruye el heap en O(n) (algoritmo de Floyd).
+    // Debe llamarse con m_mutex ya bloqueado.
+    void rebuild_unlocked() {
+        for (size_t i = m_data.size() / 2; i-- > 0; )
+            HeapifyDown(i);
+    }
+
+public:
     ForwardIterator begin() override { return m_data.begin(); }
     ForwardIterator end() override { return m_data.end();   }
 
-public:
     Heap () {};
     Heap(initializer_list<pair<value_type, Ref>> values) {
         for (const auto &v : values)
@@ -46,9 +52,8 @@ public:
 
     virtual ~Heap() { clear(); }
 
-    std::ostream& write(std::ostream& os) { return ::write(os, begin(), end()); }
-    //std::ostream& write(std::ostream& os) { return this->m_data.write(os); }
-    std::istream& read(std::istream& is) { return ::read<Vector<Traits>, Delim, Node>(is, *this); }
+    std::ostream& write(std::ostream& os) { return os << *this; }
+    std::istream& read(std::istream& is) { return is >> *this; }
     //
 
     void push(const value_type &value, Ref ref) {
@@ -69,6 +74,7 @@ public:
         }
     }
     Node pop() {
+        //if (m_data.empty()) return;
         std::scoped_lock lock(this->m_mutex);
         auto node_pop = Node(m_data[0].getValue(), m_data[0].getRef());
         std::swap(m_data[0], m_data[m_data.size() - 1]);
@@ -98,6 +104,26 @@ public:
     void clear() {
         std::scoped_lock lock(this->m_mutex);
         m_data.clear();
+    }
+
+    // Reconstruye el heap por si los valores se modificaron externamente.
+    void rebuild() {
+        std::scoped_lock lock(this->m_mutex);
+        rebuild_unlocked();
+    }
+
+    // Aplica una funcion a todos los nodos. Como el callback puede modificar
+    // los valores y romper la propiedad del heap, se reconstruye al final.
+    template <typename Func, typename... Args>
+    void ApplyFunction(Func func, Args&&... args) {
+        std::scoped_lock lock(this->m_mutex);
+        try {
+            ::call(begin(), end(), func, std::forward<Args>(args)...);
+        } catch (...) {
+            rebuild_unlocked();
+            throw;
+        }
+        rebuild_unlocked();
     }
 
 };

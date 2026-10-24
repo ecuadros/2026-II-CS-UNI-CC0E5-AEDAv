@@ -1,9 +1,12 @@
 #ifndef __BINARYTREE_H__
 #define __BINARYTREE_H__
 #include <initializer_list>
+#include <mutex>
 #include "GeneralNode.h"
 #include "GeneralIterator.h"
-#include "traits.h"
+#include "GeneralTraits.h"
+#include "containers.h"
+#include "../persistence.h"
 
 template <typename T>
 class BinaryTreeNode : public GeneralNode<T> {
@@ -12,32 +15,52 @@ public:
     using MySelf            = BinaryTreeNode<T>;
     using Node              = MySelf;
     using NodePtr           = Node*;
-    using Parent            = GeneralNode<MySelf>;
+    using Parent            = GeneralNode<T>;
     using Parent::Parent; // Inherit constructor
 
     NodePtr m_pChild[2] = {nullptr, nullptr}; // left and right children
-
+    NodePtr m_pParent   = nullptr;
 };
 
-template <typename T>
-class BinaryTreeForwardIterator : public GeneralIterator<BinaryTreeForwardIterator<T>, BinaryTreeNode<T>> {
+template <typename T, bool _isForward>
+class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T,_isForward>, BinaryTreeNode<T>> {
 public:
-    using value_type = BinaryTreeNode<T>;
-    using MySelf = BinaryTreeForwardIterator<T>;
-    using Parent = GeneralIterator<MySelf, value_type>;
+    using Node      = BinaryTreeNode<T>;
+    using value_type = Node;
+    using MySelf    = BinaryTreeIterator<T, _isForward>;
+    using Parent    = GeneralIterator<MySelf, value_type>;
     using Parent::Parent; // Inherit constructor
-    BinaryTreeForwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pChild[1]; return *this; }
+
+    BinaryTreeIterator& operator++() {
+        Node* current = Parent::m_ptr;
+        //if (!current) return *this;
+
+        if (current->m_pChild[_isForward]) {
+            // Successor: leftmost node of the right subtree.
+            current = current->m_pChild[_isForward];
+            while (current->m_pChild[!_isForward])
+                current = current->m_pChild[!_isForward];
+        } else {
+            // Successor: first ancestor of which current is a left child.
+            Node* parent = current->m_pParent;
+            while (parent && current == parent->m_pChild[_isForward]) {
+                current = parent;
+                parent  = parent->m_pParent;
+            }
+            current = parent;
+        }
+        Parent::m_ptr = current;
+        return *this;
+    }
 };
 
-template <typename T>
-class BinaryTreeBackwardIterator : public GeneralIterator<BinaryTreeBackwardIterator<T>, BinaryTreeNode<T>> {
-public:
-    using value_type = BinaryTreeNode<T>;
-    using MySelf = BinaryTreeBackwardIterator<T>;
-    using Parent = GeneralIterator<MySelf, value_type>;
-    using Parent::Parent; // Inherit constructor
-    BinaryTreeBackwardIterator& operator++() { Parent::m_ptr = Parent::m_ptr->m_pPrev; return *this; }
-};
+// Recorrido in-order: left - node - right.
+template <typename T, bool _isForward = true>
+class BinaryTreeForwardIterator : public BinaryTreeIterator<T, _isForward> {};
+
+// Recorrido in-order inverso: right - node - left.
+template <typename T, bool _isForward = false>
+class BinaryTreeBackwardIterator : public BinaryTreeIterator<T, _isForward> {};
 
 
 template <typename T>
@@ -55,39 +78,139 @@ struct BinaryTreeDescTraits : public DescendingTraits<T> {
 };
 
 template <typename Traits>
-class BinaryTree {
+class BinaryTree : public Firstable<BinaryTree<Traits>, Traits>, public Recallable<BinaryTree<Traits>, Traits> {
 public:
     using value_type        = typename Traits::value_type;
     using Node              = typename Traits::Node;
     using NodePtr           = Node *;
     using ForwardIterator   = typename Traits::ForwardIterator;
     using BackwardIterator  = typename Traits::BackwardIterator;
+    using Compare           = typename Traits::Compare;
 
 private:
     NodePtr m_root = nullptr; // root of the binary tree
-    void internal_insert(NodePtr& node, const value_type& value, Ref ref) {
+    //Compare m_comp{};
+
+    void internal_insert(NodePtr& node, NodePtr parent, const value_type& value, Ref ref) {
         if (!node) {
             node = new Node(value, ref);
+            node->m_pParent = parent;
             return;
         }
-        auto branch = value > node->m_value;
-        internal_insert(node->m_pChild[branch], value, ref); // Tail recursion to insert in the correct branch
+
+        auto branch = Compare()(value, node->getValue()) ? 0 : 1;
+        internal_insert(node->m_pChild[branch], node, value, ref);
     }
+
+    void internal_clear(NodePtr node) {
+        if (!node) return;
+        internal_clear(node->m_pChild[0]);
+        internal_clear(node->m_pChild[1]);
+        delete node;
+    }
+
+    static NodePtr first(NodePtr node) {
+        while (node && node->m_pChild[0])
+            node = node->m_pChild[0];
+        return node;
+    }
+
+    static NodePtr last(NodePtr node) {
+        while (node && node->m_pChild[1])
+            node = node->m_pChild[1];
+        return node;
+    }
+
 public:
+    using Delim = typename Node::Delim;
     BinaryTree() {}
+
     BinaryTree(initializer_list<pair<value_type, Ref>> values) {
         for (const auto &v : values)
             insert(v.first, v.second);
     }
-    void insert(const value_type& value, Ref ref) {
-        // Implement insertion logic for binary tree
-        internal_insert(m_root, value, ref);
+
+    BinaryTree(const BinaryTree& another) {
+        //scoped_lock lock(another.m_mutex);
+        *this = another;
+        /*m_comp = other.m_comp;
+        m_root = internal_clone(other.m_root, nullptr);*/
     }
+
+    BinaryTree& operator=(const BinaryTree& another) {
+        //if (this == &another) return *this;
+        std::scoped_lock lock(this->m_mutex, another.m_mutex);
+        internal_clear(m_root);
+        for (const auto& node : another)
+            push_back(node.getValue(), node.getRef());
+        /*m_comp = other.m_comp;
+        m_root = internal_clone(other.m_root, nullptr);*/
+
+        return *this;
+    }
+
+    BinaryTree(BinaryTree&& another) noexcept {
+        //scoped_lock lock(other.m_mutex);
+        //m_root = another.m_root;
+        //m_comp = std::move(other.m_comp);
+
+        // Dejar el objeto origen en un estado válido y vacío
+        //another.m_root = nullptr;
+        *this = another;
+    }
+
+    BinaryTree& operator=(BinaryTree&& another) noexcept {
+        //if (this == &another) return *this;
+        std::scoped_lock lock(this->m_mutex, another.m_mutex);
+        internal_clear(m_root);
+        m_root = another.m_root;
+        //m_comp = std::move(other.m_comp);
+        another.m_root = nullptr; // Dejar origen vacío
+        return *this;
+    }
+
+    virtual ~BinaryTree() { clear(); }
+
+    void insert(const value_type& value, Ref ref) {
+        scoped_lock lock(this->m_mutex);
+        internal_insert(m_root, nullptr, value, ref);
+    }
+    void push(const value_type& value, Ref ref) { insert(value, ref); }
+    void push_back(const value_type& value, Ref ref) { insert(value, ref); }
+
+    void clear() {
+        scoped_lock lock(this->m_mutex);
+        internal_clear(m_root);
+        m_root = nullptr;
+    }
+
+    bool empty() const { return m_root == nullptr; }
+
+    std::ostream& write(std::ostream& os) { return os << *this; }
+    std::istream& read(std::istream& is) { return is >> *this; }
+
+    // Iteradores: begin()/end() satisfacen la interfaz de Callable y
+    // rbegin()/rend() la de Recallable.
+    ForwardIterator begin() override { return ForwardIterator(first(m_root)); }
+    ForwardIterator end()   override { return ForwardIterator(nullptr); }
+
+    BackwardIterator rbegin() override { return BackwardIterator(last(m_root)); }
+    BackwardIterator rend()   override { return BackwardIterator(nullptr); }
+
+    using Callable<BinaryTree<Traits>, Traits>::call;
+    using Callable<BinaryTree<Traits>, Traits>::m_mutex;
+    using Firstable<BinaryTree<Traits>, Traits>::FirstThat;
+    using Recallable<BinaryTree<Traits>, Traits>::rcall;
+
+    template <typename Func, typename... Args>
+    void ApplyFunction(Func func, Args&&... args) {
+        this->call(func, std::forward<Args>(args)...);
+    }
+
+    // rcall() se hereda de Recallable y recorre el arbol en sentido inverso.
     // Move constructor and move assignment operator
-    // Constructor and destructor
     // Persistencia (operator << y operator >> globales para todas las estructuras pero si es para BT con indentacion entonces hacerlo por separado)
-    // Concurrencia
-    // Iteradores (forward y backward)
     // FirstThat, ForEach, call, rcall por herencia
 };
+
 #endif // __BINARYTREE_H__

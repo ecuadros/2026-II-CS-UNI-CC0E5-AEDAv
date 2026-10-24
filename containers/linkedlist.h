@@ -4,7 +4,7 @@
 #include "GeneralNode.h"
 #include "GeneralIterator.h"
 #include "../foreach.h"
-#include "traits.h"
+#include "GeneralTraits.h"
 
 template <typename T>
 class LinkedListNode : public GeneralNode<T> {

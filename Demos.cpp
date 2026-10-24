@@ -28,6 +28,12 @@ void Square(GeneralNode<TX> &node) {
     node.value() *= node.value();
 }
 
+// Transformacion no monotona: invierte el orden de los valores. Sirve para
+// comprobar que ApplyFunction reconstruye el heap y no deja rota su propiedad.
+void Negate(GeneralNode<TX> &node) {
+    node.value() = -node.value();
+}
+
 // Predicado generico para FirstThat/call: true si el valor del nodo es
 // mayor que 'threshold'. Generico en Node y T para servir tanto a
 // Vector<VectorAscTraits<TX>> (int) como a Vector<VectorAscTraits<string>>.
@@ -43,13 +49,18 @@ void PrintNode(Node &node, ostream &os) {
 const int NThreads = 5;
 
 // Inserta secuencialmente cada pareja (valor, ref) de 'values' en el
-// Container, una por una. La insercion concurrente queda aislada en
-// DemoRaceCondition(), que es donde se estudia esa problematica.
+// Container, una por una. Usa push() si existe (Heap) o push_back() en
+// caso contrario (Vector, LinkedList). La insercion concurrente queda
+// aislada en DemoRaceCondition(), que es donde se estudia esa problematica.
 template <typename Container>
 void InsertElements(Container &container,
                      const vector<pair<typename Container::value_type, Ref>> &values) {
-    for (const auto &v : values)
-        container.push_back(v.first, v.second);
+    for (const auto &v : values) {
+        if constexpr (requires { container.push(v.first, v.second); })
+            container.push(v.first, v.second);
+        else
+            container.push_back(v.first, v.second);
+    }
 }
 
 template <typename Container>
@@ -256,24 +267,86 @@ void DemoLinkedList()
     TestDoubleLinkedListSpecifics(cdlist);
 }
 
+// Prueba generica para MinHeap y MaxHeap. Reutiliza TestContainer para
+// insertar los elementos, escribir el heap en pantalla/archivo y leerlo
+// de vuelta usando operator>>.
+template <typename Heap>
+void TestHeap(Heap &heap,
+              const vector<pair<typename Heap::value_type, Ref>> &values,
+              const string &filename) {
+    ofstream(filename, ios::trunc).close();
+    TestContainer(heap, values, filename);
+
+    Heap loaded;
+    ifstream in(filename);
+    if (in >> loaded)
+        cout << "Heap leido desde archivo: " << loaded << endl;
+    in.close();
+
+    // Prueba de ApplyFunction: Heap reconstruye el heap despues de que
+    // el callback modifica los valores de los nodos.
+    heap.ApplyFunction(AddOne);
+    cout << "Heap tras ApplyFunction(AddOne): " << heap << endl;
+
+    heap.ApplyFunction(AddX<TX>, TX(10));
+    cout << "Heap tras ApplyFunction(AddX(10)): " << heap << endl;
+
+    // Al negar los valores se invierte su orden. Si ApplyFunction no
+    // reconstruyera el heap, la raiz ya no seria el minimo/maximo correcto.
+    heap.ApplyFunction(Negate);
+    cout << "Heap tras ApplyFunction(Negate): " << heap << endl;
+
+    cout << "Elemento extraido con pop(): " << heap.pop() << endl;
+    cout << "Heap despues de pop(): " << heap << endl;
+}
+
 void DemoHeap() {
     cout << "\nPruebas para Heap" << endl;
+    const vector<pair<TX, Ref>> elements {
+        {40, 0}, {50, 1}, {60, 2}, {70, 3},
+        {55, 4}, {10, 5}, {77, 6}, {5, 7}
+    };
+
+    cout << "\nMinHeap" << endl;
     MinHeap<TX> minheap;
-    auto elements = std::vector<pair<TX, Ref>>({{40, 0}, {50, 1}, {60, 2}, {70, 3}, {55, 4}, {10, 5}, {77, 6}, {5, 7}});
-    for(auto& e : elements)
-        minheap.push(e.first, e.second);
-    minheap.write(cout);
-    cout << "\n";
-    minheap.pop();
-    minheap.write(cout);
-    cout << "\n\n";
+    TestHeap(minheap, elements, "heap_min.txt");
+
+    cout << "\nMaxHeap" << endl;
     MaxHeap<TX> maxheap;
-    for(auto& e : elements)
-        maxheap.push(e.first, e.second);
-    maxheap.write(cout);
-    cout << "\n";
+    TestHeap(maxheap, elements, "heap_max.txt");
 }
 
 void DemoBinaryTree() {
-    ;
+    cout << "\nPruebas para BinaryTree" << endl;
+
+    ofstream("binarytree.txt", ios::trunc).close();
+
+    // BinaryTree hereda de Firstable y Recallable, igual que los demas contenedores
+    BinaryTree<BinaryTreeAscTraits<TX>> btree({{50, 1}, {30, 2}, {70, 3}, {20, 4}, {40, 5}, {60, 6}, {80, 7}});
+    TestContainer(btree, {{10, 8}, {35, 9}, {65, 10}}, "binarytree.txt");
+
+    cout << "Pruebas de recorrido y Recallable" << endl;
+    TestTraversal(btree);
+
+    cout << "Prueba rcall() en sentido inverso:" << endl;
+    cout << "Backward traversal: [";
+    btree.rcall(PrintNode<BinaryTreeNode<TX>>, cout);
+    cout << "]" << endl;
+
+    if (!btree.empty()) {
+        auto threshold = (*btree.begin()).getValue();
+        BinaryTreeNode<TX> &found = btree.FirstThat(IsGreaterThan<BinaryTreeNode<TX>, decltype(threshold)>, threshold);
+        cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
+    }
+
+    btree.ApplyFunction(AddOne);
+    cout << "BinaryTree tras ApplyFunction(AddOne): " << btree << endl;
+    btree.ApplyFunction(AddX<TX>, TX(10));
+    cout << "BinaryTree tras ApplyFunction(AddX(10)): " << btree << endl;
+
+    cout << "Limpiando BinaryTree..." << endl;
+    btree.clear();
+    cout << "BinaryTree vacio: " << (btree.empty() ? "si" : "no") << endl;
+    btree.insert(99, 99);
+    cout << "BinaryTree tras insertar (99,99): " << btree << endl;
 }

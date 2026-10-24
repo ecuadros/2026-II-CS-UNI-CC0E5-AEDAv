@@ -23,11 +23,11 @@ public:
     }
 };
 
+// La herencia virtual de Callable evita que una clase que combine varias
+// capacidades (por ejemplo Firstable + Recallable) tenga dos copias del
+// mutex y dos subobjetos Callable distintos.
 template <typename Derived, typename Traits>
-class Applicable: public Callable<Applicable<Derived, Traits>, Traits> {
-protected:
-    /*virtual typename Derived::ForwardIterator begin() = 0;
-    virtual typename Derived::ForwardIterator end() = 0;*/
+class Applicable: public virtual Callable<Derived, Traits> {
 public:
     template <typename Func, typename... Args>
     void ApplyFunction(Func func, Args... args) {
@@ -36,14 +36,29 @@ public:
 };
 
 template <typename Derived, typename Traits>
-class Firstable: public Callable<Firstable<Derived, Traits>, Traits> {
-protected:
-    /*virtual typename Derived::ForwardIterator begin() = 0;
-        virtual typename Derived::ForwardIterator end() = 0;*/
+class Firstable: public virtual Callable<Derived, Traits> {
 public:
     template <typename Func, typename... Args>
     typename Traits::Node& FirstThat(Func func, Args... args) {
         return this->call(func, std::forward<Args>(args)...);
+    }
+};
+
+template <typename Derived, typename Traits>
+class Recallable: public virtual Callable<Derived, Traits> {
+protected:
+    // El recorrido inverso usa el iterador inverso del contenedor (no el
+    // ForwardIterator): rbegin()/rend() deben sobrescribir estas firmas.
+    virtual typename Traits::BackwardIterator rbegin() = 0;
+    virtual typename Traits::BackwardIterator rend() = 0;
+public:
+    template<typename Func, typename... Args>
+    decltype(auto) rcall(Func func, Args&&... args)
+    {    lock_guard<mutex> lock(this->m_mutex);
+        if constexpr(is_void_v<invoke_result_t<Func, typename Derived::Node&, Args...>>)
+            ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
+        else // return type is not void:
+            return ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
     }
 };
 
