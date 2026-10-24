@@ -1,8 +1,6 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
 
-#include "traits.h"
-#include "vector.h"
 #include "container_stream.h"
 #include "traversalops.h"
 #include <cstddef>

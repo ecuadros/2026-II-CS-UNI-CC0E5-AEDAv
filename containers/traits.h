@@ -23,8 +23,6 @@ template <typename T> struct BinaryTreeTraits {
     using Node = BinaryTreeNode<T>;
     using ForwardIterator = BinaryTreeIterator<const Node>;
     using BackwardIterator = BinaryTreeIterator<const Node, true>;
-    using PreOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PreOrder>;
-    using PostOrderIterator = BinaryTreeIterator<const Node, false, TreeTraversalOrder::PostOrder>;
 };
 
 

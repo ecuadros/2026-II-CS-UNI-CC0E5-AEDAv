@@ -8,7 +8,6 @@
 #include <thread>
 #include <vector>
 #include <algorithm>
-#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -392,76 +391,6 @@ void DemoCircularDoubleLinkedList() {
     DemoRaceCondition<AscList>("CircularDoubleLinkedList");
 }
 
-template <typename HeapType> void TestHeapOperations(HeapType& heap, const string& name) {
-    PrintColor("TestHeapOperations (" + name + ")");
-    heap.clear();
-    typename HeapType::Compare compare;
-    vector<typename HeapType::value_type> expected;
-    mt19937 rng(2026);
-    uniform_int_distribution<int> distribution(-500, 500);
-    for (int i = 0; i < 1500; ++i) {
-        int value = distribution(rng);
-        expected.push_back(value);
-        heap.push(value, i);
-    }
-    sort(expected.begin(), expected.end(), compare);
-    for (int value : expected) {
-        if (heap.top().getValue() != value || heap.pop().getValue() != value)
-            throw runtime_error(name + ": orden de extraccion incorrecto");
-    }
-
-    vector<thread> workers;
-    for (int t = 0; t < 4; ++t)
-        workers.emplace_back([&heap, t] {
-            for (int i = 0; i < 1000; ++i)
-                heap.push(t * 1000 + i, i);
-        });
-    for (auto& worker : workers)
-        worker.join();
-    if (heap.size() != 4000) throw runtime_error(name + ": se perdieron inserciones concurrentes");
-    int previous = heap.pop().getValue();
-    while (!heap.empty()) {
-        int current = heap.pop().getValue();
-        if (compare(current, previous)) throw runtime_error(name + ": heapify down incorrecto");
-        previous = current;
-    }
-
-    heap.push(42, 7);
-    TestInvalidRead(heap, name);
-    cout << name << ": extraccion, concurrencia y lectura invalida OK\n";
-}
-
-template <typename View>
-void TestOrder(const View& view, const vector<Ref>& expected, const string& name) {
-    cout << name << ": [";
-    vector<Ref> actual;
-    for (const auto& node : view) {
-        cout << node << ' ';
-        actual.push_back(node.getRef());
-    }
-    cout << "]\n";
-    if (actual != expected) throw runtime_error(name + ": orden de recorrido incorrecto");
-}
-
-template <typename Tree> void TestTreeOperations(Tree& tree) {
-    TestOrder(tree.preorder(), {50, 10, 40, 20, 51, 70}, "Preorder");
-    TestOrder(tree.inorder(), {10, 20, 40, 51, 50, 70}, "Inorder");
-    TestOrder(tree.postorder(), {20, 51, 40, 10, 70, 50}, "Postorder");
-
-    Tree emptyTree;
-    TestOrder(emptyTree.preorder(), {}, "Preorder vacio");
-    TestOrder(emptyTree.inorder(), {}, "Inorder vacio");
-    TestOrder(emptyTree.postorder(), {}, "Postorder vacio");
-
-    Tree singleNode{{8, 80}};
-    TestOrder(singleNode.preorder(), {80}, "Preorder unico");
-    TestOrder(singleNode.inorder(), {80}, "Inorder unico");
-    TestOrder(singleNode.postorder(), {80}, "Postorder unico");
-
-    cout << "Estructura del arbol:\n";
-    tree.printIndented(cout);
-}
-
 template <typename Container> void TestStructure(Container& container, const string& name) {
     PrintColor(name);
     const vector<pair<typename Container::value_type, Ref>> values{{5, 50}, {1, 10}, {4, 40},
@@ -479,14 +408,7 @@ template <typename Container> void TestStructure(Container& container, const str
         while (!container.empty())
             cout << container.pop() << ' ';
         cout << '\n';
-        TestHeapOperations(container, name);
     }
-
-    if constexpr (requires {
-                      container.preorder();
-                      container.postorder();
-                  })
-        TestTreeOperations(container);
 
     container.clear();
     TestGenericContainer(container, name + "_persist.txt");

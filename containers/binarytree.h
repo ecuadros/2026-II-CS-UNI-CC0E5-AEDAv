@@ -3,13 +3,11 @@
 
 #include "GeneralNode.h"
 #include "traits.h"
-#include "treeiterator.h"
 #include "traversalops.h"
 #include "container_stream.h"
 #include <cstddef>
 #include <initializer_list>
 #include <mutex>
-#include <string>
 #include <utility>
 
 template <typename T> class BinaryTreeNode : public GeneralNode<T> {
@@ -22,7 +20,7 @@ public:
 
 private:
     template <typename> friend class BinaryTree;
-    template <typename, bool, TreeTraversalOrder> friend class BinaryTreeIterator;
+    template <typename, bool> friend class BinaryTreeIterator;
 
     NodePtr m_pChild[2] = {nullptr, nullptr};
 };
@@ -40,30 +38,6 @@ public:
     using NodePtr = Node*;
     using ForwardIterator = typename Traits::ForwardIterator;
     using BackwardIterator = typename Traits::BackwardIterator;
-    using PreOrderIterator = typename Traits::PreOrderIterator;
-    using PostOrderIterator = typename Traits::PostOrderIterator;
-
-    template <typename Iterator> class TraversalView {
-        NodePtr m_root;
-
-    public:
-        explicit TraversalView(NodePtr root) : m_root(root) {}
-        Iterator begin() const { return Iterator(m_root); }
-        Iterator end() const { return Iterator(nullptr); }
-    };
-
-    // The view owns the lock for the entire range-for loop, including dereferences.
-    template <typename Iterator> class LockedTraversalView {
-        std::unique_lock<std::mutex> m_lock;
-        TraversalView<Iterator> m_view;
-
-    public:
-        explicit LockedTraversalView(const BinaryTree& tree)
-            : m_lock(tree.m_mutex), m_view(tree.m_root) {}
-        Iterator begin() const { return m_view.begin(); }
-        Iterator end() const { return m_view.end(); }
-    };
-
 private:
     NodePtr m_root = nullptr; // root of the binary tree
     std::size_t m_size = 0;
@@ -102,11 +76,13 @@ private:
         return copy;
     }
 
-    void printIndented(std::ostream& os, NodePtr node, std::size_t depth) const {
+    void writeNodes(std::ostream& os, NodePtr node, bool& first) const {
         if (!node) return;
-        printIndented(os, node->m_pChild[1], depth + 1);
-        os << std::string(depth * 4, ' ') << *node << '\n';
-        printIndented(os, node->m_pChild[0], depth + 1);
+        if (!first) os << ',';
+        first = false;
+        os << *node;
+        writeNodes(os, node->m_pChild[0], first);
+        writeNodes(os, node->m_pChild[1], first);
     }
 
 public:
@@ -178,25 +154,12 @@ public:
     BackwardIterator rbegin() const { return BackwardIterator(m_root); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
 
-    TraversalView<PreOrderIterator> preorder() const { return TraversalView<PreOrderIterator>(m_root); }
-    TraversalView<ForwardIterator> inorder() const { return TraversalView<ForwardIterator>(m_root); }
-    TraversalView<PostOrderIterator> postorder() const { return TraversalView<PostOrderIterator>(m_root); }
-    LockedTraversalView<PreOrderIterator> locked_preorder() const {
-        return LockedTraversalView<PreOrderIterator>(*this);
-    }
-    LockedTraversalView<ForwardIterator> locked_inorder() const {
-        return LockedTraversalView<ForwardIterator>(*this);
-    }
-    LockedTraversalView<PostOrderIterator> locked_postorder() const {
-        return LockedTraversalView<PostOrderIterator>(*this);
-    }
-    LockedTraversalView<BackwardIterator> locked_rinorder() const {
-        return LockedTraversalView<BackwardIterator>(*this);
-    }
-
     std::ostream& write(std::ostream& os) const {
         std::lock_guard lock(m_mutex);
-        return container_stream::write(os, PreOrderIterator(m_root), PreOrderIterator(nullptr));
+        os << '[';
+        bool first = true;
+        writeNodes(os, m_root, first);
+        return os << ']';
     }
 
     std::istream& read(std::istream& is) {
@@ -207,10 +170,6 @@ public:
         return is;
     }
 
-    void printIndented(std::ostream& os) const {
-        std::lock_guard lock(m_mutex);
-        printIndented(os, m_root, 0);
-    }
 };
 
 #endif // __BINARYTREE_H__
