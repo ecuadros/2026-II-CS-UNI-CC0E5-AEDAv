@@ -5,23 +5,20 @@
 
 template <typename Node, bool Reverse = false>
 class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<Node, Reverse>, Node> {
-    using Parent = GeneralIterator<BinaryTreeIterator<Node, Reverse>, Node>;
-
-    static Node* extreme(Node* node) {
-        while (node && node->m_pChild[Reverse ? 1 : 0])
-            node = node->m_pChild[Reverse ? 1 : 0];
-        return node;
-    }
-
 public:
-    BinaryTreeIterator() : Parent(nullptr) {}
+    using value_type        = Node;
+    using MySelf            = BinaryTreeIterator<Node, Reverse>;
+    using Parent            = GeneralIterator<MySelf, Node>;
+    using Parent::Parent; // Inherit constructor
 
-    explicit BinaryTreeIterator(Node* root) : Parent(extreme(root)) {}
-
+    // Prefix increment
     BinaryTreeIterator& operator++() {
         Node* cur = Parent::m_ptr;
         if (cur->m_pChild[Reverse ? 0 : 1]) {
-            Parent::m_ptr = extreme(cur->m_pChild[Reverse ? 0 : 1]);
+            cur = cur->m_pChild[Reverse ? 0 : 1];
+            while (cur->m_pChild[Reverse ? 1 : 0])
+                cur = cur->m_pChild[Reverse ? 1 : 0];
+            Parent::m_ptr = cur;
         } else {
             Node* p = cur->m_pParent;
             while (p && cur == p->m_pChild[Reverse ? 0 : 1]) {
@@ -31,12 +28,6 @@ public:
             Parent::m_ptr = p;
         }
         return *this;
-    }
-
-    BinaryTreeIterator operator++(int) {
-        auto previous = *this;
-        ++*this;
-        return previous;
     }
 };
 

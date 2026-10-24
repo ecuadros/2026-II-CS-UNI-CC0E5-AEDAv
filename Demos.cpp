@@ -247,9 +247,9 @@ void DemoVector() {
     const auto& constVec = vec;
     vector<Ref> forwardRefs;
     vector<Ref> backwardRefs;
-    for (auto it = constVec.begin(); it != constVec.end(); it++)
+    for (auto it = constVec.begin(); it != constVec.end(); ++it)
         forwardRefs.push_back(it->getRef());
-    for (auto it = constVec.rbegin(); it != constVec.rend(); it++)
+    for (auto it = constVec.rbegin(); it != constVec.rend(); ++it)
         backwardRefs.push_back(it->getRef());
     std::reverse(backwardRefs.begin(), backwardRefs.end());
     if (forwardRefs.size() != vec.size() || forwardRefs != backwardRefs)

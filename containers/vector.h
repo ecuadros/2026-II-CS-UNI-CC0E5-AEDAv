@@ -20,37 +20,19 @@ public:
     using Parent::Parent; // Inherit constructor
 
     // Prefix increment
-    T* operator->() const { return Parent::m_ptr; }
     VectorForwardIterator& operator++() { ++Parent::m_ptr; return *this; }
-    VectorForwardIterator operator++(int) {
-        auto previous = *this;
-        ++*this;
-        return previous;
-    }
 };
 
 template <typename T>
-class VectorBackwardIterator {
+class VectorBackwardIterator : public GeneralIterator<VectorBackwardIterator<T>, T> {
 public:
-    using iterator_category = std::forward_iterator_tag;
-    using difference_type = std::ptrdiff_t;
-    using value_type = T;
-    using pointer = T*;
-    using reference = T&;
-    explicit VectorBackwardIterator(pointer base) : m_base(base) {}
-    reference operator*() const { return *(m_base - 1); }
-    pointer operator->() const { return m_base - 1; }
-    VectorBackwardIterator& operator++() { --m_base; return *this; }
-    VectorBackwardIterator operator++(int) {
-        auto previous = *this;
-        ++*this;
-        return previous;
-    }
-    friend bool operator==(const VectorBackwardIterator& a, const VectorBackwardIterator& b) {
-        return a.m_base == b.m_base;
-    }
-private:
-    pointer m_base;
+    using value_type        = T;
+    using MySelf            = VectorBackwardIterator<T>;
+    using Parent            = GeneralIterator<MySelf, T>;
+    using Parent::Parent; // Inherit constructor
+
+    // Prefix increment
+    VectorBackwardIterator& operator++() { --Parent::m_ptr; return *this; }
 };
 
 template <typename Traits>
@@ -183,19 +165,15 @@ public:
         m_capacity = 0;
     }
 
-    ForwardIterator begin() { return ForwardIterator(m_data); }
-    ForwardIterator end() { return ForwardIterator(m_data ? m_data + m_size : nullptr); }
-    BackwardIterator rbegin() { return BackwardIterator(m_data ? m_data + m_size : nullptr); }
-    BackwardIterator rend() { return BackwardIterator(m_data); }
+    ForwardIterator   begin() { return ForwardIterator(m_data); }
+    ForwardIterator   end()   { return ForwardIterator(m_data + m_size); }
+    BackwardIterator rbegin() { return BackwardIterator(m_data + m_size - 1); }
+    BackwardIterator rend()   { return BackwardIterator(m_data - 1); }
 
-    ConstForwardIterator begin() const { return ConstForwardIterator(m_data); }
-    ConstForwardIterator end() const {
-        return ConstForwardIterator(m_data ? m_data + m_size : nullptr);
-    }
-    ConstBackwardIterator rbegin() const {
-        return ConstBackwardIterator(m_data ? m_data + m_size : nullptr);
-    }
-    ConstBackwardIterator rend() const { return ConstBackwardIterator(m_data); }
+    ConstForwardIterator  begin()  const { return ConstForwardIterator(m_data); }
+    ConstForwardIterator  end()    const { return ConstForwardIterator(m_data + m_size); }
+    ConstBackwardIterator rbegin() const { return ConstBackwardIterator(m_data + m_size - 1); }
+    ConstBackwardIterator rend()   const { return ConstBackwardIterator(m_data - 1); }
 
     // Persistencia
     ostream &write(ostream &os) const {
