@@ -2,6 +2,7 @@
 #define __HEAP_H__
 
 #include "traits.h"
+#include "vector.h"
 #include "container_stream.h"
 #include "traversalops.h"
 #include <cstddef>
@@ -10,7 +11,9 @@
 
 template <typename Traits> class Heap : public SearchTraversalOps<Heap<Traits>> {
     friend class CallOp<Heap>;
+    friend class RCallOp<Heap>;
     friend class FirstThatOp<Heap>;
+    friend class RFirstThatOp<Heap>;
 
 public:
     using container_stream_tag = void;
@@ -30,23 +33,23 @@ private:
     void HeapifyUp(size_t index) {
         Compare compare;
         while (index > 0) {
-            size_t parentIndex = (index - 1) / 2;
-            if (!compare(m_data[index].getValue(), m_data[parentIndex].getValue())) break;
-            std::swap(m_data[index], m_data[parentIndex]);
-            index = parentIndex;
+            const auto parent = (index - 1) / 2;
+            if (!compare(m_data[index].getValue(), m_data[parent].getValue())) break;
+            std::swap(m_data[index], m_data[parent]);
+            index = parent;
         }
     }
 
     void HeapifyDown(size_t index) {
         Compare compare;
-        const size_t n = m_data.size();
-        while (index < n && index < n / 2) {
-            const size_t left = 2 * index + 1;
-            const size_t right = left + 1;
-            size_t best = index;
-            if (left < n && compare(m_data[left].getValue(), m_data[best].getValue())) best = left;
-            if (right < n && compare(m_data[right].getValue(), m_data[best].getValue())) best = right;
-            if (best == index) break;
+        const auto size = m_data.size();
+        while (index < size / 2) {
+            const auto left = 2 * index + 1;
+            const auto right = left + 1;
+            auto best = left;
+            if (right < size && compare(m_data[right].getValue(), m_data[left].getValue()))
+                best = right;
+            if (!compare(m_data[best].getValue(), m_data[index].getValue())) break;
             std::swap(m_data[index], m_data[best]);
             index = best;
         }
@@ -56,9 +59,7 @@ public:
     Heap() = default;
 
     Heap(std::initializer_list<std::pair<value_type, Ref>> initList) {
-        for (const auto& pair : initList) {
-            push(pair.first, pair.second);
-        }
+        for (const auto& [value, ref] : initList) push(value, ref);
     }
 
     ForwardIterator begin() const { return m_data.begin(); }
@@ -93,9 +94,7 @@ public:
         Node root = m_data[0];
         std::swap(m_data[0], m_data[m_data.size() - 1]);
         m_data.pop_back();
-        if (!m_data.empty()) {
-            HeapifyDown(0);
-        }
+        if (!m_data.empty()) HeapifyDown(0);
         return root;
     }
 

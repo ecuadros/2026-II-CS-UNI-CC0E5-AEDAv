@@ -3,9 +3,8 @@
 
 #include "listnodes.h"
 #include "GeneralNode.h"
-#include "vector.h"
+#include "treeiterator.h"
 #include <functional>
-#include <utility>
 
 template <typename T> class VectorForwardIterator;
 template <typename T> class VectorBackwardIterator;
@@ -53,21 +52,20 @@ template <class T> using DoubleLinkedListAscTraits = DoubleLinkedListTraits<T, s
 
 template <class T> using DoubleLinkedListDescTraits = DoubleLinkedListTraits<T, std::greater<T>>;
 
-template <typename T, typename Comparator = std::less<T>,
-          typename StorageType = Vector<VectorAscTraits<T>>>
+template <typename T, typename Comparator>
 struct HeapTraits {
     using value_type = T;
-    using Storage = StorageType;
+    using Storage = Vector<VectorAscTraits<T>>;
     using Node = typename Storage::Node;
     using compare_type = Comparator;
-    using ForwardIterator = decltype(std::declval<const Storage&>().begin());
-    using BackwardIterator = decltype(std::declval<const Storage&>().rbegin());
+    using ForwardIterator = typename Storage::ConstForwardIterator;
+    using BackwardIterator = typename Storage::ConstBackwardIterator;
 };
 
-template <typename T, typename StorageType = Vector<VectorAscTraits<T>>>
-struct MinHeapTraits : HeapTraits<T, std::less<T>, StorageType> {};
+template <typename T>
+using MinHeapTraits = HeapTraits<T, std::less<T>>;
 
-template <typename T, typename StorageType = Vector<VectorAscTraits<T>>>
-struct MaxHeapTraits : HeapTraits<T, std::greater<T>, StorageType> {};
+template <typename T>
+using MaxHeapTraits = HeapTraits<T, std::greater<T>>;
 
 #endif // __CONTAINERS_TRAITS_H__

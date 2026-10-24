@@ -53,18 +53,12 @@ private:
     pointer m_base;
 };
 
-template <typename T>
-struct VectorAscTraits {
-    using value_type        = T;
-    using Node              = GeneralNode<T>;
-    using ForwardIterator   = VectorForwardIterator<Node>;  // itera sobre Node, no sobre T
-    using BackwardIterator  = VectorBackwardIterator<Node>; // itera sobre Node, no sobre T
-};
-
 template <typename Traits>
 class Vector : public FullTraversalOps<Vector<Traits>> {
     friend class CallOp<Vector>;
+    friend class RCallOp<Vector>;
     friend class FirstThatOp<Vector>;
+    friend class RFirstThatOp<Vector>;
     friend class ApplyFunctionOp<Vector>;
 public:
     using container_stream_tag = void;

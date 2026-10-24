@@ -29,7 +29,9 @@ private:
 
 template <typename Traits> class BinaryTree : public SearchTraversalOps<BinaryTree<Traits>> {
     friend class CallOp<BinaryTree>;
+    friend class RCallOp<BinaryTree>;
     friend class FirstThatOp<BinaryTree>;
+    friend class RFirstThatOp<BinaryTree>;
 
 public:
     using container_stream_tag = void;
@@ -50,19 +52,34 @@ public:
         Iterator end() const { return Iterator(nullptr); }
     };
 
+    // The view owns the lock for the entire range-for loop, including dereferences.
+    template <typename Iterator> class LockedTraversalView {
+        std::unique_lock<std::mutex> m_lock;
+        TraversalView<Iterator> m_view;
+
+    public:
+        explicit LockedTraversalView(const BinaryTree& tree)
+            : m_lock(tree.m_mutex), m_view(tree.m_root) {}
+        Iterator begin() const { return m_view.begin(); }
+        Iterator end() const { return m_view.end(); }
+    };
+
 private:
     NodePtr m_root = nullptr; // root of the binary tree
     std::size_t m_size = 0;
     mutable std::mutex m_mutex;
 
     void internal_insert(NodePtr& node, const value_type& value, Ref ref) {
-        if (!node) {
-            node = new Node(value, ref);
-            ++m_size;
-            return;
-        }
-        auto branch = value > node->getValue();
-        internal_insert(node->m_pChild[branch], value, ref);
+        NodePtr* slot = &node;
+        while (*slot)
+            slot = &(*slot)->m_pChild[value > (*slot)->getValue()];
+        *slot = new Node(value, ref);
+        ++m_size;
+    }
+
+    void swapState(BinaryTree& other) {
+        std::swap(m_root, other.m_root);
+        std::swap(m_size, other.m_size);
     }
 
     void destroy(NodePtr node) {
@@ -115,8 +132,7 @@ public:
         if (this == &other) return *this;
         BinaryTree copy(other);
         std::lock_guard lock(m_mutex);
-        std::swap(m_root, copy.m_root);
-        std::swap(m_size, copy.m_size);
+        swapState(copy);
         return *this;
     }
 
@@ -161,28 +177,33 @@ public:
     ForwardIterator end() const { return ForwardIterator(nullptr); }
     BackwardIterator rbegin() const { return BackwardIterator(m_root); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
-    TraversalView<PreOrderIterator> preorder() const {
-        return TraversalView<PreOrderIterator>(m_root);
+
+    TraversalView<PreOrderIterator> preorder() const { return TraversalView<PreOrderIterator>(m_root); }
+    TraversalView<ForwardIterator> inorder() const { return TraversalView<ForwardIterator>(m_root); }
+    TraversalView<PostOrderIterator> postorder() const { return TraversalView<PostOrderIterator>(m_root); }
+    LockedTraversalView<PreOrderIterator> locked_preorder() const {
+        return LockedTraversalView<PreOrderIterator>(*this);
     }
-    TraversalView<ForwardIterator> inorder() const {
-        return TraversalView<ForwardIterator>(m_root);
+    LockedTraversalView<ForwardIterator> locked_inorder() const {
+        return LockedTraversalView<ForwardIterator>(*this);
     }
-    TraversalView<PostOrderIterator> postorder() const {
-        return TraversalView<PostOrderIterator>(m_root);
+    LockedTraversalView<PostOrderIterator> locked_postorder() const {
+        return LockedTraversalView<PostOrderIterator>(*this);
+    }
+    LockedTraversalView<BackwardIterator> locked_rinorder() const {
+        return LockedTraversalView<BackwardIterator>(*this);
     }
 
     std::ostream& write(std::ostream& os) const {
         std::lock_guard lock(m_mutex);
-        auto view = preorder();
-        return container_stream::write(os, view.begin(), view.end());
+        return container_stream::write(os, PreOrderIterator(m_root), PreOrderIterator(nullptr));
     }
 
     std::istream& read(std::istream& is) {
         BinaryTree parsed;
         if (!container_stream::read(is, parsed)) return is;
         std::lock_guard lock(m_mutex);
-        std::swap(m_root, parsed.m_root);
-        std::swap(m_size, parsed.m_size);
+        swapState(parsed);
         return is;
     }
 

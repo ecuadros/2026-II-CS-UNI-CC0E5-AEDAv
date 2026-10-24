@@ -10,7 +10,9 @@
 template <typename Traits, bool Double = false, bool Circular = false>
 class LinkedList : public FullTraversalOps<LinkedList<Traits, Double, Circular>> {
     friend class CallOp<LinkedList>;
+    friend class RCallOp<LinkedList>;
     friend class FirstThatOp<LinkedList>;
+    friend class RFirstThatOp<LinkedList>;
     friend class ApplyFunctionOp<LinkedList>;
 public:
     using container_stream_tag = void;

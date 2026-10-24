@@ -7,25 +7,27 @@
 
 namespace container_stream {
 
+using Delim = std::istream::char_type;
+
+inline bool expect(std::istream& is, Delim wanted) {
+    Delim actual;
+    if (!(is >> actual)) return false;
+    if (actual == wanted) return true;
+    is.setstate(std::ios::failbit);
+    return false;
+}
+
 template <class It> std::ostream& write(std::ostream& os, It first, It last) {
     os << Delim{'['};
-    for (bool separator = false; first != last; ++first) {
-        if (separator) os << Delim{','};
+    if (first != last) {
         os << *first;
-        separator = true;
+        while (++first != last) os << Delim{','} << *first;
     }
     return os << Delim{']'};
 }
 
 template <class Container> bool read(std::istream& is, Container& destination) {
-    auto expect = [&is](Delim wanted) {
-        Delim actual;
-        if (!(is >> actual)) return false;
-        if (actual == wanted) return true;
-        is.setstate(std::ios::failbit);
-        return false;
-    };
-    if (!expect('[')) return false;
+    if (!expect(is, '[')) return false;
     is >> std::ws;
     if (is.peek() == ']') {
         is.get();
@@ -34,7 +36,7 @@ template <class Container> bool read(std::istream& is, Container& destination) {
     while (true) {
         typename Container::value_type value;
         Ref ref;
-        if (!expect('(') || !(is >> value) || !expect(',') || !(is >> ref) || !expect(')'))
+        if (!expect(is, '(') || !(is >> value) || !expect(is, ',') || !(is >> ref) || !expect(is, ')'))
             return false;
         destination.push_back(value, ref);
         Delim separator;
