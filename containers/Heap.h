@@ -33,13 +33,6 @@ public:
 private:
     Vector<Traits> m_data;
 
-    // Reconstruye el heap en O(n) (algoritmo de Floyd).
-    // Debe llamarse con m_mutex ya bloqueado.
-    void rebuild_unlocked() {
-        for (size_t i = m_data.size() / 2; i-- > 0; )
-            HeapifyDown(i);
-    }
-
 public:
     ForwardIterator begin() override { return m_data.begin(); }
     ForwardIterator end() override { return m_data.end();   }
@@ -105,39 +98,12 @@ public:
         std::scoped_lock lock(this->m_mutex);
         m_data.clear();
     }
-
-    // Reconstruye el heap por si los valores se modificaron externamente.
-    void rebuild() {
-        std::scoped_lock lock(this->m_mutex);
-        rebuild_unlocked();
-    }
-
-    // Aplica una funcion a todos los nodos. Como el callback puede modificar
-    // los valores y romper la propiedad del heap, se reconstruye al final.
-    template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args&&... args) {
-        std::scoped_lock lock(this->m_mutex);
-        try {
-            ::call(begin(), end(), func, std::forward<Args>(args)...);
-        } catch (...) {
-            rebuild_unlocked();
-            throw;
-        }
-        rebuild_unlocked();
-    }
-
 };
 
 template <typename T, typename Traits=HeapAscTraits<T>>
-class MinHeap : public Heap<Traits> {
-
-};
+class MinHeap : public Heap<Traits> {};
 
 template <typename T, typename Traits=HeapDescTraits<T>>
-class MaxHeap : public Heap<Traits> {
-
-};
-
-
+class MaxHeap : public Heap<Traits> {};
 
 #endif // __HEAP_H__

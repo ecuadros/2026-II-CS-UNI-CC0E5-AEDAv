@@ -22,28 +22,26 @@ public:
     NodePtr m_pParent   = nullptr;
 };
 
-template <typename T, bool _isForward>
-class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T,_isForward>, BinaryTreeNode<T>> {
+template <typename T, bool _Branch>
+class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T,_Branch>, BinaryTreeNode<T>> {
 public:
     using Node      = BinaryTreeNode<T>;
     using value_type = Node;
-    using MySelf    = BinaryTreeIterator<T, _isForward>;
+    using MySelf    = BinaryTreeIterator<T, _Branch>;
     using Parent    = GeneralIterator<MySelf, value_type>;
     using Parent::Parent; // Inherit constructor
 
     BinaryTreeIterator& operator++() {
         Node* current = Parent::m_ptr;
-        //if (!current) return *this;
+        if (!current) return *this;
 
-        if (current->m_pChild[_isForward]) {
-            // Successor: leftmost node of the right subtree.
-            current = current->m_pChild[_isForward];
-            while (current->m_pChild[!_isForward])
-                current = current->m_pChild[!_isForward];
+        if (current->m_pChild[!_Branch]) {
+            current = current->m_pChild[!_Branch];
+            while (current->m_pChild[_Branch])
+                current = current->m_pChild[_Branch];
         } else {
-            // Successor: first ancestor of which current is a left child.
             Node* parent = current->m_pParent;
-            while (parent && current == parent->m_pChild[_isForward]) {
+            while (parent && current == parent->m_pChild[!_Branch]) {
                 current = parent;
                 parent  = parent->m_pParent;
             }
@@ -54,13 +52,13 @@ public:
     }
 };
 
-// Recorrido in-order: left - node - right.
-template <typename T, bool _isForward = true>
-class BinaryTreeForwardIterator : public BinaryTreeIterator<T, _isForward> {};
+// Recorrido left - node - right.
+template <typename T, bool _Branch = 0>
+class BinaryTreeForwardIterator : public BinaryTreeIterator<T, _Branch> {};
 
-// Recorrido in-order inverso: right - node - left.
-template <typename T, bool _isForward = false>
-class BinaryTreeBackwardIterator : public BinaryTreeIterator<T, _isForward> {};
+// Recorrido  right - node - left.
+template <typename T, bool _Branch = 1>
+class BinaryTreeBackwardIterator : public BinaryTreeIterator<T, _Branch> {};
 
 
 template <typename T>
@@ -89,7 +87,6 @@ public:
 
 private:
     NodePtr m_root = nullptr; // root of the binary tree
-    //Compare m_comp{};
 
     void internal_insert(NodePtr& node, NodePtr parent, const value_type& value, Ref ref) {
         if (!node) {
@@ -130,42 +127,31 @@ public:
             insert(v.first, v.second);
     }
 
+    //Copia
     BinaryTree(const BinaryTree& another) {
-        //scoped_lock lock(another.m_mutex);
         *this = another;
-        /*m_comp = other.m_comp;
-        m_root = internal_clone(other.m_root, nullptr);*/
     }
 
+    //Copia
     BinaryTree& operator=(const BinaryTree& another) {
-        //if (this == &another) return *this;
         std::scoped_lock lock(this->m_mutex, another.m_mutex);
         internal_clear(m_root);
         for (const auto& node : another)
             push_back(node.getValue(), node.getRef());
-        /*m_comp = other.m_comp;
-        m_root = internal_clone(other.m_root, nullptr);*/
-
         return *this;
     }
 
+    //Move
     BinaryTree(BinaryTree&& another) noexcept {
-        //scoped_lock lock(other.m_mutex);
-        //m_root = another.m_root;
-        //m_comp = std::move(other.m_comp);
-
-        // Dejar el objeto origen en un estado válido y vacío
-        //another.m_root = nullptr;
         *this = another;
     }
 
+    //Move
     BinaryTree& operator=(BinaryTree&& another) noexcept {
-        //if (this == &another) return *this;
         std::scoped_lock lock(this->m_mutex, another.m_mutex);
         internal_clear(m_root);
         m_root = another.m_root;
-        //m_comp = std::move(other.m_comp);
-        another.m_root = nullptr; // Dejar origen vacío
+        another.m_root = nullptr;
         return *this;
     }
 
@@ -175,8 +161,8 @@ public:
         scoped_lock lock(this->m_mutex);
         internal_insert(m_root, nullptr, value, ref);
     }
+
     void push(const value_type& value, Ref ref) { insert(value, ref); }
-    void push_back(const value_type& value, Ref ref) { insert(value, ref); }
 
     void clear() {
         scoped_lock lock(this->m_mutex);
@@ -189,8 +175,6 @@ public:
     std::ostream& write(std::ostream& os) { return os << *this; }
     std::istream& read(std::istream& is) { return is >> *this; }
 
-    // Iteradores: begin()/end() satisfacen la interfaz de Callable y
-    // rbegin()/rend() la de Recallable.
     ForwardIterator begin() override { return ForwardIterator(first(m_root)); }
     ForwardIterator end()   override { return ForwardIterator(nullptr); }
 
@@ -207,7 +191,6 @@ public:
         this->call(func, std::forward<Args>(args)...);
     }
 
-    // rcall() se hereda de Recallable y recorre el arbol en sentido inverso.
     // Move constructor and move assignment operator
     // Persistencia (operator << y operator >> globales para todas las estructuras pero si es para BT con indentacion entonces hacerlo por separado)
     // FirstThat, ForEach, call, rcall por herencia
