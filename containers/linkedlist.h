@@ -95,20 +95,6 @@ public:
         internalInsert(value, ref);
     }
 
-    std::ostream& write(std::ostream& os) const {
-        lock_guard lock(m_mutex);
-        auto first = true;
-        os << "[";
-        for (auto it = begin(); it != end(); ++it){
-            if (!first)
-                os << ",";
-            os << *it;
-            first = false;
-        }
-        return os << "]";
-    }
-    std::istream& read(std::istream& is) { return ReadContainer(is, *this); }
-
     // Iterators
     // ForwardIterator begin() { return ForwardIterator(m_pRoot); }
     // ForwardIterator end() { return ForwardIterator(nullptr); }

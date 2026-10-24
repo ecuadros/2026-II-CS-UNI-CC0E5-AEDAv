@@ -53,7 +53,7 @@ void Square(GeneralNode<TX> &node) {
 
 // Predicado generico para FirstThat/call: true si el valor del nodo es
 // mayor que 'threshold'. Generico en Node y T para servir tanto a
-// Vector<VectorAscTraits<TX>> (int) como a Vector<VectorAscTraits<string>>.
+// Vector<VectorTraits<TX>> (int) como a Vector<VectorTraits<string>>.
 template <typename Node, typename T>
 bool IsGreaterThan(Node &node, T threshold) {
     return node.getValue() > threshold;
@@ -81,15 +81,10 @@ void TestContainer(Container &container,
                     const string &filename) {
     InsertElements(container, values);
 
-    // Impresion usando write()
-    cout << "Container using write(): ";
-    container.write(cout);
-    cout << endl;
-
     // Escritura hacia un archivo, en modo append para acumular cada estado
     // (el archivo se deja vacio una vez al inicio, ver DemoVector)
     ofstream of(filename, ios::app);
-    container.write(of);
+    of << container;
     of << endl;
     of.close();
 
@@ -263,17 +258,17 @@ void DemoVector() {
     PrintSubtitle("Vector<int>");
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
-    Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
+    Vector<VectorTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
     TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
     TestTraversal(vec);
 
     PrintSubtitle("Vector<int> leido desde archivo");
-    Vector<VectorAscTraits<TX>> readVec;
+    Vector<VectorTraits<TX>> readVec;
     TestRead(readVec, "Vector", "vector.txt");
 
     PrintSubtitle("Vector<string>");
     ofstream("vector_str.txt", ios::trunc).close();
-    Vector<VectorAscTraits<string>> strVec;
+    Vector<VectorTraits<string>> strVec;
     TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
     TestTraversal(strVec);
 }
@@ -323,7 +318,7 @@ void TestRaceCondition(Container &container, const string &label, size_t N) {
 
 void DemoRaceCondition() {
     PrintTitle("Pruebas de concurrencia para Vector");
-    Vector<VectorAscTraits<TX>> vec;
+    Vector<VectorTraits<TX>> vec;
     TestRaceCondition(vec, "Vector", 200000);
 }
 
@@ -599,10 +594,9 @@ void DemoBinaryTree()
 
     const vector<pair<TX, Ref>> values = {{5, 15}, {1, 11}, {8, 18}, {3, 13}, {7, 17}, {3, 23}, {9, 19}};
 
-    PrintSubtitle("BinaryTree<int> ascendente: operator<< en preorden e impresion con indentacion");
+    PrintSubtitle("BinaryTree<int> ascendente: operator<<");
     IntTree tree;
     TestContainer(tree, values, "binarytree.txt");
-    tree.print(cout);
 
     PrintSubtitle("ForwardIterator y BackwardIterator");
     TestTraversal(tree);
@@ -611,7 +605,13 @@ void DemoBinaryTree()
     PrintSubtitle("operator>>: lectura desde archivo");
     IntTree readTree;
     TestRead(readTree, "BinaryTree", "binarytree.txt");
-    cout << "Misma forma que el original: " << (ToString(readTree) == ToString(tree) ? "si" : "no") << endl;
+    cout << "Mismos datos que el original: " << (ToString(readTree) == ToString(tree) ? "si" : "no") << endl;
+
+    PrintSubtitle("Constructor con initializer_list e insert con Ref por defecto");
+    IntTree listTree{{5, 15}, {1, 11}, {8, 18}};
+    listTree.insert(4);
+    cout << "BinaryTree desde initializer_list mas insert(4): " << listTree << endl;
+    TestSorted(listTree, "BinaryTree");
 
     PrintSubtitle("Constructor copia y operator= copia");
     TestCopy(tree, "BinaryTree", [](auto &t) { TestSorted(t, "BinaryTree"); });
@@ -630,13 +630,11 @@ void DemoBinaryTree()
     cout << "BinaryTree antes de ApplyFunction(Square): " << squares << endl;
     squares.ApplyFunction(Square);
     cout << "BinaryTree tras ApplyFunction(Square): " << squares << endl;
-    squares.print(cout);
     TestTraversal(squares);
 
     PrintSubtitle("BinaryTree<int> descendente");
     BinaryTree<BinaryTreeDescTraits<TX>> descTree;
     TestContainer(descTree, values, "binarytree.txt");
-    descTree.print(cout);
     TestSorted(descTree, "BinaryTree descendente");
     TestBackwardIterator(descTree);
 

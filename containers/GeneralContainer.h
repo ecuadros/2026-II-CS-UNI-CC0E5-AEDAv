@@ -13,6 +13,8 @@ protected:
 private:
     Derived& self() { return static_cast<Derived&>(*this); }
 public:
+    mutex& GetMutex() const { return m_mutex; }
+
     template <typename Func, typename... Args>
     void ApplyFunction(Func func, Args... args) {
         lock_guard<mutex> lock(m_mutex);

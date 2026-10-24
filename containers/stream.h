@@ -1,30 +1,34 @@
 #ifndef __STREAM_H__
 #define __STREAM_H__
 #include <iostream>
+#include "GeneralContainer.h"
 
-template <typename Container>
-concept Writable = requires(const Container &container, std::ostream &os) { container.write(os); };
-
-template <typename Container>
-concept Readable = requires(Container &container, std::istream &is) { container.read(is); };
-
-template <Writable Container>
-std::ostream &operator<<(std::ostream &os, const Container &container) {
-    return container.write(os);
+template <typename Derived>
+std::ostream &operator<<(std::ostream &os, const GeneralContainer<Derived> &base) {
+    const Derived &container = static_cast<const Derived &>(base);
+    std::lock_guard<std::mutex> lock(container.GetMutex());
+    auto first = true;
+    os << "[";
+    for (auto it = container.begin(); it != container.end(); ++it) {
+        if (!first)
+            os << ",";
+        os << *it;
+        first = false;
+    }
+    return os << "]";
 }
 
-template <Readable Container>
-std::istream &operator>>(std::istream &is, Container &container) {
-    return container.read(is);
-}
-
-template <typename Container>
-std::istream &ReadContainer(std::istream &is, Container &container) {
-    typename Container::Node::Delim d;
-    typename Container::Node node;
+template <typename Derived>
+std::istream &operator>>(std::istream &is, GeneralContainer<Derived> &base) {
+    Derived &container = static_cast<Derived &>(base);
+    typename Derived::Node::Delim d;
+    typename Derived::Node node;
     container.clear();
 
-    is >> d;
+    if (!(is >> d) || d != '[') {
+        is.setstate(std::ios::failbit);
+        return is;
+    }
     if (is >> d && d != ']') {
         is.unget();
         while (is >> node >> d) {

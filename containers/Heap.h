@@ -10,7 +10,7 @@
 template <typename T>
 struct HeapStructure {
     using Node              = GeneralNode<T>;
-    using Container         = Vector<VectorAscTraits<T>>;
+    using Container         = Vector<VectorTraits<T>>;
 };
 
 template <typename T>
@@ -100,18 +100,6 @@ public:
 
     auto begin() const { return m_data.begin(); }
     auto end()   const { return m_data.end();   }
-
-    ostream &write(ostream &os) const {
-        lock_guard<mutex> lock(m_mutex);
-        os << "[";
-        for (size_t i = 0; i < m_data.size(); ++i)
-            os << (i ? "," : "") << m_data[i];
-        return os << "]";
-    }
-
-    istream &read(istream &is) {
-        return ReadContainer(is, *this);
-    }
 };
 
 template <typename T>

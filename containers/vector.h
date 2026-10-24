@@ -34,7 +34,7 @@ public:
 };
 
 template <typename T>
-struct VectorAscTraits {
+struct VectorTraits {
     using value_type        = T;
     using Node              = GeneralNode<T>;
     using ForwardIterator   = VectorForwardIterator<Node>;  // itera sobre Node, no sobre T
@@ -150,22 +150,6 @@ public:
     ForwardIterator   end()   const { return ForwardIterator(m_data + m_size); }
     BackwardIterator rbegin() { return BackwardIterator(m_data + m_size - 1); }
     BackwardIterator rend()   { return BackwardIterator(m_data - 1); }
-
-    // Persistencia
-    ostream &write(ostream &os) const {
-        // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
-        lock_guard<mutex> lock(m_mutex);
-        os << "[";
-        for (size_t i = 0; i + 1 < size(); ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
-        return os << "]";
-    }
-
-    istream &read(istream &is) {
-        return ReadContainer(is, *this);
-    }
 };
 
 #endif // __VECTOR_H__
