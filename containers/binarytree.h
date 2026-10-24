@@ -166,7 +166,7 @@ private:
         ++m_size;
     }
 
-    static NodePtr clone(NodePtr src, NodePtr parent) {
+    NodePtr clone(NodePtr src, NodePtr parent) {
         if (!src) return nullptr;
         NodePtr node = new Node(src->getValue(), src->getRef());
         node->m_parent = parent;
@@ -175,18 +175,11 @@ private:
         return node;
     }
 
-    static void destroy(NodePtr root){
-        while(root){
-            if (NodePtr left = root->m_pChild[0]){
-                root->m_pChild[0] = left->m_pChild[1];
-                left->m_pChild[1] = root;
-                root = left;
-            } else {
-                NodePtr next = root->m_pChild[1];
-                delete root;
-                root = next;
-            }
-        }
+    void destroy(NodePtr root) {
+        if (!root) return;
+        destroy(root->m_pChild[0]);
+        destroy(root->m_pChild[1]);
+        delete root;
     }
 
     
