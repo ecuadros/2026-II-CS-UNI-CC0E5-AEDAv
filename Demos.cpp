@@ -15,6 +15,23 @@
 #include "containers/binarytree.h"
 using namespace std;
 
+// --- COLORES DE TEXTO ---
+const std::string TEXTO_BLANCO   = "\033[37m";
+const std::string TEXTO_NEGRO    = "\033[30m";
+const std::string TEXTO_ROJO     = "\033[31m";
+const std::string TEXTO_AMARILLO = "\033[33m";
+
+// --- COLORES DE FONDO ---
+const std::string FONDO_ROJO     = "\033[41m";
+const std::string FONDO_VERDE    = "\033[42m";
+const std::string FONDO_AZUL     = "\033[44m";
+const std::string FONDO_BLANCO   = "\033[47m";
+
+
+void printColor(const std::string& texto, const std::string& color_texto, const std::string& color_fondo) {
+    std::cout << color_fondo << color_texto << texto << "\033[0m\n";
+}
+
 void AddOne(GeneralNode<TX> &node) {
     node.value() += 1;
 }
@@ -301,17 +318,19 @@ void TestHeap(Heap &heap,
 }
 
 void DemoHeap() {
-    cout << "\nPruebas para Heap" << endl;
+    cout << endl;
+    printColor("PRUEBAS PARA HEAP", TEXTO_NEGRO , FONDO_BLANCO);
+    //cout << endl;
     const vector<pair<TX, Ref>> elements {
         {40, 0}, {50, 1}, {60, 2}, {70, 3},
         {55, 4}, {10, 5}, {77, 6}, {5, 7}
     };
 
-    cout << "\nMinHeap" << endl;
+    printColor("Min Heap", TEXTO_ROJO , FONDO_VERDE);
     MinHeap<TX> minheap;
     TestHeap(minheap, elements, "heap_min.txt");
+    printColor("Max Heap", TEXTO_ROJO , FONDO_VERDE);
 
-    cout << "\nMaxHeap" << endl;
     MaxHeap<TX> maxheap;
     TestHeap(maxheap, elements, "heap_max.txt");
 }

@@ -23,9 +23,6 @@ public:
     }
 };
 
-// La herencia virtual de Callable evita que una clase que combine varias
-// capacidades (por ejemplo Firstable + Recallable) tenga dos copias del
-// mutex y dos subobjetos Callable distintos.
 template <typename Derived, typename Traits>
 class Applicable: public virtual Callable<Derived, Traits> {
 public:
@@ -47,8 +44,6 @@ public:
 template <typename Derived, typename Traits>
 class Recallable: public virtual Callable<Derived, Traits> {
 protected:
-    // El recorrido inverso usa el iterador inverso del contenedor (no el
-    // ForwardIterator): rbegin()/rend() deben sobrescribir estas firmas.
     virtual typename Traits::BackwardIterator rbegin() = 0;
     virtual typename Traits::BackwardIterator rend() = 0;
 public:

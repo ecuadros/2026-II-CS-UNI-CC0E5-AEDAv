@@ -7,7 +7,6 @@
 #include <type_traits>
 #include <concepts>
 #include <ranges>
-//#include "GeneralNode.h"
 
 template <typename T>
 concept PrintableContainer =
@@ -31,8 +30,6 @@ std::ostream &operator<<(std::ostream &os, Container &container) {
     return os << "]";
 }
 
-// Lectura generica de cualquier contenedor que defina Node, Delim,
-// clear() y push(value, ref).
 template <typename T>
 concept ReadableContainer =
     requires {
