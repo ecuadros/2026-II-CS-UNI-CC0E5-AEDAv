@@ -23,13 +23,14 @@ private:
     template <typename, bool> friend class BinaryTreeIterator;
 
     NodePtr m_pChild[2] = {nullptr, nullptr};
+    NodePtr m_pParent = nullptr;
 };
 
-template <typename Traits> class BinaryTree : public SearchTraversalOps<BinaryTree<Traits>> {
-    friend class CallOp<BinaryTree>;
-    friend class RCallOp<BinaryTree>;
-    friend class FirstThatOp<BinaryTree>;
-    friend class RFirstThatOp<BinaryTree>;
+template <typename Traits> class BinaryTree : public SearchTraversalOps {
+    friend class CallOp;
+    friend class RCallOp;
+    friend class FirstThatOp;
+    friend class RFirstThatOp;
 
 public:
     using container_stream_tag = void;
@@ -45,9 +46,13 @@ private:
 
     void internal_insert(NodePtr& node, const value_type& value, Ref ref) {
         NodePtr* slot = &node;
-        while (*slot)
+        NodePtr parent = nullptr;
+        while (*slot) {
+            parent = *slot;
             slot = &(*slot)->m_pChild[value > (*slot)->getValue()];
+        }
         *slot = new Node(value, ref);
+        (*slot)->m_pParent = parent;
         ++m_size;
     }
 
@@ -63,12 +68,13 @@ private:
         delete node;
     }
 
-    NodePtr clone(NodePtr source) {
+    NodePtr clone(NodePtr source, NodePtr parent = nullptr) {
         if (!source) return nullptr;
         NodePtr copy = new Node(source->getValue(), source->getRef());
+        copy->m_pParent = parent;
         try {
-            copy->m_pChild[0] = clone(source->m_pChild[0]);
-            copy->m_pChild[1] = clone(source->m_pChild[1]);
+            copy->m_pChild[0] = clone(source->m_pChild[0], copy);
+            copy->m_pChild[1] = clone(source->m_pChild[1], copy);
         } catch (...) {
             destroy(copy);
             throw;

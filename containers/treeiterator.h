@@ -2,30 +2,34 @@
 #define CONTAINERS_TREEITERATOR_H
 
 #include "GeneralIterator.h"
-#include <stack>
 
 template <typename Node, bool Reverse = false>
 class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<Node, Reverse>, Node> {
     using Parent = GeneralIterator<BinaryTreeIterator<Node, Reverse>, Node>;
-    std::stack<Node*> m_pending;
 
-    void pushPath(Node* node) {
-        while (node) {
-            m_pending.push(node);
+    static Node* extreme(Node* node) {
+        while (node && node->m_pChild[Reverse ? 1 : 0])
             node = node->m_pChild[Reverse ? 1 : 0];
-        }
-        Parent::m_ptr = m_pending.empty() ? nullptr : m_pending.top();
+        return node;
     }
 
 public:
     BinaryTreeIterator() : Parent(nullptr) {}
 
-    explicit BinaryTreeIterator(Node* root) : Parent(nullptr) { pushPath(root); }
+    explicit BinaryTreeIterator(Node* root) : Parent(extreme(root)) {}
 
     BinaryTreeIterator& operator++() {
-        Node* node = m_pending.top();
-        m_pending.pop();
-        pushPath(node->m_pChild[Reverse ? 0 : 1]);
+        Node* cur = Parent::m_ptr;
+        if (cur->m_pChild[Reverse ? 0 : 1]) {
+            Parent::m_ptr = extreme(cur->m_pChild[Reverse ? 0 : 1]);
+        } else {
+            Node* p = cur->m_pParent;
+            while (p && cur == p->m_pChild[Reverse ? 0 : 1]) {
+                cur = p;
+                p = p->m_pParent;
+            }
+            Parent::m_ptr = p;
+        }
         return *this;
     }
 

@@ -8,12 +8,12 @@
 #include "container_stream.h"
 
 template <typename Traits, bool Double = false, bool Circular = false>
-class LinkedList : public FullTraversalOps<LinkedList<Traits, Double, Circular>> {
-    friend class CallOp<LinkedList>;
-    friend class RCallOp<LinkedList>;
-    friend class FirstThatOp<LinkedList>;
-    friend class RFirstThatOp<LinkedList>;
-    friend class ApplyFunctionOp<LinkedList>;
+class LinkedList : public FullTraversalOps {
+    friend class CallOp;
+    friend class RCallOp;
+    friend class FirstThatOp;
+    friend class RFirstThatOp;
+    friend class ApplyFunctionOp;
 public:
     using container_stream_tag = void;
     using traits_type       = Traits;

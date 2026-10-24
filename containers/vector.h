@@ -54,12 +54,12 @@ private:
 };
 
 template <typename Traits>
-class Vector : public FullTraversalOps<Vector<Traits>> {
-    friend class CallOp<Vector>;
-    friend class RCallOp<Vector>;
-    friend class FirstThatOp<Vector>;
-    friend class RFirstThatOp<Vector>;
-    friend class ApplyFunctionOp<Vector>;
+class Vector : public FullTraversalOps {
+    friend class CallOp;
+    friend class RCallOp;
+    friend class FirstThatOp;
+    friend class RFirstThatOp;
+    friend class ApplyFunctionOp;
 public:
     using container_stream_tag = void;
     using value_type        = Traits::value_type;

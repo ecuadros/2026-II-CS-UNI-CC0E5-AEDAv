@@ -7,11 +7,11 @@
 #include <initializer_list>
 #include <mutex>
 
-template <typename Traits> class Heap : public SearchTraversalOps<Heap<Traits>> {
-    friend class CallOp<Heap>;
-    friend class RCallOp<Heap>;
-    friend class FirstThatOp<Heap>;
-    friend class RFirstThatOp<Heap>;
+template <typename Traits> class Heap : public SearchTraversalOps {
+    friend class CallOp;
+    friend class RCallOp;
+    friend class FirstThatOp;
+    friend class RFirstThatOp;
 
 public:
     using container_stream_tag = void;
