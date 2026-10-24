@@ -155,17 +155,9 @@ public:
         m_size = 0;
     }
 
-    ForwardIterator begin() const {
-        NodePtr cur = m_root;
-        while (cur && cur->m_pChild[0]) cur = cur->m_pChild[0];
-        return ForwardIterator(cur);
-    }
+    ForwardIterator begin() const { return ForwardIterator(m_root); }
     ForwardIterator end() const { return ForwardIterator(nullptr); }
-    BackwardIterator rbegin() const {
-        NodePtr cur = m_root;
-        while (cur && cur->m_pChild[1]) cur = cur->m_pChild[1];
-        return BackwardIterator(cur);
-    }
+    BackwardIterator rbegin() const { return BackwardIterator(m_root); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
 
     std::ostream& write(std::ostream& os) const {
