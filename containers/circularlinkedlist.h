@@ -1,25 +1,31 @@
-#ifndef __CIRCULARLINKEDLIST_H__
-#define __CIRCULARLINKEDLIST_H__
+#ifndef __CIRCULAR_LINKEDLIST_H__
+#define __CIRCULAR_LINKEDLIST_H__
 #include "linkedlist.h"
 
-template <typename T>
-struct CircularLinkedListStructure {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListIterator<Node, true>;
-    static constexpr bool circular = true;
-    static constexpr bool doubly   = false;
-};
-
-template <typename T>
-using CircularLinkedListAscTraits = ListTraits<AscendingTraits<T>, CircularLinkedListStructure<T>>;
-
-template <typename T>
-using CircularLinkedListDescTraits = ListTraits<DescendingTraits<T>, CircularLinkedListStructure<T>>;
+template <typename Traits, template <typename> typename... Mixins>
+class BaseCircularLinkedList;
 
 template <typename Traits>
-class CircularLinkedList : public LinkedList<Traits> {
-    using Base = LinkedList<Traits>;
-    using Base::Base;
+using CircularLinkedList = BaseCircularLinkedList<Traits, Callable, Searchable, Applicable, Printable, Readable>;
+
+template <typename Traits, template <typename> typename... Mixins>
+class BaseCircularLinkedList : virtual public BaseLinkedList<Traits, Mixins...> {
+public:
+    using Parent = BaseLinkedList<Traits, Mixins...>;
+    using NodePtr = typename Parent::NodePtr;
+protected:
+    using Parent::m_pTail;
+    using Parent::m_pRoot;
+
+    void linkNode(NodePtr pNew, NodePtr pPrev, NodePtr pNext = nullptr) override {
+        if (m_pTail) m_pTail->m_pNext = m_pRoot;
+    }
+public:
+    BaseCircularLinkedList() = default;
+    BaseCircularLinkedList(const BaseCircularLinkedList& other) { *this = other; }
+    BaseCircularLinkedList(BaseCircularLinkedList&& other) noexcept { *this = std::move(other); }
+    BaseCircularLinkedList& operator=(const BaseCircularLinkedList& other) { Parent::operator=(other); return *this; }
+    BaseCircularLinkedList& operator=(BaseCircularLinkedList&& other) noexcept { Parent::operator=(std::move(other)); return *this; }
 };
 
 #endif

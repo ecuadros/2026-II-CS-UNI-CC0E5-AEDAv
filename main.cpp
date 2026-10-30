@@ -9,12 +9,8 @@ using namespace std;
 int main() {
     DemoVector();
     DemoRaceCondition();
-    DemoHeap();
     DemoLinkedList();
-    DemoCircularLinkedList();
-    DemoDoublyLinkedList();
-    DemoCircularDoublyLinkedList();
-    DemoTraits();
+    DemoHeap();
     DemoBinaryTree();
     return 0;
 }
