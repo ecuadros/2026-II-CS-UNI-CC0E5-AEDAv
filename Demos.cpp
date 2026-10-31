@@ -3,6 +3,11 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <numeric>
+#include <random>
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
@@ -11,6 +16,7 @@
 #include "containers/circulardoublelinkedlist.h"
 #include "containers/Heap.h"
 #include "containers/binarytree.h"
+#include "containers/avl.h"
 #include "utilities/printcolored.h"
 #include "Demos.h"
 using namespace std;
@@ -321,14 +327,104 @@ void DemoHeap() {
     TestHeap(maxHeap);
 }
 
+template <Traversal Order, TX Dir, typename TreeContainer>
+void TestTreeTraversal(TreeContainer &tree, const string &label) {
+    using Node = typename TreeContainer::Node;
+    cout << label << "[";
+    tree.template traverse<Order, Dir>(PrintNode<Node>, cout);
+    cout << "]" << endl;
+}
+
+template <typename TreeContainer>
+void TestTreeTraversals(TreeContainer &tree) {
+    TestTreeTraversal<Traversal::InOrder, 0>(tree, "Inorden asc:    ");
+    TestTreeTraversal<Traversal::InOrder, 1>(tree, "Inorden desc:   ");
+    TestTreeTraversal<Traversal::PreOrder, 0>(tree, "Preorden asc:   ");
+    TestTreeTraversal<Traversal::PreOrder, 1>(tree, "Preorden desc:  ");
+    TestTreeTraversal<Traversal::PostOrder, 0>(tree, "Postorden asc:  ");
+    TestTreeTraversal<Traversal::PostOrder, 1>(tree, "Postorden desc: ");
+}
+
+template <typename TreeContainer>
+void TestTreeRemove(TreeContainer &tree, const vector<typename TreeContainer::value_type> &values) {
+    for (const auto &value : values) {
+        if (tree.remove(value)) {
+            cout << "Arbol tras remove(" << value << "): " << tree << endl;
+            tree.print(cout);
+        } else {
+            cout << "remove(" << value << "): el valor no esta en el arbol" << endl;
+        }
+    }
+}
+
+template <typename TreeContainer>
+void TestInsertOrder(const vector<pair<typename TreeContainer::value_type, Ref>> &values) {
+    TreeContainer tree;
+    cout << "Insertando en orden:";
+    for (const auto &v : values) {
+        tree.insert(v.first, v.second);
+        cout << " " << v.first;
+    }
+    cout << endl;
+    tree.print(cout);
+}
+
+template <typename TreeContainer>
+vector<typename TreeContainer::value_type> InOrderValues(TreeContainer &tree) {
+    vector<typename TreeContainer::value_type> values;
+    tree.template traverse<Traversal::InOrder, 0>([&values](auto &node) { values.push_back(node.getValue()); });
+    return values;
+}
+
+template <typename TreeContainer>
+void TestTreeRaceCondition(TreeContainer &tree) {
+    vector<TX> values(20000);
+    iota(values.begin(), values.end(), 0);
+    shuffle(values.begin(), values.end(), mt19937(1));
+    tree.clear();
+
+    atomic<bool> done{false};
+    size_t unsorted = 0;
+    thread reader([&] {
+        while (!done) {
+            auto seen = InOrderValues(tree);
+            unsorted += !is_sorted(seen.begin(), seen.end(), typename TreeContainer::Compare());
+            this_thread::sleep_for(chrono::milliseconds(1));
+        }
+    });
+    vector<thread> workers;
+    for (size_t t = 0; t < NThreads; ++t) {
+        workers.emplace_back([&tree, &values, t] {
+            for (size_t i = t; i < values.size(); i += NThreads) {
+                tree.insert(values[i], values[i]);
+                if (values[i] % 2 == 0)
+                    tree.remove(values[i]);
+            }
+        });
+    }
+    for (auto &worker : workers)
+        worker.join();
+    done = true;
+    reader.join();
+
+    cout << "Concurrencia: " << NThreads << " hilos insertan " << values.size()
+         << " valores y quitan los pares mientras otro hilo recorre el arbol" << endl;
+    cout << "  quedaron " << InOrderValues(tree).size() << " nodos (se esperaban " << values.size() / 2
+         << "); recorridos desordenados: " << unsorted << endl;
+}
+
 template <typename TreeContainer>
 void TestBinaryTree(TreeContainer &tree, const string &filename) {
+    const vector<pair<typename TreeContainer::value_type, Ref>> values = {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}};
     ofstream(filename, ios::trunc).close();
 
     // Pruebas de insercion y persistencia
-    TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}}, filename);
+    TestContainer(tree, values, filename);
+    cout << "Visualizacion del arbol:" << endl;
+    tree.print(cout);
     // Recorrido in-order
     TestTraversal(tree);
+    TestTreeTraversals(tree);
 
     tree.ApplyFunction(AddOne);
     cout << "Arbol tras usar AddOne: " << tree << endl;
@@ -344,9 +440,16 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
     in >> new_tree;
     in.close();
     cout << "Arbol leido desde archivo: " << new_tree << endl;
+    cout << "Visualizacion del arbol leido:" << endl;
+    new_tree.print(cout);
 
     tree = new_tree;
     cout << "Arbol tras operator=: " << tree << endl;
+
+    tree.clear();
+    InsertElements(tree, values);
+    TestTreeRemove(tree, {50, 80, 20, 10, 99});
+    TestTreeRaceCondition(tree);
 }
 
 void DemoBinaryTree() {
@@ -354,4 +457,16 @@ void DemoBinaryTree() {
     PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
     BinaryTree<BinaryTreeAscTraits<TX>> tree;
     TestBinaryTree(tree, "binarytree.txt");
+}
+
+void DemoAVL() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para AVL", Color::Yellow);
+    using AVLTree = AVL<AVLAscTraits<TX>>;
+    AVLTree avl;
+    TestBinaryTree(avl, "avl.txt");
+    TestInsertOrder<AVLTree>({{30, 3}, {20, 2}, {10, 1}});
+    TestInsertOrder<AVLTree>({{10, 1}, {20, 2}, {30, 3}});
+    TestInsertOrder<AVLTree>({{30, 3}, {10, 1}, {20, 2}});
+    TestInsertOrder<AVLTree>({{10, 1}, {30, 3}, {20, 2}});
 }

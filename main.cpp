@@ -12,5 +12,6 @@ int main() {
     DemoLinkedList();
     DemoHeap();
     DemoBinaryTree();
+    DemoAVL();
     return 0;
 }
