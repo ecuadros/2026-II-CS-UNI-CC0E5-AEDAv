@@ -11,6 +11,7 @@
 #include "containers/circulardoublelinkedlist.h"
 #include "containers/Heap.h"
 #include "containers/binarytree.h"
+#include "containers/AVLTree.h"
 #include "utilities/printcolored.h"
 #include "Demos.h"
 using namespace std;
@@ -321,14 +322,50 @@ void DemoHeap() {
     TestHeap(maxHeap);
 }
 
+template <TX Order, TX Dir = Asc, typename TreeContainer>
+void TestTreeOrder(TreeContainer &tree, const string &title, Color color) {
+    PrintColored(cout, title, color, false);
+    cout << ": ";
+    for (auto it = tree.template begin<Order, Dir>(); it != tree.template end<Order, Dir>(); ++it)
+        cout << *it << " ";
+    cout << "\n";
+}
+
 template <typename TreeContainer>
 void TestBinaryTree(TreeContainer &tree, const string &filename) {
     ofstream(filename, ios::trunc).close();
 
     // Pruebas de insercion y persistencia
-    TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}}, filename);
+    TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}, {5, 0}, {15, 1}, {25, 2}, {35, 3}, {65, 6}, {75, 7}, {85, 8}, {95, 9}}, filename);
     // Recorrido in-order
     TestTraversal(tree);
+
+    cout << "Arbol girado 90 grados (arriba = hijo derecho):\n";
+    tree.PrintTree();
+
+    cout << "Los 6 recorridos con un solo iterador:\n";
+    TestTreeOrder<InOrder>(tree, "inorden asc", Color::Green);
+    TestTreeOrder<InOrder, Desc>(tree, "inorden desc", Color::Green);
+    TestTreeOrder<PreOrder>(tree, "preorden asc", Color::Yellow);
+    TestTreeOrder<PreOrder, Desc>(tree, "preorden desc", Color::Yellow);
+    TestTreeOrder<PostOrder>(tree, "postorden asc", Color::Cyan);
+    TestTreeOrder<PostOrder, Desc>(tree, "postorden desc", Color::Cyan);
+
+    // Pruebas de remove
+    auto removed = tree.remove(20);
+    cout << "remove(20) saco " << removed << ", arbol queda:\n";
+    tree.PrintTree();
+    removed = tree.remove(50);
+    cout << "remove(50) saco " << removed << ", arbol queda:\n";
+    tree.PrintTree();
+    removed = tree.remove(5);
+    cout << "remove(5) saco " << removed << ", arbol queda:\n";
+    tree.PrintTree();
+    removed = tree.remove(80);
+    cout << "remove(80) saco " << removed << ", arbol queda:\n";
+    tree.PrintTree();
+    removed = tree.remove(99);
+    cout << "remove(99) saco " << removed << ", arbol queda: " << tree << endl;
 
     tree.ApplyFunction(AddOne);
     cout << "Arbol tras usar AddOne: " << tree << endl;
@@ -354,4 +391,29 @@ void DemoBinaryTree() {
     PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
     BinaryTree<BinaryTreeAscTraits<TX>> tree;
     TestBinaryTree(tree, "binarytree.txt");
+}
+
+void DemoAVLTree() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para AVLTree (reutiliza BinaryTree)", Color::Yellow);
+
+    AVLTree<AVLTreeAscTraits<TX>> rotations;
+    for (TX v : {30, 10, 20}) {
+        rotations.insert(v, v / 10);
+        cout << "Insert " << v << ":\n";
+        rotations.PrintTree();
+    }
+
+    // El mismo demo del BinaryTree
+    // Secuencia creciente: en un BST quedaria cadena de altura 7
+    cout << "Insertando solo hacia la derecha (10..70):\n";
+    AVLTree<AVLTreeAscTraits<TX>> chain;
+    for (TX v : {10, 20, 30, 40, 50, 60, 70}) {
+        chain.insert(v, v / 10);
+        cout << "Insert " << v << ":\n";
+        chain.PrintTree();
+    }
+
+    AVLTree<AVLTreeAscTraits<TX>> tree;
+    TestBinaryTree(tree, "avltree.txt");
 }
