@@ -20,11 +20,17 @@ public:
 
 };
 
-template <typename T, TX Dir>
-class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T, Dir>, BinaryTreeNode<T>> {
+enum class TransversarOrder {
+    PreOrder,
+    InOrder,
+    PostOrder
+};
+
+template <typename T, TransversarOrder TrOrder, TX Dir>
+class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T, TrOrder, Dir>, BinaryTreeNode<T>> {
 public:
     using Node = BinaryTreeNode<T>;
-    using MySelf = BinaryTreeIterator<T, Dir>;
+    using MySelf = BinaryTreeIterator<T, TrOrder, Dir>;
     using Parent = GeneralIterator<MySelf, Node>;
     using NodePtr = Node*;
     using Parent::Parent;
@@ -33,46 +39,86 @@ public:
     MySelf& operator++();
 };
 
-template <typename T, TX Dir>
-auto BinaryTreeIterator<T, Dir>::operator++() -> MySelf& {
+template <typename T, TransversarOrder TrOrder, TX Dir>
+auto BinaryTreeIterator<T, TrOrder, Dir>::operator++() -> MySelf& {
     auto node = Parent::m_ptr;
     if (node == nullptr)
         return *this;
-    if (node->m_pChild[1-Dir]) {
-        node = node->m_pChild[1-Dir];
-        while (node->m_pChild[Dir])
-            node = node->m_pChild[Dir];
-        Parent::m_ptr = node;
-    } else {
-        auto parent = node->m_parent;
-        while (parent && node == parent->m_pChild[1-Dir]) {
-            node = parent;
-            parent = parent->m_parent;
-        }
-        Parent::m_ptr = parent;
+    switch (TrOrder) {
+        case TransversarOrder::InOrder:
+            if (node->m_pChild[1-Dir]) {
+                node = node->m_pChild[1-Dir];
+                while (node->m_pChild[Dir])
+                    node = node->m_pChild[Dir];
+                Parent::m_ptr = node;
+            }
+            else {
+                auto parent = node->m_parent;
+                while (parent && node == parent->m_pChild[1-Dir]) {
+                    node = parent;
+                    parent = parent->m_parent;
+                }
+                Parent::m_ptr = parent;
+            }
+            return *this;
+        case TransversarOrder::PreOrder:
+            if (node->m_pChild[Dir]) {
+                Parent::m_ptr = node->m_pChild[Dir];
+            }
+            else if (node->m_pChild[1-Dir]) {
+                Parent::m_ptr = node->m_pChild[1-Dir];
+            }
+            else {
+                auto parent = node->m_parent;
+                while (parent && (parent->m_pChild[1-Dir] == nullptr || node == parent->m_pChild[1-Dir])) {
+                    node = parent;
+                    parent = parent->m_parent;
+                }
+                Parent::m_ptr = parent ? parent->m_pChild[1-Dir] : nullptr;
+            }
+            return *this;
+        case TransversarOrder::PostOrder:
+            auto parent = node->m_parent;
+            if (!parent) {
+                Parent::m_ptr = nullptr;
+                return *this;
+            }
+            if (node == parent->m_pChild[Dir] && parent->m_pChild[1-Dir]) {
+                node = parent->m_pChild[1-Dir];
+                while (node->m_pChild[Dir] || node->m_pChild[1-Dir]) {
+                    if (node->m_pChild[Dir])
+                        node = node->m_pChild[Dir];
+                    else
+                        node = node->m_pChild[1-Dir];
+                }
+                Parent::m_ptr = node;
+            } else {
+                Parent::m_ptr = parent;
+            }
+            return *this;
     }
 
-    return *this;
 }
 
-template <typename T>
-using BinaryTreeForwardIterator = BinaryTreeIterator<T, 0>;
+template <typename T, TransversarOrder TrOrder>
+using BinaryTreeForwardIterator = BinaryTreeIterator<T, TrOrder, 0>;
 
-template <typename T>
-using BinaryTreeBackwardIterator = BinaryTreeIterator<T, 1>;
+template <typename T, TransversarOrder TrOrder>
+using BinaryTreeBackwardIterator = BinaryTreeIterator<T, TrOrder, 1>;
 
-template <typename T>
+template <typename T, TransversarOrder TrOrder>
 struct BinaryTreeTraits {
     using Node              = BinaryTreeNode<T>;
-    using ForwardIterator   = BinaryTreeForwardIterator<T>;
-    using BackwardIterator  = BinaryTreeBackwardIterator<T>;
+    using ForwardIterator   = BinaryTreeForwardIterator<T, TrOrder>;
+    using BackwardIterator  = BinaryTreeBackwardIterator<T, TrOrder>;
+    using Order             = TransversarOrder;
 };
 
-template <typename T>
-struct BinaryTreeAscTraits : public AscendingTraits<T>, public BinaryTreeTraits<T> {};
+template <typename T, TransversarOrder TrOrder>
+struct BinaryTreeAscTraits : public AscendingTraits<T>, public BinaryTreeTraits<T, TrOrder> {};
 
-template <typename T>
-struct BinaryTreeDescTraits : public DescendingTraits<T>, public BinaryTreeTraits<T> {};
+template <typename T, TransversarOrder TrOrder>
+struct BinaryTreeDescTraits : public DescendingTraits<T>, public BinaryTreeTraits<T, TrOrder> {};
 
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBinaryTree;
@@ -88,9 +134,11 @@ public:
     using typename Parent::value_type;
     using typename Parent::Node;
     using typename Parent::NodePtr;
-    using typename Parent::ForwardIterator;
+    //using typename Parent::ForwardIterator;
+    using ForwardIterator   = typename Traits::ForwardIterator;
     using BackwardIterator = typename Traits::BackwardIterator;
     using Compare = typename Traits::Compare;
+    using Order = typename Traits::Order;
 
 protected:
     using Parent::m_mutex;
@@ -182,5 +230,11 @@ auto BaseBinaryTree<Traits, Mixins...>::operator=(BaseBinaryTree&& another) noex
     this->move_from(another, [&]{ m_root = std::exchange(another.m_root, nullptr); });
     return *this;
 }
+
+template <typename Traits>
+class BinaryTreeInterface {
+    private:
+        BinaryTree<Traits> bt;
+};
 
 #endif // __BINARYTREE_H__

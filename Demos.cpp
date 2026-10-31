@@ -352,6 +352,6 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
 void DemoBinaryTree() {
     cout << "\n";
     PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
-    BinaryTree<BinaryTreeAscTraits<TX>> tree;
+    BinaryTree<BinaryTreeAscTraits<TX, TransversarOrder::PreOrder>> tree;
     TestBinaryTree(tree, "binarytree.txt");
 }
