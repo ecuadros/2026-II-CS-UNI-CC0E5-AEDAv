@@ -1,357 +1,696 @@
+
 #include <iostream>
-#include <fstream> // ofstream para escribir en archivo
+#include <fstream>
+#include <cstdio>
+#include <cerrno>
+#include <cstdlib>
 #include <string>
 #include <thread>
 #include <vector>
-#include "foreach.h"
-#include "containers/vector.h"
-#include "containers/linkedlist.h"
-#include "containers/doublelinkedlist.h"
-#include "containers/circularlinkedlist.h"
-#include "containers/circulardoublelinkedlist.h"
-#include "containers/Heap.h"
-#include "containers/binarytree.h"
-#include "utilities/printcolored.h"
+#include <algorithm>
+#include <functional>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
+#include <string_view>
+#include "containers/aliases.h"
+#include "containers/hashtable.h"
 #include "Demos.h"
-using namespace std;
 
-void AddOne(GeneralNode<TX> &node) {
+template <typename Container>
+using Values = std::vector<std::pair<typename Container::value_type, Ref>>;
+
+template <typename C>
+concept Insertable = requires(C& c, const typename C::value_type& v, Ref r) { c.insert(v, r); };
+
+template <typename C>
+concept HeapLike = requires(C& c) {
+    c.top();
+    c.pop();
+};
+
+template <typename C>
+concept TreeLike = requires(C& t, const typename C::value_type& v, std::ostream& os) {
+    t.InOrder();
+    t.PreOrder();
+    t.PostOrder();
+    t.height();
+    t.remove(v);
+    t.print_tree(os, visual::Layout::Sideways);
+};
+
+template <typename C>
+concept Mutable = requires(C& c) { c.ApplyFunction([](auto&) {}); };
+
+template <typename C>
+concept Circular = visual::CircularView<C>;
+
+template <typename C>
+concept Copyable = std::is_copy_constructible_v<C> && std::is_copy_assignable_v<C>;
+
+void AddOne(GeneralNode<TX>& node) {
     node.value() += 1;
 }
 
-template <typename T>
-void AddX(GeneralNode<T> &node, T x) {
+template <typename T> void AddX(GeneralNode<T>& node, T x) {
     node.value() += x;
 }
 
-void Square(GeneralNode<TX> &node) {
+void Square(GeneralNode<TX>& node) {
     node.value() *= node.value();
 }
 
-template <typename T>
-void ModX(GeneralNode<T> &node, T x) {
-    node.value() %= x;
-}
-
-// Predicado generico para FirstThat/call: true si el valor del nodo es
-// mayor que 'threshold'. Generico en Node y T para servir tanto a
-// Vector<VectorAscTraits<TX>> (int) como a Vector<VectorAscTraits<string>>.
-template <typename Node, typename T>
-bool IsGreaterThan(Node &node, T threshold) {
-    return node.getValue() > threshold;
-}
-
-template <typename Node>
-void PrintNode(Node &node, ostream &os) {
+template <typename Node> void PrintNode(const Node& node, std::ostream& os) {
     os << node << " ";
 }
-const TX NThreads = 5;
+const int NThreads = 5;
 
-// Inserta secuencialmente cada pareja (valor, ref) de 'values' en el
-// Container, una por una. La insercion concurrente queda aislada en
-// DemoRaceCondition(), que es donde se estudia esa problematica.
-template <typename Container>
-void InsertElements(Container &container,
-                     const vector<pair<typename Container::value_type, Ref>> &values) {
-    for (const auto &v : values)
-        container.push_back(v.first, v.second);
+template <typename Value>
+void PrintColor(const Value& value, std::string_view color = "1;36", std::ostream& os = std::cout) {
+    os << visual::Painter(os)(color, visual::to_text(value)) << '\n';
+}
+
+template <typename Function> void WithDemoFile(const std::string& filename, Function function) {
+    auto removeFile = [&filename] {
+        if (std::remove(filename.c_str()) != 0 && errno != ENOENT)
+            std::cerr << "No se pudo borrar " << filename << '\n';
+    };
+    try {
+        function();
+    } catch (...) {
+        removeFile();
+        throw;
+    }
+    removeFile();
+}
+
+template <typename Container> void SaveTo(const std::string& filename, const Container& container) {
+    std::ofstream file(filename, std::ios::trunc);
+    if (!file) throw std::runtime_error("No se pudo crear " + filename);
+    file << container << '\n';
+    if (!file) throw std::runtime_error("No se pudo escribir " + filename);
+}
+
+template <typename Container> void LoadFrom(const std::string& filename, Container& container) {
+    std::ifstream file(filename);
+    if (!file) throw std::runtime_error("No se pudo abrir " + filename);
+    if (!(file >> container)) throw std::runtime_error("No se pudo leer " + filename);
+}
+
+template <typename Container> void InsertAll(Container& container, const Values<Container>& values) {
+    for (const auto& [value, ref] : values)
+        container.insert(value, ref);
+}
+
+template <typename Iterator> struct Range {
+    Iterator first, last;
+    Iterator begin() const { return first; }
+    Iterator end() const { return last; }
+};
+
+template <typename Container> auto ReverseRange(const Container& container) {
+    return Range{container.rbegin(), container.rend()};
+}
+
+template <typename Body> void PrintBracketed(const std::string& label, Body body) {
+    std::cout << label << ": [";
+    body();
+    std::cout << "]\n";
+}
+
+template <typename Traversal>
+void PrintTraversal(const std::string& label, const Traversal& traversal) {
+    PrintBracketed(label, [&] {
+        for (auto&& node : traversal)
+            std::cout << node << " ";
+    });
+}
+
+template <typename Traversal> std::vector<Ref> CollectRefs(const Traversal& traversal) {
+    std::vector<Ref> refs;
+    for (auto&& node : traversal)
+        refs.push_back(node.getRef());
+    return refs;
+}
+
+template <typename Forward, typename Backward>
+void CheckReverse(const std::string& name, const Forward& forward, const Backward& backward) {
+    std::vector<Ref> refs = CollectRefs(backward);
+    std::reverse(refs.begin(), refs.end());
+    if (refs != CollectRefs(forward))
+        throw std::runtime_error(name + ": el recorrido inverso no coincide");
+}
+
+template <typename Iterator> void PrintCircularTraversal(Iterator begin, Iterator end) {
+    if (begin == end) {
+        std::cout << "[]\n";
+        return;
+    }
+
+    std::cout << *begin;
+    auto it = begin;
+    for (++it; it != end; ++it)
+        std::cout << " -> " << *it;
+    std::cout << " -> (vuelve a " << *begin << ")\n";
 }
 
 template <typename Container>
-void TestContainer(Container &container,
-                    const vector<pair<typename Container::value_type, Ref>> &values,
-                    const string &filename) {
-    InsertElements(container, values);
+void TestContainer(Container& container, const Values<Container>& values,
+                   const std::string& filename) {
+    WithDemoFile(filename, [&] {
+        PrintColor("TestContainer (" + filename + ")");
+        fill_from(container, values);
 
-    // Impresion usando operador de inserción
-    cout << "Container using operator<<: ";
-    cout << container;
-    cout << endl;
+        SaveTo(filename, container);
 
-    // Escritura hacia un archivo, en modo append para acumular cada estado
-    // (el archivo se deja vacio una vez al inicio, ver DemoVector)
-    ofstream of(filename, ios::app);
-    of << container;
-    of << endl;
-    of.close();
-
-    // Escritura en pantalla usando cout directamente (operator<<)
-    cout << "Container using cout directly: ";
-    cout << container << endl;
+        std::cout << "Container using cout directly: ";
+        PrintColor(container);
+    });
 }
 
-// Prueba los recorridos del Container hacia adelante (begin/end) y hacia
-// atras (rbegin/rend) solamente, imprimiendo los elementos en cada sentido.
 template <typename Container>
-void TestTraversal(Container &container) {
+void TestTraversal(Container& container, const std::string& name) {
+    PrintColor("TestTraversal (" + name + ")");
     using Node = typename Container::Node;
 
-    cout << "Forward traversal:  [";
-    container.call(PrintNode<Node>, cout);
-    cout << "]" << endl;
+    PrintBracketed("Forward traversal ", [&] { container.call(PrintNode<Node>, std::cout); });
+    PrintTraversal("Forward iterators ", container);
 
-    cout << "Backward traversal: [";
-    container.rcall(PrintNode<Node>, cout);
-    cout << "]" << endl;
+    if constexpr (requires { container.rcall(PrintNode<Node>, std::cout); }) {
+        PrintBracketed("Backward traversal", [&] { container.rcall(PrintNode<Node>, std::cout); });
+        PrintTraversal("Backward iterators", ReverseRange(container));
+    }
 
-    // Prueba de call()/FirstThat() con valor de retorno: busca el primer
-    // nodo cuyo valor sea mayor que el del primer elemento del container.
-    if (!container.empty()) {
-        auto threshold = (*container.begin()).getValue();
-        Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
-        cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
+    auto it = container.begin();
+    if (it != container.end() && ++it != container.end()) {
+        Ref target = (*it).getRef();
+        const Node& found = container.FirstThat(
+            [](const Node& node, Ref ref) { return node.getRef() == ref; }, target);
+        std::cout << "FirstThat (ref " << target << "): " << found << '\n';
     }
 }
 
-// Prueba los recorridos hacia únicamente hacia adelante, especialmente para una LinkedList
 template <typename Container>
-void TestForwardTraversal(Container &container){
-    using Node = typename Container::Node;
-
-    cout << "Prueba de función call con std::cout para LinkedList [";
-    container.call(PrintNode<Node>, cout);
-    cout << "]" << endl;
-
-    cout << "Prueba de uso de iteradores para impresión: [";
-    for (auto &&node : container)
-        cout << node << " ";
-    cout << "]" << endl;
-
-    // Prueba de FirstThat(): primer nodo cuyo valor sea mayor que el primero
-    if (container.begin() != container.end()) {
-        auto threshold = (*container.begin()).getValue();
-        Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
-        cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
+void TestVisualize(Container& container, const std::string& name) {
+    PrintColor("TestVisualize (" + name + ")");
+    container.visualize(std::cout);
+    if constexpr (visual::HasTreeView<Container> && !TreeLike<Container>) {
+        std::cout << "Como arreglo:\n";
+        container.print_linear(std::cout);
     }
 }
 
-void DemoVector() {
-    PrintColored(cout, "Pruebas del contenedor Vector", Color::Yellow);
-    // Dejamos los archivos vacios para que TestContainer acumule (append)
-    // el estado del container tras cada paso
-    ofstream("vector.txt", ios::trunc).close();
+template <typename Container>
+void TestGenericContainer(Container& container, const std::string& filename = "container.txt") {
+    WithDemoFile(filename, [&] {
+        PrintColor("TestGenericContainer (" + filename + ")");
+        std::cout << "Vacio: " << container.empty() << '\n';
 
-    // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
-    // el constructor initializer_list arma el Vector inicial de una vez
-    Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
-    TestTraversal(vec);
+        fill_from(container, Values<Container>{{1, 101}, {3, 103}, {7, 107}});
+        std::cout << "Luego de push_back: ";
+        PrintColor(container);
 
-    ofstream("vector_str.txt", ios::trunc).close();
-    Vector<VectorAscTraits<string>> strVec;
-    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
-    TestTraversal(strVec);
+        if constexpr (Insertable<Container>) {
+            InsertAll(container, {{5, 105}, {2, 102}, {9, 109}});
+            std::cout << "Luego de insert: ";
+            PrintColor(container);
+
+            Container copia(container);
+            Container asignada;
+            asignada = container;
+            copia.insert(4, 104);
+            std::cout << "Original: ";
+            PrintColor(container);
+            std::cout << "Copia modificada: ";
+            PrintColor(copia);
+            std::cout << "Asignada: ";
+            PrintColor(asignada);
+        }
+
+        SaveTo(filename, container);
+        std::cout << "Escrito en " << filename << '\n';
+
+        Container leida;
+        LoadFrom(filename, leida);
+        std::cout << "Leido desde " << filename << ": " << leida << '\n';
+
+        Container reutilizada;
+        reutilizada.push_back(1, 101);
+        reutilizada.clear();
+        std::cout << "Luego de clear, vacia: " << reutilizada.empty() << '\n';
+        reutilizada.push_back(10, 110);
+        std::cout << "Luego de reutilizarla: ";
+        PrintColor(reutilizada);
+    });
 }
 
-void TestCustomVector() {
-    BaseVector<VectorAscTraits<TX>, Callable, Applicable, Searchable, ReverseCallable> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-
+template <typename Container>
+void TestInvalidRead(Container& container, const std::string& name) {
+    std::ostringstream before;
+    before << container;
+    std::istringstream invalid("[(7,70),broken]");
+    if (invalid >> container) throw std::runtime_error(name + ": lectura invalida aceptada");
+    std::ostringstream after;
+    after << container;
+    if (before.str() != after.str())
+        throw std::runtime_error(name + ": la lectura invalida cambio los datos");
 }
 
-void DemoCustomContainer() {
-    TestCustomVector();
+template <typename Container>
+void TestCopyAndClear(Container& container, const std::string& name) {
+    PrintColor("TestCopyAndClear (" + name + ")");
+    container.clear();
+    container.push_back(8, 80);
+    container.clear();
+    container.clear();
+    if (!container.empty() || container.begin() != container.end())
+        throw std::runtime_error(name + ": clear no dejo el contenedor vacio");
+
+    container.push_back(3, 30);
+    if constexpr (Insertable<Container>)
+        InsertAll(container, {{1, 10}, {5, 50}});
+    Container copy(container);
+    container = container;
+    if (copy.empty() || container.empty()) throw std::runtime_error(name + ": fallo la copia");
+
+    container.clear();
+    container.push_back(9, 90);
+    if (container.empty() || (*container.begin()).getValue() != 9)
+        throw std::runtime_error(name + ": no se pudo reutilizar el contenedor");
+    std::cout << name << ": clear y copia OK\n";
 }
 
-// Insertamos muchos elementos (generados en un loop, no a mano)
-// concurrentemente y comparamos cuantos deberian haber entrado contra
-// cuantos entraron realmente. Si push_back no estuviera sincronizado
-// (sin el mutex/lock_guard actual) esto perderia inserciones o crashearia;
-// con el mutex protegiendo push_back/resize, deberia dar siempre 0 perdidas.
-void DemoRaceCondition() {
+template <typename Container>
+void TestRaceCondition(const std::string& name, const Values<Container>& values) {
+    PrintColor("TestRaceCondition (" + name + ")");
+    Container container;
+
+    size_t n = values.size();
+    std::vector<std::thread> workers;
+    for (int t = 0; t < NThreads; ++t) {
+        workers.emplace_back([&container, &values, n, t]() {
+            for (size_t i = t; i < n; i += NThreads)
+                container.push_back(values[i].first, values[i].second);
+        });
+    }
+    for (auto& worker : workers)
+        worker.join();
+
+    Ref expectedSum = 0;
+    for (auto& v : values)
+        expectedSum += v.first;
+
+    size_t actualCount = 0;
+    Ref actualSum = 0;
+    for (auto&& node : container) {
+        ++actualCount;
+        actualSum += node.getValue();
+    }
+
+    std::cout << "DemoRaceCondition (" << name << "): se esperaban " << n
+              << " elementos, el Container quedo con " << actualCount << '\n';
+    std::cout << "  suma esperada = " << expectedSum << ", suma obtenida = " << actualSum << '\n';
+
+    if (actualCount != n || actualSum != expectedSum)
+        std::cout << "  *** Race condition detectada: se perdieron inserciones (push_back sin "
+                     "sincronizar) ***\n";
+    else
+        std::cout << "  No se perdio ningun elemento: el mutex de push_back "
+                  << "sincroniza correctamente las inserciones concurrentes\n";
+}
+
+template <typename Container>
+void TestStructure(Container& container, const std::string& name) {
+    PrintColor(name);
+    const Values<Container> values{{5, 50}, {1, 10}, {4, 40}, {2, 20}, {7, 70}, {5, 51}};
+
+    TestContainer(container, values, name + ".txt");
+    TestTraversal(container, name);
+    TestVisualize(container, name);
+
+    if constexpr (HeapLike<Container>) {
+        std::cout << "Top: " << container.top() << '\n';
+        std::cout << "Orden de extraccion: ";
+        while (!container.empty())
+            std::cout << container.pop() << ' ';
+        std::cout << '\n';
+    }
+
+    container.clear();
+    TestGenericContainer(container, name + "_persist.txt");
+    TestInvalidRead(container, name);
+
+    if constexpr (Copyable<Container>) {
+        Container copyAndClear;
+        TestCopyAndClear(copyAndClear, name);
+    }
+
+    TestRaceCondition<Container>(name, values);
+}
+
+template <typename Container> void TestStructure(const std::string& name) {
+    Container container;
+    TestStructure(container, name);
+}
+
+template <typename Container> void DemoRaceCondition(const std::string& name) {
+    PrintColor("DemoRaceCondition (" + name + ")");
     const size_t N = 200000;
-
-    vector<pair<TX, Ref>> values(N);
+    Values<Container> values(N);
     for (size_t i = 0; i < N; ++i)
         values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
 
-    Vector<VectorAscTraits<TX>> vec;
+    std::cout << "DemoRaceCondition (" << NThreads << " hilos, push_back):\n";
+    TestRaceCondition<Container>(name, values);
+}
 
-    // Insercion concurrente: NThreads workers insertando en paralelo sobre
-    // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
-    size_t n = values.size();
-    vector<thread> workers;
-    for (size_t t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&vec, &values, n, t](){
-            for (size_t i = t; i < n; i += NThreads)
-                vec.push_back(values[i].first, values[i].second);
-        });
+
+template <Circular List> void PrintCycles(const List& list, const std::string& label) {
+    if constexpr (ReverseTraversable<List>) {
+        std::cout << "Ciclo" << label << " hacia adelante: ";
+        PrintCircularTraversal(list.begin(), list.end());
+        std::cout << "Ciclo" << label << " hacia atras: ";
+        PrintCircularTraversal(list.rbegin(), list.rend());
+    } else {
+        std::cout << "Ciclo" << label << ": ";
+        PrintCircularTraversal(list.begin(), list.end());
     }
-    for (auto &worker : workers)
-        worker.join();
+}
 
-    TXX expectedSum = 0;
-    for (auto &v : values) expectedSum += v.first;
+template <Mutable Container> void TestApplyFunction(Container& container) {
+    container.ApplyFunction(AddOne);
+    std::cout << "Tras AddOne: ";
+    PrintColor(container);
+    container.ApplyFunction(AddX<TX>, TX(10));
+    std::cout << "Tras AddX(10): ";
+    PrintColor(container);
+}
 
-    TXX actualSum = 0;
-    for (size_t i = 0; i < vec.size(); ++i) actualSum += vec[i].getValue();
+template <Insertable Desc> void TestDescending(const std::string& label) {
+    Desc descendente;
+    InsertAll(descendente, {{5, 105}, {3, 103}, {7, 107}});
+    std::cout << label << ": ";
+    PrintColor(descendente);
+    if constexpr (Circular<Desc>)
+        PrintCycles(descendente, " descendente");
+    if constexpr (TreeLike<Desc>)
+        descendente.print_tree(std::cout);
+}
 
-    cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
-         << "el Vector quedo con " << vec.size() << endl;
-    cout << "  suma esperada = " << expectedSum
-         << ", suma obtenida = " << actualSum << endl;
+template <TreeLike Tree> void CheckTree(const Tree& tree, const std::string& name) {
+    std::vector<TX> values;
+    for (auto&& node : tree.InOrder())
+        values.push_back(node.getValue());
+    if (!std::is_sorted(values.begin(), values.end()) || values.size() != tree.size())
+        throw std::runtime_error(name + ": el arbol perdio su orden");
+}
 
-    if (vec.size() != N || actualSum != expectedSum)
-        cout << "  *** Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar) ***" << endl;
+template <TreeLike Tree> void TestTreeTraversals(const Tree& tree, const std::string& name) {
+    PrintColor("TestTreeTraversals (" + name + ")");
+    using Node = typename Tree::Node;
+    PrintTraversal("InOrder         ", tree.InOrder());
+    PrintTraversal("ReverseInOrder  ", tree.ReverseInOrder());
+    PrintTraversal("PreOrder        ", tree.PreOrder());
+    PrintTraversal("ReversePreOrder ", tree.ReversePreOrder());
+    PrintTraversal("PostOrder       ", tree.PostOrder());
+    PrintTraversal("ReversePostOrder", tree.ReversePostOrder());
+
+    PrintBracketed("for_each PreOrder", [&] {
+        auto preOrder = tree.PreOrder();
+        traversal_detail::for_each(preOrder.begin(), preOrder.end(), PrintNode<Node>, std::cout);
+    });
+
+    CheckReverse(name + " InOrder", tree.InOrder(), tree.ReverseInOrder());
+    CheckReverse(name + " PreOrder", tree.PreOrder(), tree.ReversePreOrder());
+    CheckReverse(name + " PostOrder", tree.PostOrder(), tree.ReversePostOrder());
+    std::cout << name << ": los 6 recorridos OK\n";
+}
+
+template <TreeLike Tree> void TestTreeRemove(Tree& tree, const std::string& name) {
+    PrintColor("TestTreeRemove (" + name + ")");
+    for (TX value : {20, 60, 50, 99}) {
+        bool removed = tree.remove(value);
+        std::cout << "remove(" << value << "): " << removed << '\n';
+        if (tree.contains(value))
+            throw std::runtime_error(name + ": remove no borro el valor");
+        CheckTree(tree, name);
+    }
+    tree.print_tree(std::cout, visual::Layout::Sideways);
+
+    std::stringstream stream;
+    stream << tree;
+    Tree leido;
+    stream >> leido;
+    std::cout << "Persistencia luego de remove: " << leido << '\n';
+    CheckTree(leido, name);
+}
+
+template <TreeLike Tree> void TestTreeHeight(const std::string& name) {
+    PrintColor("TestTreeHeight (" + name + ")");
+    Tree tree;
+    for (TX value = 1; value <= 15; ++value)
+        tree.insert(value, value * 10);
+    std::cout << "Insertando 1..15 en orden, altura = " << tree.height() << '\n';
+    tree.print_tree(std::cout, visual::Layout::Sideways);
+    tree.print_tree(std::cout);
+    tree.print_tree(std::cout, visual::Layout::Cursor);
+    CheckTree(tree, name);
+}
+
+template <TreeLike Tree> void TestTree(const std::string& name) {
+    Tree tree{{50, 500}, {30, 300}, {70, 700}, {20, 200}, {40, 400},
+              {60, 600}, {80, 800}, {35, 350}, {65, 650}};
+    PrintColor("Visualizacion (" + name + ")");
+    tree.print_tree(std::cout, visual::Layout::Sideways);
+    tree.print_tree(std::cout);
+    tree.print_tree(std::cout, visual::Layout::Cursor);
+    TestTreeTraversals(tree, name);
+    TestTreeRemove(tree, name);
+    TestTreeHeight<Tree>(name);
+}
+
+template <typename Desc = void, typename C> void Demo(C& container, const std::string& name) {
+    PrintColor("Demo" + name);
+    TestStructure(container, name);
+
+    if constexpr (Circular<C>)
+        PrintCycles(container, "");
+
+    if constexpr (Mutable<C> && Insertable<C>)
+        TestApplyFunction(container);
+
+    if constexpr (!std::is_void_v<Desc>)
+        TestDescending<Desc>(name + " descendente");
+
+    if constexpr (TreeLike<C>)
+        TestTree<C>(name);
+
+    if constexpr (Mutable<C> && Insertable<C>)
+        DemoRaceCondition<C>(name);
+}
+
+template <typename C, typename Desc = void> void Demo(const std::string& name) {
+    C container;
+    Demo<Desc>(container, name);
+}
+
+template <typename T> std::string KeyText(const T& value) {
+    if constexpr (requires { value.key(); })
+        return visual::to_text(value.key());
     else
-        cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
-             << "sincroniza correctamente las inserciones concurrentes" << endl;
+        return visual::to_text(value);
 }
 
-template <typename Container>
-void TestLinkedList(Container &list, const string &filename) {
-    ofstream(filename, ios::trunc).close();
+template <typename Tree>
+class Unbalanced : public BinaryTree<BinaryTreeTraits<typename Tree::value_type, typename Tree::Compare>> {
+    using Parent = BinaryTree<BinaryTreeTraits<typename Tree::value_type, typename Tree::Compare>>;
+    using typename Parent::Node;
+    using typename Parent::NodePtr;
 
-    // Pruebas de push_back
-    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, filename);
-    TestForwardTraversal(list);
+    mutable const Node* m_mark = nullptr;
 
-    InsertElements(list, {{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-
-    // Pruebas de insert
-    list.insert(4, 12);
-    list.insert(11, 20);
-    list.insert(7, 6);
-    cout << "Lista luego de hacer 3 inserts: " << list << endl;
-
-    // Prueba de ApplyFunction
-    list.ApplyFunction(AddOne);
-    cout << "Lista tras usar AddOne a sus elementos: " << list << endl;
-    list.ApplyFunction(AddX<TX>, TX(10));
-    cout << "Lista tras usar AddX(10) a sus elementos: " << list << endl;
-
-    // Prueba de clear
-    list.clear();
-    cout << "Lista luego de usar clear: " << list << endl;
-    list.push_back(10, 2);
-    cout << "Lista luego de un nuevo push_back: " << list << endl;
-
-    // Prueba de lectura y asignacion (operator=)
-    Container new_list;
-    ifstream in(filename);
-    in >> new_list;
-    in.close();
-    cout << "Lista leida desde archivo: " << new_list << endl;
-    TestForwardTraversal(new_list);
-
-    list = new_list;
-}
-
-template <typename DoubleContainer>
-void TestDoubleLinkedListSpecifics(DoubleContainer &list) {
-    TestTraversal(list);
-
-    list.clear();
-    list.insert(5, 50);
-    list.insert(1, 10);
-    list.insert(9, 90);
-    list.insert(6, 60);
-    cout << "Lista tras inserts en cabeza, cola y medio: " << list << endl;
-    TestTraversal(list);
-}
-
-void DemoLinkedList()
-{
-    cout << "\n";
-    PrintColored(cout, "Pruebas para LinkedList", Color::Yellow);
-    LinkedList<LinkedListAscTraits<TX>> list;
-    TestLinkedList(list, "linkedlist.txt");
-
-    cout << "\n";
-    PrintColored(cout, "Pruebas para DoubleLinkedList", Color::Yellow);
-    DoubleLinkedList<DoubleLinkedListAscTraits<TX>> dlist;
-    TestLinkedList(dlist, "doublelinkedlist.txt");
-    TestDoubleLinkedListSpecifics(dlist);
-
-    cout << "\n";
-    PrintColored(cout, "Pruebas para CircularLinkedList", Color::Yellow);
-    CircularLinkedList<LinkedListAscTraits<TX>> clist;
-    TestLinkedList(clist, "circularlinkedlist.txt");
-
-    cout << "\n";
-    PrintColored(cout, "Pruebas para CircularDoubleLinkedList", Color::Yellow);
-    CircularDoubleLinkedList<DoubleLinkedListAscTraits<TX>> cdlist;
-    TestLinkedList(cdlist, "circulardoublelinkedlist.txt");
-    TestDoubleLinkedListSpecifics(cdlist);
-}
-
-template <typename Heap>
-void InitHeap(Heap &heap) {
-    heap.push(50, 5);
-    heap.push(20, 2);
-    heap.push(80, 8);
-    heap.push(10, 1);
-    heap.push(30, 3);
-    heap.push(70, 7);
-    cout << "Tras inserciones: " << heap << endl;
-}
-
-template <typename Heap>
-void ExtractHeap(Heap &heap) {
-    cout << "Tras extracción: ";
-    while (!heap.empty()) {
-        auto node = heap.pop();
-        cout << node.getValue() << " ";
+    int balance(const Node* n) const {
+        return static_cast<int>(this->height(n->m_pChild[1])) - static_cast<int>(this->height(n->m_pChild[0]));
     }
-    cout << endl;
+
+    NodePtr replacement(NodePtr node) const override {
+        bool side = balance(node) >= 0;
+        return extreme(node->m_pChild[side], !side);
+    }
+
+    void print_node(std::ostream& os, const Node& node) const override {
+        bool marked = &node == m_mark;
+        int bf = balance(&node);
+        os << (marked ? "<" : "") << KeyText(node.getValue()) << '[' << (bf > 0 ? "+" : "") << bf << ']'
+           << (marked ? ">" : "");
+    }
+
+public:
+    explicit Unbalanced(const Tree& tree) {
+        for (auto&& node : tree.PreOrder())
+            this->insert(node.getValue(), node.getRef());
+    }
+
+    const Node* unbalanced() const {
+        for (auto&& node : this->PostOrder())
+            if (std::abs(balance(&node)) > 1) return &node;
+        return nullptr;
+    }
+
+    std::string describe(const Node* x) const {
+        int bf = balance(x);
+        bool right = bf > 0;
+        const Node* c = x->m_pChild[right];
+        bool twice = balance(c) * bf < 0;
+        std::string nx = KeyText(x->getValue()), nc = KeyText(c->getValue());
+        std::string side = right ? "derecha" : "izquierda";
+        std::string other = right ? "izquierda" : "derecha";
+        std::ostringstream ss;
+        ss << "Nodo " << nx << " desbalanceado (factor " << (bf > 0 ? "+" : "") << bf << "), cargado a la "
+           << side << '\n';
+        if (twice)
+            ss << "Caso " << (right ? "RL" : "LR") << ": rotacion doble -> primero a la " << side << " en " << nc
+               << ", luego a la " << other << " en " << nx;
+        else
+            ss << "Caso " << (right ? "RR" : "LL") << ": rotacion simple a la " << other << " en " << nx;
+        return ss.str();
+    }
+
+    void print(std::ostream& os, const Node* mark = nullptr) const {
+        m_mark = mark;
+        this->print_tree(os);
+        m_mark = nullptr;
+    }
+};
+
+template <typename Tree, typename Change>
+void AVLStep(Tree& tree, const std::string& title, Change change) {
+    Unbalanced<Tree> sketch(tree);
+    change(tree, sketch);
+    PrintColor(title, "1;33");
+    if (auto x = sketch.unbalanced()) {
+        std::cout << "Como quedaria sin balancear:\n";
+        sketch.print(std::cout, x);
+        PrintColor(sketch.describe(x), "1;31");
+        std::cout << "Luego de rebalancear:\n";
+    }
+    Unbalanced<Tree>(tree).print(std::cout);
+    std::cout << '\n';
 }
 
-template <typename Heap>
-void TestHeap(Heap& heap) {
-    InitHeap(heap);
-    ExtractHeap(heap);
-    InitHeap(heap);
-    heap.ApplyFunction(AddOne);
-    cout << "Tras aplicar AddOne: " << heap << endl;
-    TX m = 13;
-    heap.ApplyFunction(ModX<TX>, TX(m));
-    cout << "Tras aplicar mod " << m << ": " << heap << endl;
-    ExtractHeap(heap);
-    cout << endl;
+void DemoAVLStepByStep() {
+    PrintColor("DemoAVL paso a paso");
+    AVLSearchTree<TX> tree;
+    for (TX v : {10, 20, 30, 40, 50, 25, 5, 4, 8, 7})
+        AVLStep(tree, "insert(" + std::to_string(v) + ")", [v](auto& t, auto& s) {
+            s.insert(v, v * 10);
+            t.insert(v, v * 10);
+        });
+    for (TX v : {50, 40, 4, 30})
+        AVLStep(tree, "remove(" + std::to_string(v) + ")", [v](auto& t, auto& s) {
+            s.remove(v);
+            t.remove(v);
+        });
+    CheckTree(tree, "AVL paso a paso");
+}
+
+void DemoHashTableStepByStep() {
+    PrintColor("DemoHashTable paso a paso (AVL ordenado por hash de la clave)");
+    using Table = HashTable<std::string, int>;
+    using Entry = Table::Entry;
+    Table table;
+    int age = 18;
+    for (std::string key : {"ana", "luis", "eva", "juan", "rosa", "pedro", "maria", "jose"}) {
+        std::string title = "tabla[\"" + key + "\"] = " + std::to_string(age) + "   (hash = " +
+                            std::to_string(Entry(key).hash()) + ")";
+        AVLStep(table, title, [&](auto& t, auto& s) {
+            s.insert_unique(Entry(key), Ref{});
+            t[key] = age;
+        });
+        ++age;
+    }
+    for (std::string key : {"eva", "rosa", "ana"})
+        AVLStep(table, "remove(\"" + key + "\")", [&](auto& t, auto& s) {
+            s.remove(Entry(key));
+            t.remove(key);
+        });
+    std::cout << "Tabla final: " << table << '\n';
+}
+
+void DemoRaceCondition() { DemoRaceCondition<VectorOf<TX>>("Vector"); }
+
+void DemoVector() {
+    VectorOf<TX> vec;
+    Demo(vec, "Vector");
+
+    VectorOf<std::string> strVec;
+    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
+    TestTraversal(strVec, "Vector<string>");
+
+    const auto& constVec = vec;
+    CheckReverse("Vector const", constVec, ReverseRange(constVec));
+    if (CollectRefs(constVec).size() != vec.size())
+        throw std::runtime_error("Vector const: recorridos inconsistentes");
+
+    VectorOf<TX> emptyVector;
+    if (emptyVector.rbegin() != emptyVector.rend())
+        throw std::runtime_error("Vector vacio: recorrido inverso incorrecto");
+    const auto& constEmpty = emptyVector;
+    if (constEmpty.begin() != constEmpty.end() || constEmpty.rbegin() != constEmpty.rend())
+        throw std::runtime_error("Vector const vacio: recorrido incorrecto");
+    std::cout << "Vector: recorrido const y vacio OK\n";
+}
+
+void DemoLinkedList() { Demo<SortedLinkedList<TX>, SortedLinkedList<TX, std::greater<TX>>>("LinkedList"); }
+
+void DemoCircularLinkedList() {
+    Demo<SortedCircularLinkedList<TX>, SortedCircularLinkedList<TX, std::greater<TX>>>(
+        "CircularLinkedList");
+}
+
+void DemoDoubleLinkedList() {
+    Demo<SortedDoubleLinkedList<TX>, SortedDoubleLinkedList<TX, std::greater<TX>>>("DoubleLinkedList");
+}
+
+void DemoCircularDoubleLinkedList() {
+    Demo<SortedCircularDoubleLinkedList<TX>,
+         SortedCircularDoubleLinkedList<TX, std::greater<TX>>>(
+        "CircularDoubleLinkedList");
 }
 
 void DemoHeap() {
-    cout << "\n";
-    PrintColored(cout, "Pruebas para MinHeap", Color::Yellow);
-    MinHeap minHeap;
-    TestHeap(minHeap);
-
-    cout << "\n";
-    PrintColored(cout, "Pruebas para MaxHeap", Color::Yellow);
-    MaxHeap maxHeap;
-    TestHeap(maxHeap);
+    Demo<MinHeap<int>>("MinHeap");
+    Demo<MaxHeap<int>>("MaxHeap");
 }
 
-template <typename TreeContainer>
-void TestBinaryTree(TreeContainer &tree, const string &filename) {
-    ofstream(filename, ios::trunc).close();
+void DemoBinaryTree() { Demo<BinarySearchTree<TX>, BinarySearchTree<TX, std::greater<TX>>>("BinaryTree"); }
 
-    // Pruebas de insercion y persistencia
-    TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}}, filename);
-    // Recorrido in-order
-    TestTraversal(tree);
-
-    tree.ApplyFunction(AddOne);
-    cout << "Arbol tras usar AddOne: " << tree << endl;
-    tree.ApplyFunction(AddX<TX>, TX(10));
-    cout << "Arbol tras usar AddX(10): " << tree << endl;
-
-    tree.clear();
-    cout << "Arbol luego de usar clear: " << tree << endl;
-
-    // lectura
-    TreeContainer new_tree;
-    ifstream in(filename);
-    in >> new_tree;
-    in.close();
-    cout << "Arbol leido desde archivo: " << new_tree << endl;
-
-    tree = new_tree;
-    cout << "Arbol tras operator=: " << tree << endl;
+void DemoAVL() {
+    Demo<AVLSearchTree<TX>, AVLSearchTree<TX, std::greater<TX>>>("AVL");
+    DemoRaceCondition<AVLSearchTree<TX>>("AVL");
 }
 
-void DemoBinaryTree() {
-    cout << "\n";
-    PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
-    BinaryTree<BinaryTreeAscTraits<TX>> tree;
-    TestBinaryTree(tree, "binarytree.txt");
+void DemoHashTable() {
+    PrintColor("DemoHashTable");
+    HashTable<std::string, int> edades;
+    edades["ana"] = 20;
+    edades["luis"] = 25;
+    edades["eva"] = 30;
+    edades["ana"] = 21;
+    edades["eva"] += 1;
+    if (edades.size() != 3 || edades["ana"] != 21 || edades["eva"] != 31)
+        throw std::runtime_error("HashTable: operator[] fallo");
+    std::cout << "Tabla: " << edades << '\n';
+
+    PrintColor("Visualizacion (HashTable)");
+    edades.print_tree(std::cout);
+
+    WithDemoFile("hashtable.txt", [&] {
+        SaveTo("hashtable.txt", edades);
+        HashTable<std::string, int> leida;
+        LoadFrom("hashtable.txt", leida);
+        std::cout << "Leida: " << leida << '\n';
+        if (leida.size() != edades.size() || leida["luis"] != 25)
+            throw std::runtime_error("HashTable: lo leido no coincide");
+    });
 }

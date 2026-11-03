@@ -1,167 +1,133 @@
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
-#include "GeneralContainer.h"
-#include "GeneralIterator.h"
-#include "GeneralNode.h"
+#include "listnodes.h"
+#include "traversalops.h"
+#include <initializer_list>
+#include <mutex>
+#include <utility>
 
-template <typename T>
-class LinkedListNode : public GeneralNode<T> {
-    using Node = LinkedListNode<T>;
-    using NodePtr = Node*;
+template <typename Traits, bool Double = false, bool Circular = false,
+          typename Ops = FullTraversalOps>
+class LinkedList : public Ops {
 public:
-    Node* m_pNext = nullptr; // puntero al siguiente nodo, npara acceso directo necesita ser publico
-    Node* m_pPrev = nullptr;
-    LinkedListNode() : GeneralNode<T>(T{}, Ref{}), m_pNext(nullptr) {}
-    // añadir friend class añade otro typename al template
-    LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref), m_pNext(pNext) {}
-};
+  using value_type = typename Traits::value_type;
+  using Node = typename Traits::Node;
+  using NodePtr = Node *;
+  using ForwardIterator = typename Traits::ForwardIterator;
+  using Compare = typename Traits::Compare;
+  static constexpr bool is_circular = Circular;
 
-template <typename T>
-class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<T>, LinkedListNode<T>> {
-public:
-    using Node   = LinkedListNode<T>;
-    using MySelf = LinkedListForwardIterator<T>;
-    using Parent = GeneralIterator<MySelf, Node>;
-    using Parent::Parent; // Inherit constructor
-    using Parent::m_ptr;
-    using Parent::m_pStart;
+protected:
+  NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
+  NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
 
-    LinkedListForwardIterator& operator++() { 
-        m_ptr = m_ptr->m_pNext == m_pStart ? nullptr : m_ptr->m_pNext;
-        return *this;
+  Compare m_comp; // comparador para ordenar los nodos de la lista
+
+  void link_after(NodePtr prev, NodePtr node) {
+    node->m_pNext = prev ? prev->m_pNext : m_pRoot;
+    if (prev)
+      prev->m_pNext = node;
+    else
+      m_pRoot = node;
+    if (prev == m_pTail)
+      m_pTail = node;
+    if constexpr (Circular)
+      m_pTail->m_pNext = m_pRoot;
+    if constexpr (Double) {
+      node->m_pPrev = prev;
+      if (node->m_pNext)
+        node->m_pNext->m_pPrev = node;
+      if constexpr (Circular)
+        m_pRoot->m_pPrev = m_pTail;
     }
+  }
+
+public:
+  LinkedList() = default;
+  LinkedList(std::initializer_list<std::pair<value_type, Ref>> values) {
+    fill_from(*this, values);
+  }
+
+  LinkedList(const LinkedList &other) {
+    std::lock_guard lock(other.m_mutex);
+    try {
+      for (auto it = other.begin(); it != other.end(); ++it)
+        link_after(m_pTail, new Node(it->getValue(), it->getRef(), nullptr));
+    } catch (...) {
+      clear();
+      throw;
+    }
+  }
+
+  LinkedList(LinkedList &&other) noexcept { swap(other); }
+
+  LinkedList &operator=(LinkedList other) noexcept {
+    swap(other);
+    return *this;
+  }
+
+  void swap(LinkedList &other) noexcept {
+    if (this == &other)
+      return;
+    std::scoped_lock lock(this->m_mutex, other.m_mutex);
+    std::swap(m_pRoot, other.m_pRoot);
+    std::swap(m_pTail, other.m_pTail);
+  }
+
+  ~LinkedList() { clear(); }
+
+  void clear() {
+    std::lock_guard lock(this->m_mutex);
+    if constexpr (Circular) {
+      if (m_pTail)
+        m_pTail->m_pNext = nullptr;
+    }
+    for (NodePtr current = m_pRoot; current;)
+      delete std::exchange(current, current->m_pNext);
+    m_pRoot = m_pTail = nullptr;
+  }
+
+  void push_back(const value_type &value, Ref ref) {
+    std::lock_guard lock(this->m_mutex);
+    link_after(m_pTail, new Node(value, ref, nullptr));
+  }
+
+  void insert(const value_type &value, Ref ref) {
+    std::lock_guard lock(this->m_mutex);
+    NodePtr prev = nullptr;
+    for (NodePtr cur = m_pRoot;
+         prev != m_pTail && !m_comp(value, cur->getValue()); cur = cur->m_pNext)
+      prev = cur;
+    link_after(prev, new Node(value, ref, nullptr));
+  }
+
+  bool empty() const {
+    std::lock_guard lock(this->m_mutex);
+    return m_pRoot == nullptr;
+  }
+
+  ForwardIterator begin() const { return ForwardIterator(m_pRoot); }
+  ForwardIterator end() const { return ForwardIterator(nullptr); }
+
+  auto rbegin() const
+    requires Double
+  {
+    return typename Traits::BackwardIterator(m_pTail);
+  }
+  auto rend() const
+    requires Double
+  {
+    return typename Traits::BackwardIterator(nullptr);
+  }
 };
-
-template <typename T>
-struct LinkedListTraits {
-    using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
-};
-
-template <typename T>
-struct LinkedListAscTraits : public AscendingTraits<T>, public LinkedListTraits<T> {};
-
-template <typename T>
-struct LinkedListDescTraits : public DescendingTraits<T>, public LinkedListTraits<T> {};
-
-template <typename Traits, template <typename> typename... Mixins>
-class BaseLinkedList;
 
 template <typename Traits>
-using LinkedList = BaseLinkedList<Traits, Callable, Searchable, Applicable, Printable, Readable>;
+using DoubleLinkedList = LinkedList<Traits, true, false>;
 
-template <typename Traits, template <typename> typename... Mixins>
-class BaseLinkedList : public GeneralContainer<Traits, Mixins...> {
-public:  
-    using Parent = GeneralContainer<Traits, Mixins...>;
-    using typename Parent::value_type;
-    using typename Parent::Node;
-    using typename Parent::NodePtr;
-    using typename Parent::ForwardIterator;
-    using typename Parent::Delim;
-    using Compare = typename Traits::Compare;
-protected:
-    NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
-    NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
+template <typename Traits>
+using CircularLinkedList = LinkedList<Traits, false, true>;
 
-    Compare m_comp; // comparador para ordenar los nodos de la lista
-    using Parent::m_mutex;
-
-    virtual void linkNode(NodePtr pNew, NodePtr pPrev, NodePtr pNext = nullptr) {}
-private:
-
-    NodePtr GetRoot() const { return m_pRoot; }
-    void internalInsert(const value_type& value, Ref ref, NodePtr& rParent, NodePtr pPrev = nullptr);
-
-public:
-    BaseLinkedList() = default;
-    BaseLinkedList(const BaseLinkedList& another) { *this = another; }
-    BaseLinkedList(BaseLinkedList&& another) noexcept { *this = std::move(another); }
-    BaseLinkedList& operator=(const BaseLinkedList& another);
-    BaseLinkedList& operator=(BaseLinkedList&& another) noexcept;
-    BaseLinkedList(initializer_list<pair<value_type, Ref>> values) {
-        for (const auto &v : values)
-            push_back(v.first, v.second);
-    }
-
-    void clear() override;
-    virtual ~BaseLinkedList() { clear(); }
-
-    void push_back(const value_type& value, Ref ref) override;
-
-    void insert(const value_type& value, Ref ref) {
-        scoped_lock lock(m_mutex);
-        if (m_pTail) m_pTail->m_pNext = nullptr; // Si es circular rompe el ciclo temporalmente
-        internalInsert(value, ref, m_pRoot);
-    }
-    
-    // Iterators
-    // ForwardIterator begin() { return ForwardIterator(m_pRoot); }
-    // ForwardIterator end() { return ForwardIterator(nullptr); }
-    ForwardIterator begin() const override { return ForwardIterator(m_pRoot); }
-    ForwardIterator end() const override { return ForwardIterator(nullptr); }
-};
-
-
-template <typename Traits, template <typename> typename... Mixins>
-auto BaseLinkedList<Traits, Mixins...>::operator=(const BaseLinkedList& other) -> BaseLinkedList& { 
-    this->copy_from(other);
-    return *this;
-}
-
-template <typename Traits, template <typename> typename... Mixins>
-auto BaseLinkedList<Traits, Mixins...>::operator=(BaseLinkedList&& other) noexcept -> BaseLinkedList& {
-    this->move_from(other, [&]{
-        m_pRoot = std::exchange(other.m_pRoot, nullptr);
-        m_pTail = std::exchange(other.m_pTail, nullptr);
-    });
-    return *this;
-}
-
-template <typename Traits, template <typename> typename... Mixins>
-void BaseLinkedList<Traits, Mixins...>::clear(){
-    scoped_lock lock(m_mutex);
-    if (!m_pRoot) return;
-    if (m_pTail) m_pTail->m_pNext = nullptr; // Si es circular rompe el ciclo
-    NodePtr curr = m_pRoot;
-    while (curr) {
-        NodePtr next = curr->m_pNext;
-        delete curr;
-        curr = next;
-    }
-    m_pRoot = nullptr;
-    m_pTail = nullptr;
-}
-
-template <typename Traits, template <typename> typename... Mixins>
-void BaseLinkedList<Traits, Mixins...>::push_back(const value_type& value, Ref ref){
-    scoped_lock lock(m_mutex);
-    NodePtr pPrev = m_pTail; // Guardar cola anterior antes de crear
-    NodePtr new_node = new Node(value, ref, nullptr);
-    if (!m_pRoot){
-        m_pRoot = new_node;
-        m_pTail = new_node;
-    } else {
-        m_pTail->m_pNext = new_node;
-        m_pTail = new_node;
-    }
-    linkNode(new_node, pPrev, nullptr);
-}
-
-/*
-internalInsert(...) recorre todos los nodos hasta llegar al final, y en la condición de parada
-si el nodo padre es nullptr, crea uno nuevo con el valor y retorna
-insert(...) empieza desde el nodo raiz
-*/
-template <typename Traits, template <typename> typename... Mixins>
-void BaseLinkedList<Traits, Mixins...>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent, NodePtr pPrev) {
-    if (rParent == nullptr || m_comp(value, rParent->getValue())) {
-        rParent = new Node(value, ref, rParent);
-        if (rParent->m_pNext == nullptr) m_pTail = rParent;
-        linkNode(rParent, pPrev, rParent->m_pNext);
-        return;
-    }
-    internalInsert(value, ref, rParent->m_pNext, rParent);
-}
+template <typename Traits>
+using CircularDoubleLinkedList = LinkedList<Traits, true, true>;
 
 #endif // __LINKEDLIST_H__

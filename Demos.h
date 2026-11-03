@@ -1,13 +1,17 @@
 #ifndef __DEMOS_H__
 #define __DEMOS_H__
-#include "types.h"
-#include "containers/Heap.h"
 
 void DemoVector();
-void DemoCustomContainer();
 void DemoRaceCondition();
 void DemoLinkedList();
+void DemoCircularLinkedList();
+void DemoDoubleLinkedList();
+void DemoCircularDoubleLinkedList();
 void DemoHeap();
 void DemoBinaryTree();
+void DemoAVL();
+void DemoHashTable();
+void DemoAVLStepByStep();
+void DemoHashTableStepByStep();
 
 #endif // __DEMOS_H__
