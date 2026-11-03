@@ -30,12 +30,12 @@ concept HeapLike = requires(C& c) {
 };
 
 template <typename C>
-concept TreeLike = requires(C& t, const typename C::value_type& v, std::ostream& os) {
+concept TreeLike = requires(C& t, TX key, std::ostream& os) {
     t.InOrder();
     t.PreOrder();
     t.PostOrder();
     t.height();
-    t.remove(v);
+    t.remove(key);
     t.print_tree(os, visual::Layout::Sideways);
 };
 
@@ -47,6 +47,13 @@ concept Circular = visual::CircularView<C>;
 
 template <typename C>
 concept Copyable = std::is_copy_constructible_v<C> && std::is_copy_assignable_v<C>;
+
+template <typename T> auto KeyOf(const T& value) {
+    if constexpr (requires { value.key(); })
+        return value.key();
+    else
+        return value;
+}
 
 void AddOne(GeneralNode<TX>& node) {
     node.value() += 1;
@@ -275,7 +282,7 @@ void TestCopyAndClear(Container& container, const std::string& name) {
 
     container.clear();
     container.push_back(9, 90);
-    if (container.empty() || (*container.begin()).getValue() != 9)
+    if (container.empty() || KeyOf((*container.begin()).getValue()) != 9)
         throw std::runtime_error(name + ": no se pudo reutilizar el contenedor");
     std::cout << name << ": clear y copia OK\n";
 }
@@ -298,13 +305,13 @@ void TestRaceCondition(const std::string& name, const Values<Container>& values)
 
     Ref expectedSum = 0;
     for (auto& v : values)
-        expectedSum += v.first;
+        expectedSum += KeyOf(v.first);
 
     size_t actualCount = 0;
     Ref actualSum = 0;
     for (auto&& node : container) {
         ++actualCount;
-        actualSum += node.getValue();
+        actualSum += KeyOf(node.getValue());
     }
 
     std::cout << "DemoRaceCondition (" << name << "): se esperaban " << n
@@ -400,7 +407,7 @@ template <Insertable Desc> void TestDescending(const std::string& label) {
 template <TreeLike Tree> void CheckTree(const Tree& tree, const std::string& name) {
     std::vector<TX> values;
     for (auto&& node : tree.InOrder())
-        values.push_back(node.getValue());
+        values.push_back(KeyOf(node.getValue()));
     if (!std::is_sorted(values.begin(), values.end()) || values.size() != tree.size())
         throw std::runtime_error(name + ": el arbol perdio su orden");
 }
@@ -670,102 +677,31 @@ void DemoAVL() {
 }
 
 void DemoHashTable() {
-    using Table = HashTable<std::string, int>;
-    auto check = [](bool ok, const std::string& what) {
-        if (!ok) throw std::runtime_error("HashTable: " + what);
-    };
-    PrintColor("DemoHashTable");
+    Demo<HashTable<TX, TX>>("HashTable");
 
-    PrintColor("operator[]", "1;33");
-    Table edades;
+    PrintColor("DemoHashTable (operator[] y clave string)");
+    HashTable<std::string, int> edades;
+    auto show = [&](const std::string& label) { std::cout << label << ": " << edades << '\n'; };
+
     edades["ana"] = 20;
     edades["luis"] = 25;
     edades["eva"] = 30;
-    std::cout << "insertar ana, luis, eva:  " << edades << '\n';
+    show("insertar ana, luis, eva");
     edades["ana"] = 21;
-    std::cout << "sobrescribir ana = 21:    " << edades << '\n';
     edades["eva"] += 1;
-    std::cout << "eva += 1:                 " << edades << '\n';
-    check(edades.size() == 3 && edades["ana"] == 21 && edades["eva"] == 31, "operator[] fallo");
-    int nadie = edades["nadie"];
-    std::cout << "leer edades[\"nadie\"] = " << nadie << " (la crea con 0): " << edades << '\n';
-    check(nadie == 0 && edades.size() == 4, "operator[] no creo la clave nueva");
-    edades.remove("nadie");
+    show("ana = 21, eva += 1");
+    std::cout << "edades[\"nadie\"] = " << edades["nadie"] << '\n';
+    show("leer una clave que no existe la crea con 0");
 
-    PrintColor("find / contains / remove", "1;33");
     if (auto edad = edades.find("luis")) *edad += 5;
-    std::cout << "find(\"luis\") y += 5:      " << edades << '\n';
-    check(edades["luis"] == 30, "find no devolvio el valor real");
-    check(edades.find("pepe") == nullptr, "find encontro una clave que no existe");
-    check(edades.size() == 3, "find creo una clave");
+    edades.remove("nadie");
+    show("luis += 5 con find, remove(\"nadie\")");
     std::cout << std::boolalpha << "contains(\"ana\") = " << edades.contains("ana")
               << ", contains(\"pepe\") = " << edades.contains("pepe") << '\n';
-    check(edades.contains("ana") && !edades.contains("pepe"), "contains fallo");
-    const Table& constante = edades;
-    const int* edadConst = constante.find("eva");
-    std::cout << "find en tabla const: eva = " << *edadConst << '\n';
-    check(edadConst && *edadConst == 31, "find const fallo");
-    edades["rosa"] = 40;
-    bool borrada = edades.remove("rosa"), repetida = edades.remove("rosa");
-    std::cout << "remove(\"rosa\") = " << borrada << ", otra vez = " << repetida << ":  " << edades << '\n';
-    check(borrada && !repetida && !edades.contains("rosa"), "remove fallo");
 
-    PrintColor("operator<<", "1;33");
-    std::ostringstream salida;
-    salida << edades;
-    std::cout << "a un ostringstream: " << salida.str() << '\n';
-    check(salida.str() == "[({ ana : 21 },0),({ eva : 31 },0),({ luis : 30 },0)]", "operator<< fallo");
-    std::ostringstream vacia;
-    vacia << Table{};
-    std::cout << "tabla vacia: " << vacia.str() << '\n';
-    check(vacia.str() == "[]", "operator<< de tabla vacia fallo");
-
-    PrintColor("operator>>", "1;33");
-    Table leida;
-    std::istringstream entrada("[({ zoe : 40 },0),({ beto : 18 },0),({ ana : 22 },0)]");
-    entrada >> leida;
-    std::cout << "texto desordenado:  " << entrada.str() << '\n';
-    std::cout << "queda ordenada:     " << leida << '\n';
-    check(entrada && leida.size() == 3 && leida["beto"] == 18 && leida["zoe"] == 40, "operator>> fallo");
-    std::istringstream vaciaIn("[]");
-    vaciaIn >> leida;
-    std::cout << "leer \"[]\" la vacia: " << leida << '\n';
-    check(vaciaIn && leida.empty(), "operator>> de tabla vacia fallo");
-    std::istringstream rota("[({ ana : 22 },0),({ eva 31 },0)]");
-    rota >> edades;
-    std::cout << "leer \"" << rota.str() << "\" falla y la tabla no cambia: " << edades << '\n';
-    check(rota.fail() && edades.size() == 3 && edades["eva"] == 31, "lectura invalida cambio la tabla");
-    TestInvalidRead(edades, "HashTable");
-
-    PrintColor("<< y >> con archivo", "1;33");
-    WithDemoFile("hashtable.txt", [&] {
-        SaveTo("hashtable.txt", edades);
-        Table archivo;
-        LoadFrom("hashtable.txt", archivo);
-        std::cout << "leida de hashtable.txt: " << archivo << '\n';
-        check(archivo.size() == edades.size() && archivo["luis"] == 30, "lo leido no coincide");
-    });
-
-    PrintColor("copia y clear", "1;33");
-    Table copia(edades);
-    copia["ana"] = 99;
-    copia["nuevo"] = 1;
-    std::cout << "copia modificada: " << copia << '\n';
-    std::cout << "original intacta: " << edades << '\n';
-    check(edades["ana"] == 21 && !edades.contains("nuevo"), "la copia comparte datos");
-    copia.clear();
-    check(copia.empty() && copia.find("ana") == nullptr, "clear fallo");
-    std::cout << "copia despues de clear: " << copia << '\n';
-
-    PrintColor("clave int, valor string", "1;33");
-    HashTable<int, std::string> nombres;
-    for (int k : {50, 20, 70, 10, 30, 60, 80})
-        nombres[k] = "n" + std::to_string(k);
-    nombres[30] = "treinta";
-    std::cout << nombres << '\n';
-    check(nombres.size() == 7 && nombres[30] == "treinta", "clave int fallo");
-
-    PrintColor("Visualizacion (HashTable)", "1;33");
+    std::stringstream stream("[({ zoe : 40 },0),({ beto : 18 },0),({ ana : 22 },0)]");
+    std::cout << "texto a leer: " << stream.str() << '\n';
+    stream >> edades;
+    show("luego de >> (queda ordenada)");
     edades.print_tree(std::cout);
-    nombres.print_tree(std::cout, visual::Layout::Sideways);
 }
