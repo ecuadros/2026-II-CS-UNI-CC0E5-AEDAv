@@ -60,10 +60,7 @@ public:
     Vector() {}
 
     // Cada elemento de la lista es una pareja (valor, ref) para un Node
-    Vector(std::initializer_list<std::pair<value_type, Ref>> values) {
-        for (const auto &v : values)
-            push_back(v.first, v.second);
-    }
+    Vector(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
 
     virtual ~Vector() {
         clear();

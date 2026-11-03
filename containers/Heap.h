@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <mutex>
+#include <ostream>
 #include <stdexcept>
 #include <utility>
 
@@ -56,9 +57,19 @@ private:
 public:
     Heap() = default;
 
-    Heap(std::initializer_list<std::pair<value_type, Ref>> initList) {
-        for (const auto& [value, ref] : initList) push(value, ref);
-    }
+    Heap(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
+
+    struct View {
+        using Handle = size_t;
+        const Storage* data;
+
+        Handle root() const { return 0; }
+        Handle child(Handle i, bool side) const { return 2 * i + 1 + side; }
+        bool valid(Handle i) const { return i < data->size(); }
+        void label(std::ostream& os, Handle i) const { os << (*data)[i]; }
+    };
+
+    View tree_view() const { return View{&m_data}; }
 
     ForwardIterator begin() const { return m_data.begin(); }
     ForwardIterator end() const { return m_data.end(); }

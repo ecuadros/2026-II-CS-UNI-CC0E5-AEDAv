@@ -13,6 +13,7 @@
 #include <utility>
 #include <unistd.h>
 #include "containers/aliases.h"
+#include "containers/hashtable.h"
 #include "Demos.h"
 
 template <typename Container>
@@ -42,6 +43,8 @@ concept TreeLike = requires(C& t, const typename C::value_type& v, std::ostream&
     t.height();
     t.remove(v);
     t.print_sideways(os);
+    t.print_tree(os);
+    t.print_cursor(os);
 };
 
 template <typename C>
@@ -215,6 +218,16 @@ void TestTraversal(Container& container, const std::string& name) {
 }
 
 template <typename Container>
+void TestVisualize(Container& container, const std::string& name) {
+    PrintColor("TestVisualize (" + name + ")");
+    container.visualize(std::cout);
+    if constexpr (visual::HasTreeView<Container> && !TreeLike<Container>) {
+        std::cout << "Como arreglo:\n";
+        container.print_linear(std::cout);
+    }
+}
+
+template <typename Container>
 void TestGenericContainer(Container& container, const std::string& filename = "container.txt") {
     WithDemoFile(filename, [&] {
         PrintColor("TestGenericContainer (" + filename + ")");
@@ -340,6 +353,7 @@ void TestStructure(Container& container, const std::string& name) {
 
     TestContainer(container, values, name + ".txt");
     TestTraversal(container, name);
+    TestVisualize(container, name);
 
     if constexpr (HeapLike<Container>) {
         std::cout << "Top: " << container.top() << '\n';
@@ -463,6 +477,8 @@ template <TreeLike Tree> void TestTreeHeight(const std::string& name) {
         tree.insert(value, value * 10);
     std::cout << "Insertando 1..15 en orden, altura = " << tree.height() << '\n';
     tree.print_sideways(std::cout);
+    tree.print_tree(std::cout);
+    tree.print_cursor(std::cout);
     CheckTree(tree, name);
 }
 
@@ -471,6 +487,8 @@ template <TreeLike Tree> void TestTree(const std::string& name) {
               {60, 600}, {80, 800}, {35, 350}, {65, 650}};
     PrintColor("Visualizacion (" + name + ")");
     tree.print_sideways(std::cout);
+    tree.print_tree(std::cout);
+    tree.print_cursor(std::cout);
     TestTreeTraversals(tree, name);
     TestTreeRemove(tree, name);
     TestTreeHeight<Tree>(name);
@@ -550,4 +568,29 @@ void DemoBinaryTree() { Demo<BinarySearchTree<TX>>("BinaryTree"); }
 void DemoAVL() {
     Demo<AVLSearchTree<TX>>("AVL");
     DemoRaceCondition<AVLSearchTree<TX>>("AVL");
+}
+
+void DemoHashTable() {
+    PrintColor("DemoHashTable");
+    HashTable<std::string, int> edades;
+    edades["ana"] = 20;
+    edades["luis"] = 25;
+    edades["eva"] = 30;
+    edades["ana"] = 21;
+    edades["eva"] += 1;
+    if (edades.size() != 3 || edades["ana"] != 21 || edades["eva"] != 31)
+        throw std::runtime_error("HashTable: operator[] fallo");
+    std::cout << "Tabla: " << edades << '\n';
+
+    PrintColor("Visualizacion (HashTable)");
+    edades.print_tree(std::cout);
+
+    WithDemoFile("hashtable.txt", [&] {
+        SaveTo("hashtable.txt", edades);
+        HashTable<std::string, int> leida;
+        LoadFrom("hashtable.txt", leida);
+        std::cout << "Leida: " << leida << '\n';
+        if (leida.size() != edades.size() || leida["luis"] != 25)
+            throw std::runtime_error("HashTable: lo leido no coincide");
+    });
 }

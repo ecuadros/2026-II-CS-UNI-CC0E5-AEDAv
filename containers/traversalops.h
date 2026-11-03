@@ -3,9 +3,21 @@
 
 #include "container_stream.h"
 #include "traversal_algorithms.h"
+#include "visualization.h"
 #include <istream>
 #include <mutex>
 #include <utility>
+
+template <class Container, class Values>
+void fill_from(Container& container, const Values& values) {
+    try {
+        for (const auto& [value, ref] : values)
+            container.push_back(value, ref);
+    } catch (...) {
+        container.clear();
+        throw;
+    }
+}
 
 template <class Container>
 concept ReverseTraversable = requires(Container& container) {
@@ -21,6 +33,11 @@ protected:
 };
 
 struct LockedTraversal {
+    template <class Self>
+    static std::lock_guard<std::mutex> guard(Self& c) {
+        return std::lock_guard<std::mutex>(c.m_mutex);
+    }
+
     template <bool Reverse, class Self, class Algorithm, class... Args>
     static decltype(auto) run(Self& c, Algorithm algorithm, Args&&... args) {
         std::lock_guard lock(c.m_mutex);
@@ -92,15 +109,55 @@ class ReadableOp {
     }
 };
 
+class VisualOp {
+public:
+    template <class Self>
+        requires visual::HasTreeView<Self>
+    void print_sideways(this const Self& self, std::ostream& os) {
+        auto lock = LockedTraversal::guard(self);
+        visual::print_sideways(os, self.tree_view());
+    }
+
+    template <class Self>
+        requires visual::HasTreeView<Self>
+    void print_tree(this const Self& self, std::ostream& os) {
+        auto lock = LockedTraversal::guard(self);
+        visual::print_tree(os, self.tree_view());
+    }
+
+    template <class Self>
+        requires visual::HasTreeView<Self>
+    void print_cursor(this const Self& self, std::ostream& os) {
+        auto lock = LockedTraversal::guard(self);
+        visual::print_cursor(os, self.tree_view());
+    }
+
+    template <class Self>
+        requires visual::LinearView<Self>
+    void print_linear(this const Self& self, std::ostream& os) {
+        auto lock = LockedTraversal::guard(self);
+        visual::print_linear(os, self);
+    }
+
+    template <class Self>
+        requires visual::HasTreeView<Self> || visual::LinearView<Self>
+    void visualize(this const Self& self, std::ostream& os) {
+        if constexpr (visual::HasTreeView<Self>)
+            self.print_tree(os);
+        else
+            self.print_linear(os);
+    }
+};
+
 template <class... Ops>
 class TraversalOps : public LockableOp, public Ops... {};
 
 using FullTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
                                       RFirstThatOp, ApplyFunctionOp,
-                                      PrintableOp, ReadableOp>;
+                                      PrintableOp, ReadableOp, VisualOp>;
 
 using SearchTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
                                          RFirstThatOp, PrintableOp,
-                                         ReadableOp>;
+                                         ReadableOp, VisualOp>;
 
 #endif // TRAVERSALOPS_H

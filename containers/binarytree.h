@@ -9,7 +9,6 @@
 #include <initializer_list>
 #include <mutex>
 #include <ostream>
-#include <string>
 #include <utility>
 
 template <typename T, typename Derived = void>
@@ -39,17 +38,20 @@ private:
     NodePtr m_root = nullptr; // root of the binary tree
     std::size_t m_size = 0;
 
-    void internal_insert(NodePtr& node, const value_type& value, Ref ref) {
-        NodePtr* slot = &node;
+    std::pair<NodePtr, bool> internal_insert(const value_type& value, Ref ref, bool unique) {
+        NodePtr* slot = &m_root;
         NodePtr parent = nullptr;
         while (*slot) {
             parent = *slot;
-            slot = &(*slot)->m_pChild[value > (*slot)->getValue()];
+            if (unique && value == parent->getValue()) return {parent, false};
+            slot = &parent->m_pChild[value > parent->getValue()];
         }
-        *slot = new Node(value, ref);
-        (*slot)->m_pParent = parent;
+        NodePtr node = new Node(value, ref);
+        node->m_pParent = parent;
+        *slot = node;
         ++m_size;
-        after_insert(*slot);
+        after_insert(node);
+        return {node, true};
     }
 
     NodePtr find_node(const value_type& value) const {
@@ -86,15 +88,6 @@ private:
         return copy;
     }
 
-    void print_sideways(std::ostream& os, NodePtr node, std::size_t depth) const {
-        if (!node) return;
-        print_sideways(os, node->m_pChild[1], depth + 1);
-        os << std::string(depth * 10, ' ');
-        print_node(os, *node);
-        os << '\n';
-        print_sideways(os, node->m_pChild[0], depth + 1);
-    }
-
     template <TreeOrder Order, bool Reverse> Traversal<Order, Reverse> traversal() const {
         return Traversal<Order, Reverse>(m_root);
     }
@@ -105,7 +98,7 @@ protected:
     virtual NodePtr replacement(NodePtr node) const { return extreme(node->m_pChild[1], 0); }
     virtual void print_node(std::ostream& os, const Node& node) const { os << node; }
 
-    virtual std::size_t height(NodePtr node) const {
+    virtual std::size_t height(const Node* node) const {
         if (!node) return 0;
         return 1 + std::max(height(node->m_pChild[0]), height(node->m_pChild[1]));
     }
@@ -130,15 +123,7 @@ protected:
 public:
     BinaryTree() = default;
 
-    BinaryTree(std::initializer_list<std::pair<value_type, Ref>> values) {
-        try {
-            for (const auto& [value, ref] : values)
-                insert(value, ref);
-        } catch (...) {
-            clear();
-            throw;
-        }
-    }
+    BinaryTree(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
 
     BinaryTree(const BinaryTree& other) {
         std::lock_guard lock(other.m_mutex);
@@ -161,7 +146,13 @@ public:
 
     void insert(const value_type& value, Ref ref) {
         std::lock_guard lock(m_mutex);
-        internal_insert(m_root, value, ref);
+        internal_insert(value, ref, false);
+    }
+
+    std::pair<value_type*, bool> insert_unique(const value_type& value, Ref ref) {
+        std::lock_guard lock(m_mutex);
+        auto [node, inserted] = internal_insert(value, ref, true);
+        return {&node->value(), inserted};
     }
 
     bool remove(const value_type& value) {
@@ -221,10 +212,18 @@ public:
         m_size = 0;
     }
 
-    void print_sideways(std::ostream& os) const {
-        std::lock_guard lock(m_mutex);
-        print_sideways(os, m_root, 0);
-    }
+    struct View {
+        using Handle = const Node*;
+        const BinaryTree* tree;
+
+        Handle root() const { return tree->m_root; }
+        Handle child(Handle node, bool side) const { return node->m_pChild[side]; }
+        bool valid(Handle node) const { return node != nullptr; }
+        void label(std::ostream& os, Handle node) const { tree->print_node(os, *node); }
+        std::size_t height(Handle node) const { return tree->height(node); }
+    };
+
+    View tree_view() const { return View{this}; }
 
     ForwardIterator begin() const { return ForwardIterator(m_root); }
     ForwardIterator end() const { return ForwardIterator(nullptr); }

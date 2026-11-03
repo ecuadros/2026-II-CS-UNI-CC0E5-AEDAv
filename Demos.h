@@ -10,5 +10,6 @@ void DemoCircularDoubleLinkedList();
 void DemoHeap();
 void DemoBinaryTree();
 void DemoAVL();
+void DemoHashTable();
 
 #endif // __DEMOS_H__

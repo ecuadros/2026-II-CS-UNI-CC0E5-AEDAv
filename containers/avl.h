@@ -26,10 +26,7 @@ public:
 
     AVLTree() = default;
 
-    AVLTree(std::initializer_list<std::pair<value_type, Ref>> values) {
-        for (const auto& [value, ref] : values)
-            this->insert(value, ref);
-    }
+    AVLTree(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
 
 protected:
     void after_insert(NodePtr node) override {
@@ -62,7 +59,7 @@ protected:
         return extreme(node->m_pChild[side], !side);
     }
 
-    std::size_t height(NodePtr node) const override {
+    std::size_t height(const Node* node) const override {
         std::size_t h = 0;
         for (; node; ++h)
             node = node->m_pChild[node->m_balance > 0];

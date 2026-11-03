@@ -15,6 +15,7 @@ public:
     using NodePtr           = Node *;
     using ForwardIterator   = typename Traits::ForwardIterator;
     using Compare           = typename Traits::Compare;
+    static constexpr bool is_circular = Circular;
 protected:
     NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
@@ -57,10 +58,7 @@ public:
     LinkedList() = default;
     LinkedList(const LinkedList& another){ *this = another; }
     LinkedList& operator=(const LinkedList& another);
-    LinkedList(std::initializer_list<std::pair<value_type, Ref>> values) {
-        for (const auto &v : values)
-            push_back(v.first, v.second);
-    }
+    LinkedList(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
 
     void clear();
     ~LinkedList(){ clear(); }

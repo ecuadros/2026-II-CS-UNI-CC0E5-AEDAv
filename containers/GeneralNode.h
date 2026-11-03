@@ -12,7 +12,6 @@ struct StreamDelimiters {
     static constexpr Delim node_open       = '(';
     static constexpr Delim node_close      = ')';
 
-    // Lee un delimitador y marca failbit si no es el esperado
     static bool expect(std::istream& is, Delim wanted) {
         Delim actual;
         if (!(is >> actual)) return false;
@@ -22,7 +21,6 @@ struct StreamDelimiters {
     }
 };
 
-// Tipo del nodo final en jerarquias CRTP: Self si Derived es void, si no Derived
 template <typename Self, typename Derived>
 using NodeSelf = std::conditional_t<std::is_void_v<Derived>, Self, Derived>;
 
@@ -33,9 +31,9 @@ private:
     Ref m_ref;      // Reference to the value
 
 public:
-    GeneralNode() = default; // requerido por resize(): new Node[new_cap]
-    GeneralNode(const T& value, Ref ref) : m_value(value), m_ref(ref) {}
-    T    getValue() const { return m_value; }
+    GeneralNode() = default; 
+    GeneralNode(const T& value, Ref ref) : m_value(value), m_ref(ref) {};
+    const T& getValue() const { return m_value; }
     Ref  getRef()   const { return m_ref;   }
     T&   value()          { return m_value; } // acceso mutable para ApplyFunction
 
