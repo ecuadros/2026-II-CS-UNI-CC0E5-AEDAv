@@ -595,14 +595,13 @@ void DemoAVLStepByStep() {
 }
 
 void DemoHashTableStepByStep() {
-    PrintColor("DemoHashTable paso a paso (AVL ordenado por hash de la clave)");
+    PrintColor("DemoHashTable paso a paso (AVL ordenado por clave)");
     using Table = HashTable<std::string, int>;
     using Entry = Table::Entry;
     Table table;
     int age = 18;
     for (std::string key : {"ana", "luis", "eva", "juan", "rosa", "pedro", "maria", "jose"}) {
-        std::string title = "tabla[\"" + key + "\"] = " + std::to_string(age) + "   (hash = " +
-                            std::to_string(Entry(key).hash()) + ")";
+        std::string title = "tabla[\"" + key + "\"] = " + std::to_string(age);
         AVLStep(table, title, [&](auto& t, auto& s) {
             s.insert_unique(Entry(key), Ref{});
             t[key] = age;
@@ -671,26 +670,102 @@ void DemoAVL() {
 }
 
 void DemoHashTable() {
+    using Table = HashTable<std::string, int>;
+    auto check = [](bool ok, const std::string& what) {
+        if (!ok) throw std::runtime_error("HashTable: " + what);
+    };
     PrintColor("DemoHashTable");
-    HashTable<std::string, int> edades;
+
+    PrintColor("operator[]", "1;33");
+    Table edades;
     edades["ana"] = 20;
     edades["luis"] = 25;
     edades["eva"] = 30;
+    std::cout << "insertar ana, luis, eva:  " << edades << '\n';
     edades["ana"] = 21;
+    std::cout << "sobrescribir ana = 21:    " << edades << '\n';
     edades["eva"] += 1;
-    if (edades.size() != 3 || edades["ana"] != 21 || edades["eva"] != 31)
-        throw std::runtime_error("HashTable: operator[] fallo");
-    std::cout << "Tabla: " << edades << '\n';
+    std::cout << "eva += 1:                 " << edades << '\n';
+    check(edades.size() == 3 && edades["ana"] == 21 && edades["eva"] == 31, "operator[] fallo");
+    int nadie = edades["nadie"];
+    std::cout << "leer edades[\"nadie\"] = " << nadie << " (la crea con 0): " << edades << '\n';
+    check(nadie == 0 && edades.size() == 4, "operator[] no creo la clave nueva");
+    edades.remove("nadie");
 
-    PrintColor("Visualizacion (HashTable)");
-    edades.print_tree(std::cout);
+    PrintColor("find / contains / remove", "1;33");
+    if (auto edad = edades.find("luis")) *edad += 5;
+    std::cout << "find(\"luis\") y += 5:      " << edades << '\n';
+    check(edades["luis"] == 30, "find no devolvio el valor real");
+    check(edades.find("pepe") == nullptr, "find encontro una clave que no existe");
+    check(edades.size() == 3, "find creo una clave");
+    std::cout << std::boolalpha << "contains(\"ana\") = " << edades.contains("ana")
+              << ", contains(\"pepe\") = " << edades.contains("pepe") << '\n';
+    check(edades.contains("ana") && !edades.contains("pepe"), "contains fallo");
+    const Table& constante = edades;
+    const int* edadConst = constante.find("eva");
+    std::cout << "find en tabla const: eva = " << *edadConst << '\n';
+    check(edadConst && *edadConst == 31, "find const fallo");
+    edades["rosa"] = 40;
+    bool borrada = edades.remove("rosa"), repetida = edades.remove("rosa");
+    std::cout << "remove(\"rosa\") = " << borrada << ", otra vez = " << repetida << ":  " << edades << '\n';
+    check(borrada && !repetida && !edades.contains("rosa"), "remove fallo");
 
+    PrintColor("operator<<", "1;33");
+    std::ostringstream salida;
+    salida << edades;
+    std::cout << "a un ostringstream: " << salida.str() << '\n';
+    check(salida.str() == "[({ ana : 21 },0),({ eva : 31 },0),({ luis : 30 },0)]", "operator<< fallo");
+    std::ostringstream vacia;
+    vacia << Table{};
+    std::cout << "tabla vacia: " << vacia.str() << '\n';
+    check(vacia.str() == "[]", "operator<< de tabla vacia fallo");
+
+    PrintColor("operator>>", "1;33");
+    Table leida;
+    std::istringstream entrada("[({ zoe : 40 },0),({ beto : 18 },0),({ ana : 22 },0)]");
+    entrada >> leida;
+    std::cout << "texto desordenado:  " << entrada.str() << '\n';
+    std::cout << "queda ordenada:     " << leida << '\n';
+    check(entrada && leida.size() == 3 && leida["beto"] == 18 && leida["zoe"] == 40, "operator>> fallo");
+    std::istringstream vaciaIn("[]");
+    vaciaIn >> leida;
+    std::cout << "leer \"[]\" la vacia: " << leida << '\n';
+    check(vaciaIn && leida.empty(), "operator>> de tabla vacia fallo");
+    std::istringstream rota("[({ ana : 22 },0),({ eva 31 },0)]");
+    rota >> edades;
+    std::cout << "leer \"" << rota.str() << "\" falla y la tabla no cambia: " << edades << '\n';
+    check(rota.fail() && edades.size() == 3 && edades["eva"] == 31, "lectura invalida cambio la tabla");
+    TestInvalidRead(edades, "HashTable");
+
+    PrintColor("<< y >> con archivo", "1;33");
     WithDemoFile("hashtable.txt", [&] {
         SaveTo("hashtable.txt", edades);
-        HashTable<std::string, int> leida;
-        LoadFrom("hashtable.txt", leida);
-        std::cout << "Leida: " << leida << '\n';
-        if (leida.size() != edades.size() || leida["luis"] != 25)
-            throw std::runtime_error("HashTable: lo leido no coincide");
+        Table archivo;
+        LoadFrom("hashtable.txt", archivo);
+        std::cout << "leida de hashtable.txt: " << archivo << '\n';
+        check(archivo.size() == edades.size() && archivo["luis"] == 30, "lo leido no coincide");
     });
+
+    PrintColor("copia y clear", "1;33");
+    Table copia(edades);
+    copia["ana"] = 99;
+    copia["nuevo"] = 1;
+    std::cout << "copia modificada: " << copia << '\n';
+    std::cout << "original intacta: " << edades << '\n';
+    check(edades["ana"] == 21 && !edades.contains("nuevo"), "la copia comparte datos");
+    copia.clear();
+    check(copia.empty() && copia.find("ana") == nullptr, "clear fallo");
+    std::cout << "copia despues de clear: " << copia << '\n';
+
+    PrintColor("clave int, valor string", "1;33");
+    HashTable<int, std::string> nombres;
+    for (int k : {50, 20, 70, 10, 30, 60, 80})
+        nombres[k] = "n" + std::to_string(k);
+    nombres[30] = "treinta";
+    std::cout << nombres << '\n';
+    check(nombres.size() == 7 && nombres[30] == "treinta", "clave int fallo");
+
+    PrintColor("Visualizacion (HashTable)", "1;33");
+    edades.print_tree(std::cout);
+    nombres.print_tree(std::cout, visual::Layout::Sideways);
 }
