@@ -22,9 +22,11 @@ public:
 
 };
 
-enum class Traversal { PreOrder = 0, InOrder = 1, PostOrder = 2 };
+enum class Traversal { PreOrder, InOrder, PostOrder };
+enum class Direction { Asc, Desc };
+enum Side : TX { Left, Right, Root };
 
-template <typename Node, Traversal Order, TX Dir>
+template <typename Node, Traversal Order, Direction Dir>
 class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<Node, Order, Dir>, Node> {
 public:
     using MySelf = BinaryTreeIterator<Node, Order, Dir>;
@@ -32,40 +34,42 @@ public:
     using NodePtr = Node*;
 
     explicit BinaryTreeIterator(NodePtr root)
-        : Parent(root && Order != Traversal::PreOrder ? next(root, 0) : root) {}
+        : Parent(root && Order != Traversal::PreOrder ? next(root, Traversal::PreOrder) : root) {}
 
     MySelf& operator++() {
         if (Parent::m_ptr)
-            Parent::m_ptr = next(Parent::m_ptr, TX(Order));
+            Parent::m_ptr = next(Parent::m_ptr, Order);
         return *this;
     }
 
 private:
-    static NodePtr next(NodePtr node, TX done);
+    static NodePtr next(NodePtr node, Traversal stage);
 };
 
-template <typename Node, Traversal Order, TX Dir>
-auto BinaryTreeIterator<Node, Order, Dir>::next(NodePtr node, TX done) -> NodePtr {
+template <typename Node, Traversal Order, Direction Dir>
+auto BinaryTreeIterator<Node, Order, Dir>::next(NodePtr node, Traversal stage) -> NodePtr {
+    Side first = Dir == Direction::Asc ? Left : Right;
+    Side last = Dir == Direction::Asc ? Right : Left;
     do {
-        if (done == 2) {
+        if (stage == Traversal::PostOrder) {
             NodePtr parent = node->m_parent;
-            done = parent && node == parent->m_pChild[Dir] ? 1 : 2;
+            stage = parent && node == parent->m_pChild[first] ? Traversal::InOrder : Traversal::PostOrder;
             node = parent;
-        } else if (NodePtr child = node->m_pChild[done ? 1-Dir : Dir]) {
+        } else if (NodePtr child = node->m_pChild[stage == Traversal::InOrder ? last : first]) {
             node = child;
-            done = 0;
+            stage = Traversal::PreOrder;
         } else {
-            ++done;
+            stage = stage == Traversal::PreOrder ? Traversal::InOrder : Traversal::PostOrder;
         }
-    } while (node && done != TX(Order));
+    } while (node && stage != Order);
     return node;
 }
 
 template <typename Node>
-using BinaryTreeForwardIterator = BinaryTreeIterator<Node, Traversal::InOrder, 0>;
+using BinaryTreeForwardIterator = BinaryTreeIterator<Node, Traversal::InOrder, Direction::Asc>;
 
 template <typename Node>
-using BinaryTreeBackwardIterator = BinaryTreeIterator<Node, Traversal::InOrder, 1>;
+using BinaryTreeBackwardIterator = BinaryTreeIterator<Node, Traversal::InOrder, Direction::Desc>;
 
 template <typename T, typename _Node = BinaryTreeNode<T>>
 struct BinaryTreeTraits {
@@ -97,7 +101,7 @@ public:
     using typename Parent::ForwardIterator;
     using BackwardIterator = typename Traits::BackwardIterator;
     using Compare = typename Traits::Compare;
-    template <Traversal Order, TX Dir>
+    template <Traversal Order, Direction Dir>
     using Iterator = BinaryTreeIterator<Node, Order, Dir>;
 
 protected:
@@ -111,7 +115,7 @@ private:
     NodePtr internal_remove(NodePtr node);
     void clear_recursive(NodePtr node);
     NodePtr clone_recursive(NodePtr node, NodePtr parent) const;
-    void print_recursive(std::ostream& os, NodePtr node, const std::string& prefix, TX side) const;
+    void print_recursive(std::ostream& os, NodePtr node, const std::string& prefix, Side side) const;
 public:
     BaseBinaryTree() = default;
     BaseBinaryTree(const BaseBinaryTree& another) { *this = another; }
@@ -141,12 +145,12 @@ public:
     BackwardIterator rbegin() const { return BackwardIterator(m_root); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
 
-    template <Traversal Order, TX Dir>
+    template <Traversal Order, Direction Dir>
     Iterator<Order, Dir> begin() const { return Iterator<Order, Dir>(m_root); }
-    template <Traversal Order, TX Dir>
+    template <Traversal Order, Direction Dir>
     Iterator<Order, Dir> end() const { return Iterator<Order, Dir>(nullptr); }
 
-    template <Traversal Order, TX Dir, typename Func, typename... Args>
+    template <Traversal Order, Direction Dir, typename Func, typename... Args>
     decltype(auto) traverse(Func func, Args&&... args) {
         std::lock_guard lock(this->m_mutex);
         return ::call(begin<Order, Dir>(), end<Order, Dir>(), func, std::forward<Args>(args)...);
@@ -163,7 +167,7 @@ auto BaseBinaryTree<Traits, Mixins...>::internal_insert(NodePtr& node, const val
         node->m_parent = parent;
         return node;
     }
-    auto branch = Compare()(node->getValue(), value);
+    Side branch = Compare()(node->getValue(), value) ? Right : Left;
     return internal_insert(node->m_pChild[branch], value, ref, node); // Tail recursion to insert in the correct branch
 }
 
@@ -172,8 +176,8 @@ bool BaseBinaryTree<Traits, Mixins...>::remove(const value_type& value) {
     std::lock_guard lock(this->m_mutex);
     NodePtr node = m_root;
     while (node) {
-        auto branch = Compare()(node->getValue(), value);
-        if (!branch && !Compare()(value, node->getValue()))
+        Side branch = Compare()(node->getValue(), value) ? Right : Left;
+        if (branch == Left && !Compare()(value, node->getValue()))
             break;
         node = node->m_pChild[branch];
     }
@@ -185,20 +189,20 @@ bool BaseBinaryTree<Traits, Mixins...>::remove(const value_type& value) {
 
 template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::internal_remove(NodePtr node) -> NodePtr {
-    NodePtr left = node->m_pChild[0], right = node->m_pChild[1];
+    NodePtr left = node->m_pChild[Left], right = node->m_pChild[Right];
     NodePtr replacement = left ? left : right;
     NodePtr changed = node->m_parent;
     if (left && right) {
-        while (replacement->m_pChild[1])
-            replacement = replacement->m_pChild[1];
+        while (replacement->m_pChild[Right])
+            replacement = replacement->m_pChild[Right];
         changed = replacement;
         if (replacement != left) {
             changed = replacement->m_parent;
-            transplant(replacement, replacement->m_pChild[0]);
-            replacement->m_pChild[0] = left;
+            transplant(replacement, replacement->m_pChild[Left]);
+            replacement->m_pChild[Left] = left;
             left->m_parent = replacement;
         }
-        replacement->m_pChild[1] = right;
+        replacement->m_pChild[Right] = right;
         right->m_parent = replacement;
     }
     transplant(node, replacement);
@@ -212,7 +216,7 @@ void BaseBinaryTree<Traits, Mixins...>::transplant(NodePtr node, NodePtr child) 
     if (!parent)
         m_root = child;
     else
-        parent->m_pChild[node == parent->m_pChild[1]] = child;
+        parent->m_pChild[node == parent->m_pChild[Right] ? Right : Left] = child;
     if (child)
         child->m_parent = parent;
 }
@@ -220,16 +224,16 @@ void BaseBinaryTree<Traits, Mixins...>::transplant(NodePtr node, NodePtr child) 
 template <typename Traits, template <typename> typename... Mixins>
 void BaseBinaryTree<Traits, Mixins...>::print(std::ostream& os) const {
     std::lock_guard lock(this->m_mutex);
-    print_recursive(os, m_root, "", 2);
+    print_recursive(os, m_root, "", Root);
 }
 
 template <typename Traits, template <typename> typename... Mixins>
-void BaseBinaryTree<Traits, Mixins...>::print_recursive(std::ostream& os, NodePtr node, const std::string& prefix, TX side) const {
+void BaseBinaryTree<Traits, Mixins...>::print_recursive(std::ostream& os, NodePtr node, const std::string& prefix, Side side) const {
     static const char* const branch[] = {"\\-- ", "/-- ", ""};
     if (!node) return;
-    print_recursive(os, node->m_pChild[1], prefix + (side == 0 ? "|   " : "    "), 1);
+    print_recursive(os, node->m_pChild[Right], prefix + (side == Left ? "|   " : "    "), Right);
     os << prefix << branch[side] << *node << "\n";
-    print_recursive(os, node->m_pChild[0], prefix + (side == 1 ? "|   " : "    "), 0);
+    print_recursive(os, node->m_pChild[Left], prefix + (side == Right ? "|   " : "    "), Left);
 }
 
 template <typename Traits, template <typename> typename... Mixins>
@@ -242,8 +246,8 @@ void BaseBinaryTree<Traits, Mixins...>::clear() {
 template <typename Traits, template <typename> typename... Mixins>
 void BaseBinaryTree<Traits, Mixins...>::clear_recursive(NodePtr node) {
     if (!node) return;
-    clear_recursive(node->m_pChild[0]);
-    clear_recursive(node->m_pChild[1]);
+    clear_recursive(node->m_pChild[Left]);
+    clear_recursive(node->m_pChild[Right]);
     delete node;
 }
 
@@ -262,8 +266,8 @@ auto BaseBinaryTree<Traits, Mixins...>::clone_recursive(NodePtr node, NodePtr pa
     if (!node) return nullptr;
     NodePtr copy = new Node(*node);
     copy->m_parent = parent;
-    copy->m_pChild[0] = clone_recursive(node->m_pChild[0], copy);
-    copy->m_pChild[1] = clone_recursive(node->m_pChild[1], copy);
+    copy->m_pChild[Left] = clone_recursive(node->m_pChild[Left], copy);
+    copy->m_pChild[Right] = clone_recursive(node->m_pChild[Right], copy);
     return copy;
 }
 

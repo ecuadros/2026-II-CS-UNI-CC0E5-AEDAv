@@ -327,7 +327,7 @@ void DemoHeap() {
     TestHeap(maxHeap);
 }
 
-template <Traversal Order, TX Dir, typename TreeContainer>
+template <Traversal Order, Direction Dir, typename TreeContainer>
 void TestTreeTraversal(TreeContainer &tree, const string &label) {
     using Node = typename TreeContainer::Node;
     cout << label << "[";
@@ -337,12 +337,12 @@ void TestTreeTraversal(TreeContainer &tree, const string &label) {
 
 template <typename TreeContainer>
 void TestTreeTraversals(TreeContainer &tree) {
-    TestTreeTraversal<Traversal::InOrder, 0>(tree, "Inorden asc:    ");
-    TestTreeTraversal<Traversal::InOrder, 1>(tree, "Inorden desc:   ");
-    TestTreeTraversal<Traversal::PreOrder, 0>(tree, "Preorden asc:   ");
-    TestTreeTraversal<Traversal::PreOrder, 1>(tree, "Preorden desc:  ");
-    TestTreeTraversal<Traversal::PostOrder, 0>(tree, "Postorden asc:  ");
-    TestTreeTraversal<Traversal::PostOrder, 1>(tree, "Postorden desc: ");
+    TestTreeTraversal<Traversal::InOrder, Direction::Asc>(tree, "Inorden asc:    ");
+    TestTreeTraversal<Traversal::InOrder, Direction::Desc>(tree, "Inorden desc:   ");
+    TestTreeTraversal<Traversal::PreOrder, Direction::Asc>(tree, "Preorden asc:   ");
+    TestTreeTraversal<Traversal::PreOrder, Direction::Desc>(tree, "Preorden desc:  ");
+    TestTreeTraversal<Traversal::PostOrder, Direction::Asc>(tree, "Postorden asc:  ");
+    TestTreeTraversal<Traversal::PostOrder, Direction::Desc>(tree, "Postorden desc: ");
 }
 
 template <typename TreeContainer>
@@ -372,7 +372,7 @@ void TestInsertOrder(const vector<pair<typename TreeContainer::value_type, Ref>>
 template <typename TreeContainer>
 vector<typename TreeContainer::value_type> InOrderValues(TreeContainer &tree) {
     vector<typename TreeContainer::value_type> values;
-    tree.template traverse<Traversal::InOrder, 0>([&values](auto &node) { values.push_back(node.getValue()); });
+    tree.template traverse<Traversal::InOrder, Direction::Asc>([&values](auto &node) { values.push_back(node.getValue()); });
     return values;
 }
 
