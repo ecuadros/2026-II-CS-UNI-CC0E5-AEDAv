@@ -57,6 +57,8 @@ protected:
         return extreme(node->m_pChild[side], !side);
     }
 
+    void take_place(NodePtr repl, const Node* node) override { repl->m_balance = node->m_balance; }
+
     std::size_t height(const Node* node) const override {
         std::size_t h = 0;
         for (; node; ++h)

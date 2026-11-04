@@ -109,6 +109,33 @@ protected:
         return node->m_pParent ? node->m_pParent->m_pChild[side_of(node)] : m_root;
     }
 
+    virtual void take_place(NodePtr, const Node*) {}
+
+    void detach(NodePtr node) {
+        NodePtr child = node->m_pChild[0] ? node->m_pChild[0] : node->m_pChild[1];
+        link_of(node) = child;
+        if (child) child->m_pParent = node->m_pParent;
+    }
+
+    std::pair<NodePtr, bool> unlink(NodePtr node) {
+        if (!node->m_pChild[0] || !node->m_pChild[1]) {
+            std::pair<NodePtr, bool> origin{node->m_pParent, side_of(node)};
+            detach(node);
+            return origin;
+        }
+        NodePtr repl = replacement(node);
+        std::pair<NodePtr, bool> origin{repl->m_pParent == node ? repl : repl->m_pParent, side_of(repl)};
+        detach(repl);
+        for (bool s : {false, true}) {
+            repl->m_pChild[s] = node->m_pChild[s];
+            if (repl->m_pChild[s]) repl->m_pChild[s]->m_pParent = repl;
+        }
+        link_of(node) = repl;
+        repl->m_pParent = node->m_pParent;
+        take_place(repl, node);
+        return origin;
+    }
+
     NodePtr rotate(NodePtr x, bool dir) {
         NodePtr y = x->m_pChild[!dir];
         x->m_pChild[!dir] = y->m_pChild[dir];
@@ -162,16 +189,7 @@ public:
         std::lock_guard lock(this->m_mutex);
         NodePtr node = find_node(value);
         if (!node) return false;
-        if (node->m_pChild[0] && node->m_pChild[1]) {
-            NodePtr repl = replacement(node);
-            static_cast<GeneralNode<value_type>&>(*node) = *repl;
-            node = repl;
-        }
-        NodePtr child = node->m_pChild[0] ? node->m_pChild[0] : node->m_pChild[1];
-        NodePtr parent = node->m_pParent;
-        bool side = side_of(node);
-        link_of(node) = child;
-        if (child) child->m_pParent = parent;
+        auto [parent, side] = unlink(node);
         delete node;
         --m_size;
         after_remove(parent, side);
