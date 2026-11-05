@@ -4,6 +4,7 @@
 #include "GeneralIterator.h"
 #include "GeneralContainer.h"
 #include "mixins.h"
+#include <cstddef>
 
 template <typename T>
 class BinaryTreeNode : public GeneralNode<T> {
@@ -26,25 +27,29 @@ enum class TransversarOrder {
     PostOrder
 };
 
-template <typename T, TransversarOrder TrOrder, TX Dir>
-class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T, TrOrder, Dir>, BinaryTreeNode<T>> {
+template <typename T, TX Dir>
+class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T, Dir>, BinaryTreeNode<T>> {
 public:
     using Node = BinaryTreeNode<T>;
-    using MySelf = BinaryTreeIterator<T, TrOrder, Dir>;
+    using MySelf = BinaryTreeIterator<T, Dir>;
     using Parent = GeneralIterator<MySelf, Node>;
     using NodePtr = Node*;
-    using Parent::Parent;
-    NodePtr m_parent = nullptr;
-
+    //using Parent::Parent;
+    //NodePtr m_parent = nullptr;
+private:
+    TransversarOrder m_TrOrder;
+public:
+    BinaryTreeIterator(NodePtr ptr, TransversarOrder _TrOrder=TransversarOrder::InOrder): Parent(ptr), m_TrOrder{_TrOrder} {}
+    void setTrOrder(TransversarOrder _TrOrder) { m_TrOrder = _TrOrder; }
     MySelf& operator++();
 };
 
-template <typename T, TransversarOrder TrOrder, TX Dir>
-auto BinaryTreeIterator<T, TrOrder, Dir>::operator++() -> MySelf& {
+template <typename T, TX Dir>
+auto BinaryTreeIterator<T, Dir>::operator++() -> MySelf& {
     auto node = Parent::m_ptr;
     if (node == nullptr)
         return *this;
-    switch (TrOrder) {
+    switch (m_TrOrder) {
         case TransversarOrder::InOrder:
             if (node->m_pChild[1-Dir]) {
                 node = node->m_pChild[1-Dir];
@@ -100,28 +105,31 @@ auto BinaryTreeIterator<T, TrOrder, Dir>::operator++() -> MySelf& {
 
 }
 
-template <typename T, TransversarOrder TrOrder>
-using BinaryTreeForwardIterator = BinaryTreeIterator<T, TrOrder, 0>;
+template <typename T>
+using BinaryTreeForwardIterator = BinaryTreeIterator<T, 0>;
 
-template <typename T, TransversarOrder TrOrder>
-using BinaryTreeBackwardIterator = BinaryTreeIterator<T, TrOrder, 1>;
+template <typename T>
+using BinaryTreeBackwardIterator = BinaryTreeIterator<T, 1>;
 
-template <typename T, TransversarOrder TrOrder>
+template <typename T>
 struct BinaryTreeTraits {
     using Node              = BinaryTreeNode<T>;
-    using ForwardIterator   = BinaryTreeForwardIterator<T, TrOrder>;
-    using BackwardIterator  = BinaryTreeBackwardIterator<T, TrOrder>;
+    using ForwardIterator   = BinaryTreeForwardIterator<T>;
+    using BackwardIterator  = BinaryTreeBackwardIterator<T>;
     using Order             = TransversarOrder;
 };
 
-template <typename T, TransversarOrder TrOrder>
-struct BinaryTreeAscTraits : public AscendingTraits<T>, public BinaryTreeTraits<T, TrOrder> {};
+template <typename T>
+struct BinaryTreeAscTraits : public AscendingTraits<T>, public BinaryTreeTraits<T> {};
 
-template <typename T, TransversarOrder TrOrder>
-struct BinaryTreeDescTraits : public DescendingTraits<T>, public BinaryTreeTraits<T, TrOrder> {};
+template <typename T>
+struct BinaryTreeDescTraits : public DescendingTraits<T>, public BinaryTreeTraits<T> {};
 
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBinaryTree;
+
+template <typename Iterator>
+class BinaryTreeProxy;
 
 template <typename Traits>
 using BinaryTree = BaseBinaryTree<Traits, Callable, Applicable, Searchable, ReverseCallable, Printable, Readable>;
@@ -146,6 +154,11 @@ protected:
 private:
     NodePtr m_root = nullptr; // root of the binary tree
     void internal_insert(NodePtr& node, const value_type& value, Ref ref, NodePtr parent = nullptr);
+    NodePtr extremeLeafNode(NodePtr nodeptr, TX _Dir) const {
+        //NodePtr curr = m_root;
+        while (nodeptr && nodeptr->m_pChild[_Dir]) nodeptr = nodeptr->m_pChild[_Dir];
+        return nodeptr;
+    }
 public:
     BaseBinaryTree() = default;
     BaseBinaryTree(const BaseBinaryTree& another) { *this = another; }
@@ -177,6 +190,79 @@ public:
 
     BaseBinaryTree& operator=(const BaseBinaryTree& another);
     BaseBinaryTree& operator=(BaseBinaryTree&& another) noexcept;
+
+    BinaryTreeProxy<ForwardIterator> InOrder();
+    BinaryTreeProxy<BackwardIterator> ReverseInOrder();
+    BinaryTreeProxy<ForwardIterator> PreOrder();
+    BinaryTreeProxy<BackwardIterator> ReversePreOrder();
+    BinaryTreeProxy<ForwardIterator> PostOrder();
+    BinaryTreeProxy<BackwardIterator> ReversePostOrder();
+    NodePtr findNodePtr(value_type val);
+    void transplant(NodePtr original, NodePtr sustitute);
+    //Node remove(value_type val);
+
+    void print() const {
+        std::lock_guard lock(this->m_mutex);
+        if (!m_root) {
+            std::cout << "El árbol está vacío.\n";
+            return;
+        }
+
+        // 1. Limpiar pantalla y mover el cursor al inicio usando ANSI[cite: 2]
+        std::cout << "\033[2J\033[H";
+
+        // --- NIVEL 0: Raíz (Fila 1) ---
+        // Ampliamos el espacio horizontal a la columna 25 para dar margen
+        std::cout << "\033[1;25H" << m_root->getValue();
+
+        // --- NIVEL 1: Conectores superiores (Fila 3) ---
+        std::cout << "\033[3;22H" << "/";
+        std::cout << "\033[3;28H" << "\\";
+
+        // --- NIVEL 2: Hijos de la raíz (Fila 5) ---
+        if (m_root->m_pChild[0]) {
+            std::cout << "\033[5;19H" << m_root->m_pChild[0]->getValue(); // Ej. 31[cite: 2, 3, 4]
+        }
+        if (m_root->m_pChild[1]) {
+            std::cout << "\033[5;31H" << m_root->m_pChild[1]->getValue(); // Ej. 91[cite: 2, 3, 4]
+        }
+
+        // --- NIVEL 3: Conectores inferiores (Fila 7) ---
+        if (m_root->m_pChild[0]) {
+            std::cout << "\033[7;16H" << "/";
+            std::cout << "\033[7;22H" << "\\";
+        }
+        if (m_root->m_pChild[1]) {
+            std::cout << "\033[7;28H" << "/";
+            std::cout << "\033[7;34H" << "\\";
+        }
+
+        // --- NIVEL 4: Hijos de los nodos intermedios / Hojas (Fila 9) ---
+        // Hijos del subárbol izquierdo
+        if (m_root->m_pChild[0]) {
+            auto leftChild = m_root->m_pChild[0];
+            if (leftChild->m_pChild[0]) {
+                std::cout << "\033[9;13H" << leftChild->m_pChild[0]->getValue(); // Ej. 21[cite: 2, 3, 4]
+            }
+            if (leftChild->m_pChild[1]) {
+                std::cout << "\033[9;21H" << leftChild->m_pChild[1]->getValue(); // Ej. 41[cite: 2, 3, 4]
+            }
+        }
+
+        // Hijos del subárbol derecho (Aquí se incluye el hijo izquierdo y derecho de 91)
+        if (m_root->m_pChild[1]) {
+            auto rightChild = m_root->m_pChild[1];
+            if (rightChild->m_pChild[0]) {
+                std::cout << "\033[9;27H" << rightChild->m_pChild[0]->getValue(); // Hijo izquierdo de 91[cite: 2, 3, 4]
+            }
+            if (rightChild->m_pChild[1]) {
+                std::cout << "\033[9;35H" << rightChild->m_pChild[1]->getValue(); // Hijo derecho de 91 (Ej. 101)[cite: 2, 3, 4]
+            }
+        }
+
+        // Mover el cursor al final de la impresión para mantener la terminal limpia
+        std::cout << "\033[11;1H";
+    }
 };
 
 template <typename Traits, template <typename> typename... Mixins>
@@ -207,16 +293,12 @@ void BaseBinaryTree<Traits, Mixins...>::clear_recursive(NodePtr node) {
 
 template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::begin() const -> ForwardIterator {
-    NodePtr curr = m_root;
-    while (curr && curr->m_pChild[0]) curr = curr->m_pChild[0];
-    return ForwardIterator(curr);
+    return ForwardIterator(extremeLeafNode(m_root, 0));
 }
 
 template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::rbegin() const -> BackwardIterator {
-    NodePtr curr = m_root;
-    while (curr && curr->m_pChild[1]) curr = curr->m_pChild[1];
-    return BackwardIterator(curr);
+    return BackwardIterator(extremeLeafNode(m_root,1));
 }
 
 template <typename Traits, template <typename> typename... Mixins>
@@ -231,10 +313,97 @@ auto BaseBinaryTree<Traits, Mixins...>::operator=(BaseBinaryTree&& another) noex
     return *this;
 }
 
-template <typename Traits>
-class BinaryTreeInterface {
-    private:
-        BinaryTree<Traits> bt;
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::InOrder() -> BinaryTreeProxy<ForwardIterator> {
+    return BinaryTreeProxy<ForwardIterator>(ForwardIterator(extremeLeafNode(m_root, 0), Order::InOrder), ForwardIterator(nullptr, Order::InOrder));
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::ReverseInOrder() -> BinaryTreeProxy<BackwardIterator> {
+    return BinaryTreeProxy<BackwardIterator>(BackwardIterator(extremeLeafNode(m_root, 1), Order::InOrder), BackwardIterator(nullptr, Order::InOrder));
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::PreOrder() -> BinaryTreeProxy<ForwardIterator> {
+    return BinaryTreeProxy<ForwardIterator>(ForwardIterator(m_root, Order::PreOrder), ForwardIterator(nullptr, Order::PreOrder));
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::ReversePreOrder() -> BinaryTreeProxy<BackwardIterator> {
+    return BinaryTreeProxy<BackwardIterator>(BackwardIterator(m_root, Order::PreOrder), BackwardIterator(nullptr, Order::PreOrder));
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::PostOrder() -> BinaryTreeProxy<ForwardIterator> {
+    return BinaryTreeProxy<ForwardIterator>(ForwardIterator(extremeLeafNode(m_root, 0), Order::PostOrder), ForwardIterator(nullptr, Order::PostOrder));
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::ReversePostOrder() -> BinaryTreeProxy<BackwardIterator> {
+    return BinaryTreeProxy<BackwardIterator>(BackwardIterator(extremeLeafNode(m_root, 1), Order::PostOrder), BackwardIterator(nullptr, Order::PostOrder));
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::findNodePtr(value_type val) -> NodePtr {
+    auto current = m_root;
+    while (!current) {
+        if(current->getValue() == val) return current;
+        current = current->m_pChild[current->getValue() < val];
+    }
+    return current;
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+void BaseBinaryTree<Traits, Mixins...>::transplant(NodePtr original, NodePtr sustitute) {
+    if (!original) m_root = sustitute;
+    else {
+        auto dir = original == original->m_parent->m_pChild[1];
+        original->m_parent->m_pChild[dir] = sustitute;
+    }
+    if (sustitute && original) sustitute->m_parent = original->m_parent;
+    if (original) original->m_parent = nullptr;
+}
+
+// template <typename Traits, template <typename> typename... Mixins>
+// auto BaseBinaryTree<Traits, Mixins...>::remove(value_type val) -> Node {
+//     static Node nullNode;
+//     auto nodeFound = findNodePtr(val);
+//     if (!nodeFound) return nullNode;
+//     auto parent = nodeFound->m_parent;
+//     if (!nodeFound.m_pChild[0]) transplant(nodeFound, nodeFound.m_pChild[1]);
+//     else if (!nodeFound.m_pChild[1]) transplant(nodeFound, nodeFound.m_pChild[0]);
+//     else {
+//         auto newNode = extremeLeafNode(nodeFound.m_pChild[0], 1); //Supremo de menores a valor
+//         if (nodeFound != newNode->m_parent) {
+//             transplant(nodeFound, nodeFound.m_pChild[0]);
+//         }
+//     }
+//     /*auto last = nodeFound->m_pChild[0];
+//     if (last) {
+//         while (last->m_pChild[1]) last = last->m_pChild[1];
+//     }
+//     if (last) {
+//         parent->m_pChild[parent->m_pChild[1] == nodeFound] = nodeFound->m_pChild[1];
+//         nodeFound->m_pChild[1]->m_parent = parent;
+//     }
+//     else {
+//         ;
+//         }*/
+//     nodeFound->m_parent = nullptr;
+//     nodeFound->m_pChild[0] = nullptr;
+//     nodeFound->m_pChild[1] = nullptr;
+//     return *nodeFound;
+// }
+
+template <typename Iterator>
+class BinaryTreeProxy {
+private:
+    Iterator m_begin;
+    Iterator m_end;
+public:
+    BinaryTreeProxy(Iterator _begin, Iterator _end): m_begin(_begin), m_end(_end) {}
+    Iterator begin() { return m_begin; }
+    Iterator end() { return m_end; }
 };
 
 #endif // __BINARYTREE_H__

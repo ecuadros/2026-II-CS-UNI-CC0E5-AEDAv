@@ -59,9 +59,8 @@ void InsertElements(Container &container,
 
 template <typename Container>
 void TestContainer(Container &container,
-                    const vector<pair<typename Container::value_type, Ref>> &values,
                     const string &filename) {
-    InsertElements(container, values);
+    //InsertElements(container, values);
 
     // Impresion usando operador de inserción
     cout << "Container using operator<<: ";
@@ -134,12 +133,14 @@ void DemoVector() {
     // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
     // el constructor initializer_list arma el Vector inicial de una vez
     Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
+    InsertElements(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}});
+    TestContainer(vec, "vector.txt");
     TestTraversal(vec);
 
     ofstream("vector_str.txt", ios::trunc).close();
     Vector<VectorAscTraits<string>> strVec;
-    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
+    InsertElements(strVec, {{"Hello", 1}, {"World", 2}});
+    TestContainer(strVec, "vector_str.txt");
     TestTraversal(strVec);
 }
 
@@ -202,7 +203,8 @@ void TestLinkedList(Container &list, const string &filename) {
     ofstream(filename, ios::trunc).close();
 
     // Pruebas de push_back
-    TestContainer(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}}, filename);
+    InsertElements(list, {{5, 15}, {1, 11}, {8, 18}, {3, 13}});
+    TestContainer(list, filename);
     TestForwardTraversal(list);
 
     InsertElements(list, {{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
@@ -326,7 +328,8 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
     ofstream(filename, ios::trunc).close();
 
     // Pruebas de insercion y persistencia
-    TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}}, filename);
+    InsertElements(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}});
+    TestContainer(tree, filename);
     // Recorrido in-order
     TestTraversal(tree);
 
@@ -334,6 +337,48 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
     cout << "Arbol tras usar AddOne: " << tree << endl;
     tree.ApplyFunction(AddX<TX>, TX(10));
     cout << "Arbol tras usar AddX(10): " << tree << endl;
+
+    cout << endl;
+    tree.print();
+    cout << endl;
+
+    cout << "IN ORDER\n";
+    for (auto& elem: tree.InOrder()) {
+        cout << elem << " ";
+    }
+    cout << endl;
+    cout << "IN ORDER Reverse\n";
+    for (auto& elem: tree.ReverseInOrder()) {
+        cout << elem << " ";
+    }
+     cout << endl;
+
+     cout << "PRE ORDER\n";
+     for (auto& elem: tree.PreOrder()) {
+         cout << elem << " ";
+     }
+     cout << endl;
+     cout << "PRE ORDER Reverse\n";
+     for (auto& elem: tree.ReversePreOrder()) {
+         cout << elem << " ";
+     }
+      cout << endl;
+
+      cout << "POST ORDER\n";
+      for (auto& elem: tree.PostOrder()) {
+          cout << elem << " ";
+      }
+      cout << endl;
+      cout << "IN ORDER Reverse\n";
+      for (auto& elem: tree.ReversePostOrder()) {
+          cout << elem << " ";
+      }
+       cout << endl;
+    /*tree.ApplyFunction(AddOne);
+    cout << "Arbol tras usar AddOne: " << tree << endl;
+    tree.ApplyFunction(AddX<TX>, TX(10));
+    cout << "Arbol tras usar AddX(10): " << tree << endl;*/
+    cout << endl;
 
     tree.clear();
     cout << "Arbol luego de usar clear: " << tree << endl;
@@ -352,6 +397,6 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
 void DemoBinaryTree() {
     cout << "\n";
     PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
-    BinaryTree<BinaryTreeAscTraits<TX, TransversarOrder::PreOrder>> tree;
+    BinaryTree<BinaryTreeAscTraits<TX>> tree;
     TestBinaryTree(tree, "binarytree.txt");
 }
