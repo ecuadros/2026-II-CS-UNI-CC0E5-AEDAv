@@ -677,9 +677,10 @@ void DemoAVL() {
 }
 
 void DemoHashTable() {
-    Demo<HashTable<TX, TX>>("HashTable");
-
     PrintColor("DemoHashTable (operator[] y clave string)");
+    auto check = [](bool ok, const std::string& what) {
+        if (!ok) throw std::runtime_error("HashTable: " + what);
+    };
     HashTable<std::string, int> edades;
     auto show = [&](const std::string& label) { std::cout << label << ": " << edades << '\n'; };
 
@@ -690,18 +691,22 @@ void DemoHashTable() {
     edades["ana"] = 21;
     edades["eva"] += 1;
     show("ana = 21, eva += 1");
-    std::cout << "edades[\"nadie\"] = " << edades["nadie"] << '\n';
-    show("leer una clave que no existe la crea con 0");
+    check(edades.size() == 3 && edades["ana"] == 21 && edades["eva"] == 31, "operator[] fallo");
+    check(edades["nadie"] == 0 && edades.size() == 4, "operator[] no creo la clave nueva");
+    show("leer edades[\"nadie\"] la crea con 0");
 
     if (auto edad = edades.find("luis")) *edad += 5;
-    edades.remove("nadie");
+    check(edades.remove("nadie") && !edades.remove("nadie"), "remove fallo");
+    check(!edades.find("pepe") && !edades.contains("pepe") && edades.contains("ana"), "find/contains fallo");
     show("luis += 5 con find, remove(\"nadie\")");
-    std::cout << std::boolalpha << "contains(\"ana\") = " << edades.contains("ana")
-              << ", contains(\"pepe\") = " << edades.contains("pepe") << '\n';
 
     std::stringstream stream("[({ zoe : 40 },0),({ beto : 18 },0),({ ana : 22 },0)]");
-    std::cout << "texto a leer: " << stream.str() << '\n';
     stream >> edades;
-    show("luego de >> (queda ordenada)");
+    show(">> de texto desordenado");
+    check(stream && edades.size() == 3 && edades["zoe"] == 40, "operator>> fallo");
+    stream.clear();
+    stream.str("");
+    stream << edades;
+    check(stream.str() == "[({ ana : 22 },0),({ beto : 18 },0),({ zoe : 40 },0)]", "operator<< fallo");
     edades.print_tree(std::cout);
 }

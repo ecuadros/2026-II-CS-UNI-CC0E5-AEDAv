@@ -26,6 +26,8 @@ public:
 
     AVLTree(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
 
+    value_type& operator[](const value_type& value) { return *this->insert_unique(value, Ref{}).first; }
+
 protected:
     using Parent::side_of;
 
