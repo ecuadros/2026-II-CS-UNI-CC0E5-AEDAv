@@ -380,6 +380,11 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
     cout << "Arbol tras usar AddX(10): " << tree << endl;*/
     cout << endl;
 
+    tree.remove(101);
+    cout << endl;
+    tree.print();
+    cout << endl;
+
     tree.clear();
     cout << "Arbol luego de usar clear: " << tree << endl;
 

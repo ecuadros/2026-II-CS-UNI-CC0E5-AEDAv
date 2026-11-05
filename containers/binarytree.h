@@ -5,6 +5,8 @@
 #include "GeneralContainer.h"
 #include "mixins.h"
 #include <cstddef>
+#include <optional>
+#include <utility>
 
 template <typename T>
 class BinaryTreeNode : public GeneralNode<T> {
@@ -156,7 +158,7 @@ private:
     void internal_insert(NodePtr& node, const value_type& value, Ref ref, NodePtr parent = nullptr);
     NodePtr extremeLeafNode(NodePtr nodeptr, TX _Dir) const {
         //NodePtr curr = m_root;
-        while (nodeptr && nodeptr->m_pChild[_Dir]) nodeptr = nodeptr->m_pChild[_Dir];
+        while (nodeptr != nullptr && nodeptr->m_pChild[_Dir] != nullptr) nodeptr = nodeptr->m_pChild[_Dir];
         return nodeptr;
     }
 public:
@@ -199,7 +201,7 @@ public:
     BinaryTreeProxy<BackwardIterator> ReversePostOrder();
     NodePtr findNodePtr(value_type val);
     void transplant(NodePtr original, NodePtr sustitute);
-    //Node remove(value_type val);
+    Node remove(value_type val);
 
     void print() const {
         std::lock_guard lock(this->m_mutex);
@@ -346,7 +348,9 @@ auto BaseBinaryTree<Traits, Mixins...>::ReversePostOrder() -> BinaryTreeProxy<Ba
 template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::findNodePtr(value_type val) -> NodePtr {
     auto current = m_root;
-    while (!current) {
+    //cout << "AQUI\n";
+    while (current) {
+        //cout << *current << endl;
         if(current->getValue() == val) return current;
         current = current->m_pChild[current->getValue() < val];
     }
@@ -394,6 +398,38 @@ void BaseBinaryTree<Traits, Mixins...>::transplant(NodePtr original, NodePtr sus
 //     nodeFound->m_pChild[1] = nullptr;
 //     return *nodeFound;
 // }
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::remove(value_type val) -> Node {
+    static Node nullNode;
+    auto nodeFound = findNodePtr(val);
+    //cout << *nodeFound << endl;
+    if (!nodeFound) return nullNode;
+    auto hasLeftChild = nodeFound->m_pChild[0] != nullptr;
+    auto hasRightChild = nodeFound->m_pChild[1] != nullptr;
+    if (hasRightChild && hasRightChild) {
+        auto newNode = extremeLeafNode(nodeFound->m_pChild[0], 1); //Supremo de menores a valor
+        std::swap(nodeFound->value(), newNode->value());
+        std::swap(nodeFound->ref(), newNode->ref());
+        std::swap(nodeFound, newNode);
+        hasLeftChild = nodeFound->m_pChild[0] != nullptr;
+        hasRightChild = nodeFound->m_pChild[1] != nullptr;
+    }
+    auto parent = nodeFound->m_parent;
+    auto dir = nodeFound == parent->m_pChild[1];
+    if (hasLeftChild != hasRightChild) {
+        //auto dir = nodeFound == parent->m_pChild[1];
+        parent->m_pChild[dir] = nodeFound->m_pChild[hasRightChild];
+        parent->m_pChild[dir]->m_parent = parent;
+    }
+    else {
+        parent->m_pChild[dir] = nullptr;
+    }
+    nodeFound->m_parent = nullptr;
+    nodeFound->m_pChild[0] = nullptr;
+    nodeFound->m_pChild[1] = nullptr;
+    return *nodeFound;
+}
 
 template <typename Iterator>
 class BinaryTreeProxy {
