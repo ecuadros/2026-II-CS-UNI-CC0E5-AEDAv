@@ -8,6 +8,11 @@
 #include <optional>
 #include <utility>
 
+#include <vector>
+#include <string>
+#include <sstream>
+#include <algorithm>
+
 template <typename T>
 class BinaryTreeNode : public GeneralNode<T> {
 public:
@@ -20,7 +25,7 @@ public:
 
     NodePtr m_pChild[2] = {nullptr, nullptr}; // left and right children
     NodePtr m_parent = nullptr;
-
+    TX m_height = 0;
 };
 
 enum class TransversarOrder {
@@ -51,60 +56,60 @@ auto BinaryTreeIterator<T, Dir>::operator++() -> MySelf& {
     auto node = Parent::m_ptr;
     if (node == nullptr)
         return *this;
-    switch (m_TrOrder) {
-        case TransversarOrder::InOrder:
-            if (node->m_pChild[1-Dir]) {
-                node = node->m_pChild[1-Dir];
-                while (node->m_pChild[Dir])
-                    node = node->m_pChild[Dir];
-                Parent::m_ptr = node;
-            }
-            else {
-                auto parent = node->m_parent;
-                while (parent && node == parent->m_pChild[1-Dir]) {
-                    node = parent;
-                    parent = parent->m_parent;
-                }
-                Parent::m_ptr = parent;
-            }
-            return *this;
-        case TransversarOrder::PreOrder:
-            if (node->m_pChild[Dir]) {
-                Parent::m_ptr = node->m_pChild[Dir];
-            }
-            else if (node->m_pChild[1-Dir]) {
-                Parent::m_ptr = node->m_pChild[1-Dir];
-            }
-            else {
-                auto parent = node->m_parent;
-                while (parent && (parent->m_pChild[1-Dir] == nullptr || node == parent->m_pChild[1-Dir])) {
-                    node = parent;
-                    parent = parent->m_parent;
-                }
-                Parent::m_ptr = parent ? parent->m_pChild[1-Dir] : nullptr;
-            }
-            return *this;
-        case TransversarOrder::PostOrder:
+    if (m_TrOrder == TransversarOrder::InOrder) {
+        if (node->m_pChild[1-Dir]) {
+            node = node->m_pChild[1-Dir];
+            while (node->m_pChild[Dir])
+                node = node->m_pChild[Dir];
+            Parent::m_ptr = node;
+        }
+        else {
             auto parent = node->m_parent;
-            if (!parent) {
-                Parent::m_ptr = nullptr;
-                return *this;
+            while (parent && node == parent->m_pChild[1-Dir]) {
+                node = parent;
+                parent = parent->m_parent;
             }
-            if (node == parent->m_pChild[Dir] && parent->m_pChild[1-Dir]) {
-                node = parent->m_pChild[1-Dir];
-                while (node->m_pChild[Dir] || node->m_pChild[1-Dir]) {
-                    if (node->m_pChild[Dir])
-                        node = node->m_pChild[Dir];
-                    else
-                        node = node->m_pChild[1-Dir];
-                }
-                Parent::m_ptr = node;
-            } else {
-                Parent::m_ptr = parent;
-            }
-            return *this;
+            Parent::m_ptr = parent;
+        }
+        return *this;
     }
-
+    if (m_TrOrder == TransversarOrder::PreOrder) {
+        if (node->m_pChild[Dir]) {
+            Parent::m_ptr = node->m_pChild[Dir];
+        }
+        else if (node->m_pChild[1-Dir]) {
+            Parent::m_ptr = node->m_pChild[1-Dir];
+        }
+        else {
+            auto parent = node->m_parent;
+            while (parent && (parent->m_pChild[1-Dir] == nullptr || node == parent->m_pChild[1-Dir])) {
+                node = parent;
+                parent = parent->m_parent;
+            }
+            Parent::m_ptr = parent ? parent->m_pChild[1-Dir] : nullptr;
+        }
+        return *this;
+    }
+    else {
+        auto parent = node->m_parent;
+        if (!parent) {
+            Parent::m_ptr = nullptr;
+            return *this;
+        }
+        if (node == parent->m_pChild[Dir] && parent->m_pChild[1-Dir]) {
+            node = parent->m_pChild[1-Dir];
+            while (node->m_pChild[Dir] || node->m_pChild[1-Dir]) {
+                if (node->m_pChild[Dir])
+                    node = node->m_pChild[Dir];
+                else
+                    node = node->m_pChild[1-Dir];
+            }
+            Parent::m_ptr = node;
+        } else {
+            Parent::m_ptr = parent;
+        }
+        return *this;
+    }
 }
 
 template <typename T>
@@ -157,7 +162,6 @@ private:
     NodePtr m_root = nullptr; // root of the binary tree
     void internal_insert(NodePtr& node, const value_type& value, Ref ref, NodePtr parent = nullptr);
     NodePtr extremeLeafNode(NodePtr nodeptr, TX _Dir) const {
-        //NodePtr curr = m_root;
         while (nodeptr != nullptr && nodeptr->m_pChild[_Dir] != nullptr) nodeptr = nodeptr->m_pChild[_Dir];
         return nodeptr;
     }
@@ -200,71 +204,13 @@ public:
     BinaryTreeProxy<ForwardIterator> PostOrder();
     BinaryTreeProxy<BackwardIterator> ReversePostOrder();
     NodePtr findNodePtr(value_type val);
-    void transplant(NodePtr original, NodePtr sustitute);
     Node remove(value_type val);
+    TX height(NodePtr nodeptr);
+    virtual void Redistribution(NodePtr nodeptr) {}
 
-    void print() const {
-        std::lock_guard lock(this->m_mutex);
-        if (!m_root) {
-            std::cout << "El árbol está vacío.\n";
-            return;
-        }
-
-        // 1. Limpiar pantalla y mover el cursor al inicio usando ANSI[cite: 2]
-        std::cout << "\033[2J\033[H";
-
-        // --- NIVEL 0: Raíz (Fila 1) ---
-        // Ampliamos el espacio horizontal a la columna 25 para dar margen
-        std::cout << "\033[1;25H" << m_root->getValue();
-
-        // --- NIVEL 1: Conectores superiores (Fila 3) ---
-        std::cout << "\033[3;22H" << "/";
-        std::cout << "\033[3;28H" << "\\";
-
-        // --- NIVEL 2: Hijos de la raíz (Fila 5) ---
-        if (m_root->m_pChild[0]) {
-            std::cout << "\033[5;19H" << m_root->m_pChild[0]->getValue(); // Ej. 31[cite: 2, 3, 4]
-        }
-        if (m_root->m_pChild[1]) {
-            std::cout << "\033[5;31H" << m_root->m_pChild[1]->getValue(); // Ej. 91[cite: 2, 3, 4]
-        }
-
-        // --- NIVEL 3: Conectores inferiores (Fila 7) ---
-        if (m_root->m_pChild[0]) {
-            std::cout << "\033[7;16H" << "/";
-            std::cout << "\033[7;22H" << "\\";
-        }
-        if (m_root->m_pChild[1]) {
-            std::cout << "\033[7;28H" << "/";
-            std::cout << "\033[7;34H" << "\\";
-        }
-
-        // --- NIVEL 4: Hijos de los nodos intermedios / Hojas (Fila 9) ---
-        // Hijos del subárbol izquierdo
-        if (m_root->m_pChild[0]) {
-            auto leftChild = m_root->m_pChild[0];
-            if (leftChild->m_pChild[0]) {
-                std::cout << "\033[9;13H" << leftChild->m_pChild[0]->getValue(); // Ej. 21[cite: 2, 3, 4]
-            }
-            if (leftChild->m_pChild[1]) {
-                std::cout << "\033[9;21H" << leftChild->m_pChild[1]->getValue(); // Ej. 41[cite: 2, 3, 4]
-            }
-        }
-
-        // Hijos del subárbol derecho (Aquí se incluye el hijo izquierdo y derecho de 91)
-        if (m_root->m_pChild[1]) {
-            auto rightChild = m_root->m_pChild[1];
-            if (rightChild->m_pChild[0]) {
-                std::cout << "\033[9;27H" << rightChild->m_pChild[0]->getValue(); // Hijo izquierdo de 91[cite: 2, 3, 4]
-            }
-            if (rightChild->m_pChild[1]) {
-                std::cout << "\033[9;35H" << rightChild->m_pChild[1]->getValue(); // Hijo derecho de 91 (Ej. 101)[cite: 2, 3, 4]
-            }
-        }
-
-        // Mover el cursor al final de la impresión para mantener la terminal limpia
-        std::cout << "\033[11;1H";
-    }
+    // Declaración de la función externa como amiga
+    template <typename T2, template <typename> typename... Mixins2>
+    friend void print_tree(const BaseBinaryTree<T2, Mixins2...>& tree);
 };
 
 template <typename Traits, template <typename> typename... Mixins>
@@ -276,6 +222,8 @@ void BaseBinaryTree<Traits, Mixins...>::internal_insert(NodePtr& node, const val
     }
     auto branch = Compare()(node->getValue(), value);
     internal_insert(node->m_pChild[branch], value, ref, node); // Tail recursion to insert in the correct branch
+    node->m_height = height(node);
+    Redistribution(node);
 }
 
 template <typename Traits, template <typename> typename... Mixins>
@@ -348,9 +296,7 @@ auto BaseBinaryTree<Traits, Mixins...>::ReversePostOrder() -> BinaryTreeProxy<Ba
 template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::findNodePtr(value_type val) -> NodePtr {
     auto current = m_root;
-    //cout << "AQUI\n";
     while (current) {
-        //cout << *current << endl;
         if(current->getValue() == val) return current;
         current = current->m_pChild[current->getValue() < val];
     }
@@ -358,49 +304,8 @@ auto BaseBinaryTree<Traits, Mixins...>::findNodePtr(value_type val) -> NodePtr {
 }
 
 template <typename Traits, template <typename> typename... Mixins>
-void BaseBinaryTree<Traits, Mixins...>::transplant(NodePtr original, NodePtr sustitute) {
-    if (!original) m_root = sustitute;
-    else {
-        auto dir = original == original->m_parent->m_pChild[1];
-        original->m_parent->m_pChild[dir] = sustitute;
-    }
-    if (sustitute && original) sustitute->m_parent = original->m_parent;
-    if (original) original->m_parent = nullptr;
-}
-
-// template <typename Traits, template <typename> typename... Mixins>
-// auto BaseBinaryTree<Traits, Mixins...>::remove(value_type val) -> Node {
-//     static Node nullNode;
-//     auto nodeFound = findNodePtr(val);
-//     if (!nodeFound) return nullNode;
-//     auto parent = nodeFound->m_parent;
-//     if (!nodeFound.m_pChild[0]) transplant(nodeFound, nodeFound.m_pChild[1]);
-//     else if (!nodeFound.m_pChild[1]) transplant(nodeFound, nodeFound.m_pChild[0]);
-//     else {
-//         auto newNode = extremeLeafNode(nodeFound.m_pChild[0], 1); //Supremo de menores a valor
-//         if (nodeFound != newNode->m_parent) {
-//             transplant(nodeFound, nodeFound.m_pChild[0]);
-//         }
-//     }
-//     /*auto last = nodeFound->m_pChild[0];
-//     if (last) {
-//         while (last->m_pChild[1]) last = last->m_pChild[1];
-//     }
-//     if (last) {
-//         parent->m_pChild[parent->m_pChild[1] == nodeFound] = nodeFound->m_pChild[1];
-//         nodeFound->m_pChild[1]->m_parent = parent;
-//     }
-//     else {
-//         ;
-//         }*/
-//     nodeFound->m_parent = nullptr;
-//     nodeFound->m_pChild[0] = nullptr;
-//     nodeFound->m_pChild[1] = nullptr;
-//     return *nodeFound;
-// }
-
-template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::remove(value_type val) -> Node {
+    std::lock_guard lock(this->m_mutex);
     static Node nullNode;
     auto nodeFound = findNodePtr(val);
     //cout << *nodeFound << endl;
@@ -431,6 +336,12 @@ auto BaseBinaryTree<Traits, Mixins...>::remove(value_type val) -> Node {
     return *nodeFound;
 }
 
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::height(NodePtr nodeptr) -> TX {
+    if (!nodeptr) return 0;
+    return 1 + std::max(height(nodeptr->m_pChild[0]), height(nodeptr->m_pChild[0]));
+}
+
 template <typename Iterator>
 class BinaryTreeProxy {
 private:
@@ -441,5 +352,104 @@ public:
     Iterator begin() { return m_begin; }
     Iterator end() { return m_end; }
 };
+
+// --- FUNCIONES AUXILIARES EXTERNAS ---
+template <typename T>
+TX tree_get_width(BinaryTreeNode<T>* node) {
+    if (!node) return 0;
+    return 1 + tree_get_width(node->m_pChild[0]) + tree_get_width(node->m_pChild[1]);
+}
+
+template <typename T>
+TX tree_get_max_depth(BinaryTreeNode<T>* node) {
+    if (!node) return 0;
+    return 1 + std::max(tree_get_max_depth(node->m_pChild[0]), tree_get_max_depth(node->m_pChild[1]));
+}
+
+template <typename T>
+void tree_draw_orthogonal(BinaryTreeNode<T>* node, TX x, TX y, std::vector<std::string>& canvas) {
+    if (!node) return;
+
+    TX left_w = tree_get_width(node->m_pChild[0]);
+    TX node_x = x + left_w * 4;
+
+    std::ostringstream oss;
+    oss << node->getValue();
+    std::string val = oss.str();
+    TX start_x = node_x - val.length() / 2;
+
+    for (TX i = 0; i < static_cast<TX>(val.length()); i++) {
+        if (start_x + i >= 0 && start_x + i < static_cast<TX>(canvas[y].size())) {
+            canvas[y][start_x + i] = val[i];
+        }
+    }
+
+    TX mid_y = y + 1;
+
+    // Conexión al hijo izquierdo
+    if (node->m_pChild[0]) {
+        TX left_child_x = x + tree_get_width(node->m_pChild[0]->m_pChild[0]) * 4;
+        canvas[mid_y][node_x] = '|';
+
+        TX min_x = std::min(node_x, left_child_x);
+        TX max_x = std::max(node_x, left_child_x);
+        for (TX i = min_x; i <= max_x; i++) canvas[mid_y][i] = '-';
+
+        canvas[mid_y][node_x] = '+';
+        canvas[mid_y][left_child_x] = '+';
+        canvas[mid_y + 1][left_child_x] = '|';
+        tree_draw_orthogonal(node->m_pChild[0], x, y + 2, canvas);
+    }
+
+    // Conexión al hijo derecho
+    if (node->m_pChild[1]) {
+        TX right_child_x = x + (left_w + 1 + tree_get_width(node->m_pChild[1]->m_pChild[0])) * 4;
+        canvas[mid_y][node_x] = '|';
+
+        TX min_x = std::min(node_x, right_child_x);
+        TX max_x = std::max(node_x, right_child_x);
+        for (TX i = min_x; i <= max_x; i++) canvas[mid_y][i] = '-';
+
+        canvas[mid_y][node_x] = '+';
+        canvas[mid_y][right_child_x] = '+';
+        canvas[mid_y + 1][right_child_x] = '|';
+        tree_draw_orthogonal(node->m_pChild[1], x + (left_w + 1) * 4, y + 2, canvas);
+    }
+}
+
+// --- FUNCIÓN PRINCIPAL EXTERNA ---
+template <typename Traits, template <typename> typename... Mixins>
+void print_tree(const BaseBinaryTree<Traits, Mixins...>& tree) {
+    std::lock_guard lock(tree.m_mutex);
+    auto root = tree.m_root;
+    if (!root) {
+        std::cout << "El árbol está vacío.\n";
+        return;
+    }
+
+    // 2. Calcular dimensiones
+    TX tree_width = tree_get_width(root);
+    TX tree_height = tree_get_max_depth(root);
+
+    // Ajustamos un poco el alto. 2 filas por nivel es suficiente.
+    TX canvas_width = tree_width * 4 + 8;
+    TX canvas_height = tree_height * 2;
+
+    // 3. Crear lienzo
+    std::vector<std::string> canvas(canvas_height, std::string(canvas_width, ' '));
+
+    // 4. Dibujar
+    tree_draw_orthogonal(root, 4, 0, canvas);
+
+    // 5. Imprimir
+    for (const auto& row : canvas) {
+        size_t last = row.find_last_not_of(' ');
+        if (last != std::string::npos) {
+            std::cout << row.substr(0, last + 1) << "\n";
+        } else {
+            std::cout << "\n";
+        }
+    }
+}
 
 #endif // __BINARYTREE_H__

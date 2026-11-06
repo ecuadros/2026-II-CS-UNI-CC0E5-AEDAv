@@ -11,6 +11,7 @@
 #include "containers/circulardoublelinkedlist.h"
 #include "containers/Heap.h"
 #include "containers/binarytree.h"
+#include "containers/AVLtree.h"
 #include "utilities/printcolored.h"
 #include "Demos.h"
 using namespace std;
@@ -328,18 +329,22 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
     ofstream(filename, ios::trunc).close();
 
     // Pruebas de insercion y persistencia
-    InsertElements(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}});
+    //InsertElements(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}});
+    InsertElements(tree, {{40, 6}, {20, 2}, {10, 1}, {25, 4}, {30, 5}, {22, 3}, {50, 7}});
     TestContainer(tree, filename);
     // Recorrido in-order
     TestTraversal(tree);
 
+    print_tree(tree);
+    cout << endl;
+
+    cout  << "Aumentar 11\n";
     tree.ApplyFunction(AddOne);
     cout << "Arbol tras usar AddOne: " << tree << endl;
     tree.ApplyFunction(AddX<TX>, TX(10));
     cout << "Arbol tras usar AddX(10): " << tree << endl;
 
-    cout << endl;
-    tree.print();
+    print_tree(tree);
     cout << endl;
 
     cout << "IN ORDER\n";
@@ -380,9 +385,19 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
     cout << "Arbol tras usar AddX(10): " << tree << endl;*/
     cout << endl;
 
-    tree.remove(101);
+    tree.remove(41);
+    cout << "Remover 41\n";
+    print_tree(tree);
     cout << endl;
-    tree.print();
+
+    tree.remove(31);
+    cout << "Remover 31\n";
+    print_tree(tree);
+    cout << endl;
+
+    tree.remove(51);
+    cout << "Remover 51\n";
+    print_tree(tree);
     cout << endl;
 
     tree.clear();
@@ -404,4 +419,11 @@ void DemoBinaryTree() {
     PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
     BinaryTree<BinaryTreeAscTraits<TX>> tree;
     TestBinaryTree(tree, "binarytree.txt");
+}
+
+void DemoAVLTree() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
+    AVL_Tree<BinaryTreeAscTraits<TX>> avltree;
+    TestBinaryTree(avltree, "binarytree.txt");
 }
