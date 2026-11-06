@@ -9,8 +9,8 @@
 
 template <typename T, bool Reverse> class VectorIterator;
 template <typename Traits, typename Ops = FullTraversalOps> class Vector;
-template <typename T, typename Derived> class BinaryTreeNode;
-template <typename T> class AVLNode;
+template <typename T, typename Derived = void, typename R = Ref> class BinaryTreeNode;
+template <typename T, typename R = Ref> class AVLNode;
 
 template <typename T> struct VectorTraits {
     using value_type = T;
@@ -24,13 +24,14 @@ template <typename T, typename Comparator = std::less<T>,
 struct BinaryTreeTraits {
     using value_type = T;
     using Node = NodeType;
+    using ref_type = typename NodeType::ref_type;
     using Compare = Comparator;
     using ForwardIterator = BinaryTreeIterator<const Node>;
     using BackwardIterator = BinaryTreeIterator<const Node, TreeOrder::InOrder, true>;
 };
 
-template <typename T, typename Comparator = std::less<T>>
-using AVLTraits = BinaryTreeTraits<T, Comparator, AVLNode<T>>;
+template <typename T, typename Comparator = std::less<T>, typename R = Ref>
+using AVLTraits = BinaryTreeTraits<T, Comparator, AVLNode<T, R>>;
 
 template <typename T, typename NodeType, typename Comparator> struct ListTraits {
     using value_type = T;
@@ -55,6 +56,19 @@ struct HeapTraits {
     using Compare = Comparator;
     using ForwardIterator = typename Storage::ConstForwardIterator;
     using BackwardIterator = typename Storage::ConstBackwardIterator;
+};
+
+template <typename Digest> class MerkleNode;
+template <typename T> struct StdMerkleHasher;
+
+template <typename T, typename HasherType = StdMerkleHasher<T>>
+struct MerkleTreeTraits {
+    using value_type = T;
+    using Hasher = HasherType;
+    using Digest = typename Hasher::Digest;
+    using Node = MerkleNode<Digest>;
+    using ForwardIterator = BinaryTreeIterator<const Node, TreeOrder::PostOrder>;
+    using BackwardIterator = BinaryTreeIterator<const Node, TreeOrder::PostOrder, true>;
 };
 
 #endif // __CONTAINERS_TRAITS_H__

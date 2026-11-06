@@ -7,6 +7,7 @@
 #include "vector.h"
 #include "traits.h"
 #include "linkedlist.h"
+#include "merkletree.h"
 #include <functional>
 
 template <typename T>

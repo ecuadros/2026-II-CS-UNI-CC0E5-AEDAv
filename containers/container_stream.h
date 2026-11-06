@@ -10,6 +10,11 @@
 
 namespace container_stream {
 
+template <class C> struct ref_of { using type = Ref; };
+template <class C> requires requires { typename C::ref_type; }
+struct ref_of<C> { using type = typename C::ref_type; };
+template <class C> using ref_of_t = typename ref_of<C>::type;
+
 using Delim = StreamDelimiters::Delim;
 
 template <class Container>
@@ -27,10 +32,10 @@ concept PrintableContainer =
 template <class Container>
 concept ReadableContainer =
     PrintableContainer<Container> &&
-    requires(Container& c, typename Container::value_type value, Ref ref,
-             std::istream& is, GeneralNode<typename Container::value_type>& node) {
+    requires(Container& c, typename Container::value_type value, ref_of_t<Container> ref,
+             std::istream& is, GeneralNode<typename Container::value_type, ref_of_t<Container>>& node) {
         typename Container::value_type;
-        requires std::default_initializable<GeneralNode<typename Container::value_type>>;
+        requires std::default_initializable<GeneralNode<typename Container::value_type, ref_of_t<Container>>>;
         is >> node;
         c.clear();
         c.push_back(value, ref);
@@ -48,8 +53,8 @@ std::ostream& write(std::ostream& os, const Container& container) {
     return os << StreamDelimiters::container_close;
 }
 
-template <typename T>
-bool read_nodes(std::istream& is, std::vector<GeneralNode<T>>& nodes) {
+template <typename T, typename R>
+bool read_nodes(std::istream& is, std::vector<GeneralNode<T, R>>& nodes) {
     if (!StreamDelimiters::expect(is, StreamDelimiters::container_open)) return false;
     is >> std::ws;
     if (is.peek() == StreamDelimiters::container_close) {
@@ -57,7 +62,7 @@ bool read_nodes(std::istream& is, std::vector<GeneralNode<T>>& nodes) {
         return true;
     }
     while (true) {
-        GeneralNode<T> node;
+        GeneralNode<T, R> node;
         if (!(is >> node)) return false;
         nodes.push_back(node);
         Delim separator;
@@ -72,7 +77,7 @@ bool read_nodes(std::istream& is, std::vector<GeneralNode<T>>& nodes) {
 
 template <ReadableContainer Container>
 void insert_nodes(Container& destination,
-                  const std::vector<GeneralNode<typename Container::value_type>>& nodes) {
+                  const std::vector<GeneralNode<typename Container::value_type, ref_of_t<Container>>>& nodes) {
     Container temp;
     for (const auto& node : nodes)
         temp.push_back(node.getValue(), node.getRef());
@@ -81,7 +86,7 @@ void insert_nodes(Container& destination,
 
 template <ReadableContainer Container>
 std::istream& read(std::istream& is, Container& container) {
-    std::vector<GeneralNode<typename Container::value_type>> nodes;
+    std::vector<GeneralNode<typename Container::value_type, ref_of_t<Container>>> nodes;
     if (read_nodes(is, nodes))
         insert_nodes(container, nodes);
     return is;

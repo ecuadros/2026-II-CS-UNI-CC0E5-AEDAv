@@ -13,12 +13,12 @@
 #include <type_traits>
 #include <utility>
 
-template <typename T, typename Derived = void>
-class BinaryTreeNode : public GeneralNode<T> {
+template <typename T, typename Derived, typename R>
+class BinaryTreeNode : public GeneralNode<T, R> {
 public:
-    using Parent = GeneralNode<T>;
+    using Parent = GeneralNode<T, R>;
     using Parent::Parent;
-    using Node = NodeSelf<BinaryTreeNode<T>, Derived>;
+    using Node = NodeSelf<BinaryTreeNode<T, void, R>, Derived>;
     using NodePtr = Node*;
 
     NodePtr m_pChild[2] = {nullptr, nullptr};
@@ -29,6 +29,7 @@ template <typename Traits, typename Ops = SearchTraversalOps> class BinaryTree :
 public:
     using value_type = typename Traits::value_type;
     using Node = typename Traits::Node;
+    using ref_type = typename Traits::ref_type;
     using Compare = typename Traits::Compare;
     using NodePtr = Node*;
     using ForwardIterator = typename Traits::ForwardIterator;
@@ -46,7 +47,7 @@ private:
         return !m_comp(a, b) && !m_comp(b, a);
     }
 
-    std::pair<NodePtr, bool> internal_insert(const value_type& value, Ref ref, bool unique) {
+    std::pair<NodePtr, bool> internal_insert(const value_type& value, const ref_type& ref, bool unique) {
         NodePtr* slot = &m_root;
         NodePtr parent = nullptr;
         while (*slot) {
@@ -69,23 +70,6 @@ private:
         return node;
     }
 
-    static void destroy(NodePtr node) {
-        if (!node) return;
-        destroy(node->m_pChild[0]);
-        destroy(node->m_pChild[1]);
-        delete node;
-    }
-
-    static NodePtr clone(const Node* source, NodePtr parent = nullptr) {
-        if (!source) return nullptr;
-        std::unique_ptr<Node, decltype(&destroy)> copy(new Node(*source), &destroy);
-        copy->m_pParent = parent;
-        copy->m_pChild[0] = copy->m_pChild[1] = nullptr;
-        copy->m_pChild[0] = clone(source->m_pChild[0], copy.get());
-        copy->m_pChild[1] = clone(source->m_pChild[1], copy.get());
-        return copy.release();
-    }
-
     template <TreeOrder Order, bool Reverse> Traversal<Order, Reverse> traversal() const {
         return Traversal<Order, Reverse>(m_root);
     }
@@ -99,10 +83,6 @@ protected:
     virtual std::size_t height(const Node* node) const {
         if (!node) return 0;
         return 1 + std::max(height(node->m_pChild[0]), height(node->m_pChild[1]));
-    }
-
-    static bool side_of(const Node* node) {
-        return node->m_pParent && node->m_pParent->m_pChild[1] == node;
     }
 
     NodePtr& link_of(NodePtr node) {
@@ -150,7 +130,7 @@ protected:
 public:
     BinaryTree() = default;
 
-    BinaryTree(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
+    BinaryTree(std::initializer_list<std::pair<value_type, ref_type>> values) { fill_from(*this, values); }
 
     BinaryTree(const BinaryTree& other) {
         std::lock_guard lock(other.m_mutex);
@@ -174,12 +154,12 @@ public:
 
     virtual ~BinaryTree() { clear(); }
 
-    void insert(const value_type& value, Ref ref) {
+    void insert(const value_type& value, const ref_type& ref) {
         std::lock_guard lock(this->m_mutex);
         internal_insert(value, ref, false);
     }
 
-    std::pair<value_type*, bool> insert_unique(const value_type& value, Ref ref) {
+    std::pair<value_type*, bool> insert_unique(const value_type& value, const ref_type& ref) {
         std::lock_guard lock(this->m_mutex);
         auto [node, inserted] = internal_insert(value, ref, true);
         return {&node->value(), inserted};
@@ -203,12 +183,24 @@ public:
         return node ? Ptr(&node->value()) : nullptr;
     }
 
+    ref_type& operator[](const value_type& value) {
+        std::lock_guard lock(this->m_mutex);
+        return internal_insert(value, ref_type{}, true).first->ref();
+    }
+
+    template <typename Self> auto find_ref(this Self& self, const value_type& value) {
+        using Ptr = std::conditional_t<std::is_const_v<Self>, const ref_type*, ref_type*>;
+        std::lock_guard lock(self.m_mutex);
+        NodePtr node = self.find_node(value);
+        return node ? Ptr(&node->ref()) : nullptr;
+    }
+
     bool contains(const value_type& value) const {
         std::lock_guard lock(this->m_mutex);
         return find_node(value) != nullptr;
     }
 
-    void push_back(const value_type& value, Ref ref) { insert(value, ref); }
+    void push_back(const value_type& value, const ref_type& ref) { insert(value, ref); }
     bool empty() const { return size() == 0; }
 
     std::size_t size() const {

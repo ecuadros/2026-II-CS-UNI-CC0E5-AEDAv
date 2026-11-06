@@ -13,5 +13,7 @@ void DemoAVL();
 void DemoHashTable();
 void DemoAVLStepByStep();
 void DemoHashTableStepByStep();
+void DemoMerkleTree();
+void DemoMerkleTreeStepByStep();
 
 #endif // __DEMOS_H__

@@ -2,6 +2,7 @@
 #define CONTAINERS_BINARYTREEITERATOR_H
 
 #include "GeneralIterator.h"
+#include <memory>
 
 enum class TreeOrder { PreOrder, InOrder, PostOrder };
 
@@ -10,6 +11,30 @@ Node* extreme(Node* cur, bool side) {
     while (cur && cur->m_pChild[side])
         cur = cur->m_pChild[side];
     return cur;
+}
+
+template <typename Node>
+bool side_of(const Node* node) {
+    return node->m_pParent && node->m_pParent->m_pChild[1] == node;
+}
+
+template <typename Node>
+void destroy(Node* node) {
+    if (!node) return;
+    destroy(node->m_pChild[0]);
+    destroy(node->m_pChild[1]);
+    delete node;
+}
+
+template <typename Node>
+Node* clone(const Node* source, Node* parent = nullptr) {
+    if (!source) return nullptr;
+    std::unique_ptr<Node, void (*)(Node*)> copy(new Node(*source), &destroy<Node>);
+    copy->m_pParent = parent;
+    copy->m_pChild[0] = copy->m_pChild[1] = nullptr;
+    copy->m_pChild[0] = clone(source->m_pChild[0], copy.get());
+    copy->m_pChild[1] = clone(source->m_pChild[1], copy.get());
+    return copy.release();
 }
 
 template <bool Reverse>

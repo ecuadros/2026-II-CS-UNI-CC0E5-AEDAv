@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include <utility>
 #include <string_view>
+#include <iomanip>
+#include <set>
 #include "containers/aliases.h"
 #include "containers/hashtable.h"
 #include "Demos.h"
@@ -37,6 +39,16 @@ concept TreeLike = requires(C& t, TX key, std::ostream& os) {
     t.height();
     t.remove(key);
     t.print_tree(os, visual::Layout::Sideways);
+};
+
+template <typename C>
+concept SixOrderTree = requires(const C& t) {
+    t.InOrder();
+    t.ReverseInOrder();
+    t.PreOrder();
+    t.ReversePreOrder();
+    t.PostOrder();
+    t.ReversePostOrder();
 };
 
 template <typename C>
@@ -412,7 +424,7 @@ template <TreeLike Tree> void CheckTree(const Tree& tree, const std::string& nam
         throw std::runtime_error(name + ": el arbol perdio su orden");
 }
 
-template <TreeLike Tree> void TestTreeTraversals(const Tree& tree, const std::string& name) {
+template <SixOrderTree Tree> void TestTreeTraversals(const Tree& tree, const std::string& name) {
     PrintColor("TestTreeTraversals (" + name + ")");
     using Node = typename Tree::Node;
     PrintTraversal("InOrder         ", tree.InOrder());
@@ -509,8 +521,10 @@ template <typename T> std::string KeyText(const T& value) {
 }
 
 template <typename Tree>
-class Unbalanced : public BinaryTree<BinaryTreeTraits<typename Tree::value_type, typename Tree::Compare>> {
-    using Parent = BinaryTree<BinaryTreeTraits<typename Tree::value_type, typename Tree::Compare>>;
+class Unbalanced : public BinaryTree<BinaryTreeTraits<typename Tree::value_type, typename Tree::Compare,
+                                                       BinaryTreeNode<typename Tree::value_type, void, typename Tree::ref_type>>> {
+    using Parent = BinaryTree<BinaryTreeTraits<typename Tree::value_type, typename Tree::Compare,
+                                               BinaryTreeNode<typename Tree::value_type, void, typename Tree::ref_type>>>;
     using typename Parent::Node;
     using typename Parent::NodePtr;
 
@@ -604,20 +618,19 @@ void DemoAVLStepByStep() {
 void DemoHashTableStepByStep() {
     PrintColor("DemoHashTable paso a paso (AVL ordenado por clave)");
     using Table = HashTable<std::string, int>;
-    using Entry = Table::Entry;
     Table table;
     int age = 18;
     for (std::string key : {"ana", "luis", "eva", "juan", "rosa", "pedro", "maria", "jose"}) {
         std::string title = "tabla[\"" + key + "\"] = " + std::to_string(age);
         AVLStep(table, title, [&](auto& t, auto& s) {
-            s.insert_unique(Entry(key), Ref{});
+            s.insert_unique(key, 0);
             t[key] = age;
         });
         ++age;
     }
     for (std::string key : {"eva", "rosa", "ana"})
         AVLStep(table, "remove(\"" + key + "\")", [&](auto& t, auto& s) {
-            s.remove(Entry(key));
+            s.remove(key);
             t.remove(key);
         });
     std::cout << "Tabla final: " << table << '\n';
@@ -676,6 +689,247 @@ void DemoAVL() {
     DemoRaceCondition<AVLSearchTree<TX>>("AVL");
 }
 
+using MerkleStrings = MerkleOf<std::string>;
+using MerkleHasher = StdMerkleHasher<std::string>;
+
+std::string ShortHash(MerkleStrings::Digest digest) {
+    std::ostringstream ss;
+    ss << std::hex << std::setw(4) << std::setfill('0') << (digest & 0xffff);
+    return ss.str();
+}
+
+void CheckMerkle(bool ok, const std::string& what) {
+    if (!ok) throw std::runtime_error("MerkleTree: " + what);
+}
+
+const MerkleStrings::Node* LeafAt(const MerkleStrings& tree, Ref index) {
+    for (auto&& node : tree.InOrder())
+        if (node.is_leaf() && node.getRef() == index) return &node;
+    return nullptr;
+}
+
+class MerkleSketch {
+public:
+    using Handle = const MerkleStrings::Node*;
+
+private:
+    MerkleStrings::View m_base;
+    const std::vector<std::string>& m_blocks;
+    std::set<Handle> m_path, m_siblings;
+
+public:
+    MerkleSketch(const MerkleStrings& tree, const std::vector<std::string>& blocks)
+        : m_base(tree.tree_view()), m_blocks(blocks) {}
+
+    void mark(Handle leaf) {
+        m_path.clear();
+        m_siblings.clear();
+        for (Handle node = leaf; node; node = node->m_pParent) {
+            m_path.insert(node);
+            if (node->m_pParent) m_siblings.insert(node->m_pParent->m_pChild[!side_of(node)]);
+        }
+    }
+
+    void mark_path_only(Handle leaf) {
+        mark(leaf);
+        m_siblings.clear();
+    }
+
+    Handle root() const { return m_base.root(); }
+    Handle child(Handle node, bool side) const { return m_base.child(node, side); }
+    bool valid(Handle node) const { return m_base.valid(node); }
+    std::size_t height(Handle node) const { return m_base.height(node); }
+
+    void label(std::ostream& os, Handle node) const {
+        std::string text = ShortHash(node->getValue());
+        if (node->is_leaf()) text = m_blocks[node->getRef()] + ":" + text;
+        if (m_path.count(node)) text = "<" + text + ">";
+        else if (m_siblings.count(node)) text = "[" + text + "]";
+        os << text;
+    }
+
+    void print(std::ostream& os) const { visual::print_tree(os, *this); }
+};
+
+void ShowMerkle(const MerkleStrings& tree, const std::vector<std::string>& blocks, Ref leaf = -1,
+                bool siblings = false) {
+    MerkleSketch sketch(tree, blocks);
+    if (leaf >= 0) siblings ? sketch.mark(LeafAt(tree, leaf)) : sketch.mark_path_only(LeafAt(tree, leaf));
+    sketch.print(std::cout);
+    std::cout << "raiz = " << ShortHash(tree.root_hash()) << ", hojas = " << tree.size()
+              << ", altura = " << tree.height() << "\n\n";
+}
+
+void TestMerkleProofs(const MerkleStrings& tree, const std::vector<std::string>& blocks) {
+    PrintColor("TestMerkleProofs");
+    auto root = tree.root_hash();
+    for (std::size_t i = 0; i < blocks.size(); ++i) {
+        auto proof = tree.proof(i);
+        std::cout << "prueba(" << blocks[i] << ") = " << proof.size() << " hashes: ";
+        for (auto&& step : proof) {
+            const auto& s = step.getValue();
+            std::cout << (s.sibling_is_right ? "der:" : "izq:") << ShortHash(s.sibling) << ' ';
+        }
+        std::cout << '\n';
+        CheckMerkle(MerkleStrings::verify(blocks[i], proof, root), "la prueba de " + blocks[i] + " no verifico");
+        CheckMerkle(!MerkleStrings::verify(blocks[i] + "!", proof, root), "bloque alterado verifico");
+        CheckMerkle(!MerkleStrings::verify(blocks[i], proof, root + 1), "raiz alterada verifico");
+    }
+    std::cout << "Todas las pruebas verifican; bloque o raiz alterados fallan\n";
+}
+
+void TestMerkleUpdate(MerkleStrings& tree, const std::vector<std::string>& blocks) {
+    PrintColor("TestMerkleUpdate");
+    auto before = tree.root_hash();
+    MerkleStrings snapshot(tree);
+    tree.update(2, "C2");
+    std::cout << "update(2, \"C2\"): " << ShortHash(before) << " -> " << ShortHash(tree.root_hash()) << '\n';
+    CheckMerkle(tree.root_hash() != before, "update no cambio la raiz");
+    CheckMerkle(snapshot.root_hash() == before, "la copia no es independiente");
+    auto edited = blocks;
+    edited[2] = "C2";
+    CheckMerkle(MerkleStrings(edited.begin(), edited.end()).root_hash() == tree.root_hash(),
+                "update no coincide con reconstruir");
+    tree.update(2, blocks[2]);
+    CheckMerkle(tree.root_hash() == before, "restaurar el bloque no restauro la raiz");
+    bool threw = false;
+    try { tree.update(99, "x"); } catch (const std::out_of_range&) { threw = true; }
+    CheckMerkle(threw, "update fuera de rango no lanzo");
+    std::cout << "update coincide con reconstruir y es reversible\n";
+}
+
+void TestMerkleCopyAndClear(const std::string& name) {
+    PrintColor("TestCopyAndClear (" + name + ")");
+    MerkleStrings tree;
+    CheckMerkle(tree.empty() && tree.begin() == tree.end(), "arbol nuevo no esta vacio");
+    bool threw = false;
+    try { tree.root_hash(); } catch (const std::logic_error&) { threw = true; }
+    CheckMerkle(threw, "root_hash de arbol vacio no lanzo");
+    tree.clear();
+    tree = {"x", "y", "z"};
+    MerkleStrings copy(tree);
+    tree = tree;
+    CheckMerkle(copy.root_hash() == tree.root_hash() && copy.size() == 3, "fallo la copia");
+    tree.clear();
+    tree.clear();
+    CheckMerkle(tree.empty() && !copy.empty(), "clear afecto a la copia");
+    tree = {"solo"};
+    CheckMerkle(tree.size() == 1 && tree.height() == 1 && MerkleStrings::verify("solo", tree.proof(0), tree.root_hash()),
+                "arbol de una hoja");
+    std::cout << name << ": clear, copia y arbol de una hoja OK\n";
+}
+
+void TestMerkleSizes() {
+    PrintColor("TestMerkleSizes (niveles impares)");
+    std::vector<std::string> blocks;
+    for (char c = 'A'; c <= 'M'; ++c) {
+        blocks.push_back(std::string(1, c));
+        MerkleStrings tree(blocks.begin(), blocks.end());
+        for (std::size_t i = 0; i < blocks.size(); ++i)
+            CheckMerkle(MerkleStrings::verify(blocks[i], tree.proof(i), tree.root_hash()),
+                        "prueba invalida con " + std::to_string(blocks.size()) + " hojas");
+        std::cout << std::setw(2) << blocks.size() << " hojas: altura " << tree.height() << ", raiz "
+                  << ShortHash(tree.root_hash()) << '\n';
+    }
+}
+
+void TestMerkleRace() {
+    PrintColor("TestRaceCondition (MerkleTree)");
+    MerkleStrings tree{"a", "b", "c", "d", "e", "f", "g", "h"};
+    std::vector<std::thread> threads;
+    for (int t = 0; t < NThreads; ++t)
+        threads.emplace_back([&tree, t] {
+            for (int i = 0; i < 2000; ++i) {
+                tree.update(t, "v" + std::to_string(i));
+                auto proof = tree.proof(t);
+                (void)proof;
+                (void)tree.root_hash();
+            }
+        });
+    for (auto& thread : threads) thread.join();
+    for (int t = 0; t < NThreads; ++t) tree.update(t, "v1999");
+    MerkleStrings rebuilt{"v1999", "v1999", "v1999", "v1999", "v1999", "f", "g", "h"};
+    CheckMerkle(tree.root_hash() == rebuilt.root_hash(), "estado inconsistente tras actualizar en paralelo");
+    std::cout << NThreads << " hilos con update/proof/root_hash: raiz consistente\n";
+}
+
+void DemoMerkleTree() {
+    PrintColor("DemoMerkleTree");
+    const std::vector<std::string> blocks{"A", "B", "C", "D", "E"};
+    MerkleStrings tree(blocks.begin(), blocks.end());
+
+    PrintColor("Contenedor (MerkleTree)");
+    PrintColor(tree);
+    TestTraversal(tree, "MerkleTree");
+
+    PrintColor("Visualizacion (MerkleTree)");
+    tree.print_tree(std::cout, visual::Layout::Sideways);
+    tree.print_tree(std::cout);
+    tree.print_tree(std::cout, visual::Layout::Cursor);
+    TestTreeTraversals(tree, "MerkleTree");
+
+    TestMerkleProofs(tree, blocks);
+    TestMerkleUpdate(tree, blocks);
+    TestMerkleSizes();
+    TestMerkleCopyAndClear("MerkleTree");
+    TestMerkleRace();
+}
+
+void DemoMerkleTreeStepByStep() {
+    PrintColor("DemoMerkleTree paso a paso");
+    std::vector<std::string> blocks{"A", "B", "C", "D", "E"};
+    MerkleStrings tree(blocks.begin(), blocks.end());
+
+    PrintColor("build(A, B, C, D, E): hojas H(bloque), padres H(izq || der), la hoja impar sube", "1;33");
+    ShowMerkle(tree, blocks);
+
+    for (auto [index, text] : std::vector<std::pair<Ref, std::string>>{{2, "C2"}, {0, "A2"}, {4, "E2"}}) {
+        auto before = tree.root_hash();
+        blocks[index] = text;
+        tree.update(index, text);
+        PrintColor("update(" + std::to_string(index) + ", \"" + text + "\"): solo cambia el camino <..> hasta la raiz",
+                   "1;33");
+        ShowMerkle(tree, blocks, index);
+        std::cout << "raiz: " << ShortHash(before) << " -> " << ShortHash(tree.root_hash()) << "\n\n";
+        CheckMerkle(before != tree.root_hash(), "update no cambio la raiz");
+    }
+
+    const Ref target = 3;
+    PrintColor("proof(" + std::to_string(target) + "): camino <..> y hermanos [..] necesarios", "1;33");
+    ShowMerkle(tree, blocks, target, true);
+    auto hash = MerkleHasher::leaf(blocks[target]);
+    std::cout << "h0 = H(" << blocks[target] << ") = " << ShortHash(hash) << '\n';
+    int level = 0;
+    for (auto&& step : tree.proof(target)) {
+        const auto& s = step.getValue();
+        hash = s.sibling_is_right ? MerkleHasher::combine(hash, s.sibling) : MerkleHasher::combine(s.sibling, hash);
+        std::string prev = "h" + std::to_string(level);
+        ++level;
+        std::cout << "h" << level << " = H("
+                  << (s.sibling_is_right ? prev + " || " + ShortHash(s.sibling) : ShortHash(s.sibling) + " || " + prev)
+                  << ") = " << ShortHash(hash) << '\n';
+    }
+    bool ok = hash == tree.root_hash();
+    PrintColor(std::string("h") + std::to_string(level) + " == raiz (" + ShortHash(tree.root_hash()) + "): " +
+                   (ok ? "verifica" : "NO verifica"),
+               ok ? "1;32" : "1;31");
+    CheckMerkle(ok, "la prueba paso a paso no verifico");
+
+    PrintColor("verify con el bloque alterado \"D2\"", "1;33");
+    bool tampered = MerkleStrings::verify("D2", tree.proof(target), tree.root_hash());
+    PrintColor(tampered ? "verifica (ERROR)" : "no verifica: el bloque fue alterado", tampered ? "1;31" : "1;32");
+    CheckMerkle(!tampered, "bloque alterado verifico");
+
+    PrintColor("Crecimiento: una hoja mas cada vez", "1;33");
+    std::vector<std::string> growing;
+    for (char c = 'A'; c <= 'G'; ++c) {
+        growing.push_back(std::string(1, c));
+        MerkleStrings step(growing.begin(), growing.end());
+        std::cout << "con " << growing.size() << " hojas:\n";
+        ShowMerkle(step, growing);
+    }
+}
+
 void DemoHashTable() {
     PrintColor("DemoHashTable (operator[] y clave string)");
     auto check = [](bool ok, const std::string& what) {
@@ -700,13 +954,13 @@ void DemoHashTable() {
     check(!edades.find("pepe") && !edades.contains("pepe") && edades.contains("ana"), "find/contains fallo");
     show("luis += 5 con find, remove(\"nadie\")");
 
-    std::stringstream stream("[({ zoe : 40 },0),({ beto : 18 },0),({ ana : 22 },0)]");
+    std::stringstream stream("[(zoe,40),(beto,18),(ana,22)]");
     stream >> edades;
     show(">> de texto desordenado");
     check(stream && edades.size() == 3 && edades["zoe"] == 40, "operator>> fallo");
     stream.clear();
     stream.str("");
     stream << edades;
-    check(stream.str() == "[({ ana : 22 },0),({ beto : 18 },0),({ zoe : 40 },0)]", "operator<< fallo");
+    check(stream.str() == "[(ana,22),(beto,18),(zoe,40)]", "operator<< fallo");
     edades.print_tree(std::cout);
 }
