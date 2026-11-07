@@ -11,7 +11,6 @@
 #include <initializer_list>
 #include <iterator>
 #include <mutex>
-#include <ostream>
 #include <stdexcept>
 #include <utility>
 
@@ -33,23 +32,20 @@ class MerkleNode : public BinaryTreeNode<Digest, MerkleNode<Digest>> {
 public:
   using Parent = BinaryTreeNode<Digest, MerkleNode<Digest>>;
   using Parent::Parent;
-
-  bool is_leaf() const { return !this->m_pChild[0] && !this->m_pChild[1]; }
 };
 
 using MerkleTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
                                         RFirstThatOp, PrintableOp, VisualOp>;
 
 template <typename Traits, typename Ops = MerkleTraversalOps>
-class MerkleTree : public Ops {
+class MerkleTree : public BinaryTreeBase<Traits, Ops> {
 public:
+  using Base = BinaryTreeBase<Traits, Ops>;
   using value_type = typename Traits::value_type;
   using Hasher = typename Traits::Hasher;
   using Digest = typename Traits::Digest;
   using Node = typename Traits::Node;
   using NodePtr = Node *;
-  using ForwardIterator = typename Traits::ForwardIterator;
-  using BackwardIterator = typename Traits::BackwardIterator;
 
   struct ProofStep {
     Digest sibling{};
@@ -60,10 +56,6 @@ public:
 private:
   using Level = Vector<VectorTraits<NodePtr>>;
 
-  template <TreeOrder Order, bool Reverse = false, typename N = const Node>
-  using Traversal = TreeTraversal<BinaryTreeIterator<N, Order, Reverse>>;
-
-  NodePtr m_root = nullptr;
   Level m_leaves;
 
   static void discard(Level &level, std::size_t from = 0) {
@@ -103,14 +95,21 @@ private:
       }
       level.swap(next);
     }
-    m_root = level.empty() ? nullptr : level.at(0).getValue();
+    this->m_root = level.empty() ? nullptr : level.at(0).getValue();
   }
 
   void collect_leaves() {
     m_leaves.clear();
-    for (auto &node : Traversal<TreeOrder::InOrder, false, Node>(m_root))
+    using Leaves = TreeTraversal<BinaryTreeIterator<Node, TreeOrder::InOrder>>;
+    for (auto &node : Leaves(this->m_root))
       if (node.is_leaf())
         m_leaves.push_back(&node, Ref(m_leaves.size()));
+  }
+
+protected:
+  void reset() override {
+    Base::reset();
+    m_leaves.clear();
   }
 
 public:
@@ -133,11 +132,7 @@ public:
   MerkleTree(std::initializer_list<value_type> blocks)
       : MerkleTree(blocks.begin(), blocks.end()) {}
 
-  MerkleTree(const MerkleTree &other) {
-    std::lock_guard lock(other.m_mutex);
-    m_root = clone(other.m_root);
-    collect_leaves();
-  }
+  MerkleTree(const MerkleTree &other) : Base(other) { collect_leaves(); }
 
   MerkleTree(MerkleTree &&other) noexcept { swap(other); }
 
@@ -150,26 +145,17 @@ public:
     if (this == &other)
       return;
     std::scoped_lock lock(this->m_mutex, other.m_mutex);
-    std::swap(m_root, other.m_root);
+    std::swap(this->m_root, other.m_root);
     m_leaves.swap(other.m_leaves);
   }
 
-  ~MerkleTree() { clear(); }
-
-  void clear() {
-    std::lock_guard lock(this->m_mutex);
-    destroy(std::exchange(m_root, nullptr));
-    m_leaves.clear();
-  }
-
-  std::size_t size() const { return m_leaves.size(); }
-  bool empty() const { return size() == 0; }
+  std::size_t size() const override { return m_leaves.size(); }
 
   Digest root_hash() const {
     std::lock_guard lock(this->m_mutex);
-    if (!m_root)
+    if (!this->m_root)
       throw std::logic_error("MerkleTree vacio");
-    return m_root->getValue();
+    return this->m_root->getValue();
   }
 
   void update(std::size_t index, const value_type &block) {
@@ -203,40 +189,6 @@ public:
     }
     return hash == root;
   }
-
-  struct View {
-    using Handle = const Node *;
-    const MerkleTree *tree;
-
-    Handle root() const { return tree->m_root; }
-    Handle child(Handle node, bool side) const { return node->m_pChild[side]; }
-    bool valid(Handle node) const { return node != nullptr; }
-    void label(std::ostream &os, Handle node) const { os << *node; }
-    std::size_t height(Handle node) const {
-      if (!node)
-        return 0;
-      return 1 + std::max(height(node->m_pChild[0]), height(node->m_pChild[1]));
-    }
-  };
-
-  View tree_view() const { return View{this}; }
-
-  ForwardIterator begin() const { return ForwardIterator(m_root); }
-  ForwardIterator end() const { return ForwardIterator(nullptr); }
-  BackwardIterator rbegin() const { return BackwardIterator(m_root); }
-  BackwardIterator rend() const { return BackwardIterator(nullptr); }
-
-  std::size_t height() const {
-    std::lock_guard lock(this->m_mutex);
-    return View{this}.height(m_root);
-  }
-
-  auto InOrder() const { return Traversal<TreeOrder::InOrder>(m_root); }
-  auto ReverseInOrder() const { return Traversal<TreeOrder::InOrder, true>(m_root); }
-  auto PreOrder() const { return Traversal<TreeOrder::PreOrder>(m_root); }
-  auto ReversePreOrder() const { return Traversal<TreeOrder::PostOrder, true>(m_root); }
-  auto PostOrder() const { return Traversal<TreeOrder::PostOrder>(m_root); }
-  auto ReversePostOrder() const { return Traversal<TreeOrder::PreOrder, true>(m_root); }
 };
 
 template <typename T, typename Hasher = StdMerkleHasher<T>>
