@@ -112,6 +112,7 @@ protected:
 private:
     NodePtr m_root = nullptr; // root of the binary tree
     NodePtr internal_insert(NodePtr& node, const value_type& value, Ref ref, NodePtr parent = nullptr);
+    NodePtr internal_find(const value_type& value) const;
     NodePtr internal_remove(NodePtr node);
     void clear_recursive(NodePtr node);
     NodePtr clone_recursive(NodePtr node, NodePtr parent) const;
@@ -127,6 +128,7 @@ public:
         rebalance(internal_insert(m_root, value, ref));
     }
     bool remove(const value_type& value);
+    Node& find_or_insert(const value_type& value);
     void print(std::ostream& os) const;
     // Move constructor and move assignment operator
     // Constructor and destructor
@@ -172,8 +174,7 @@ auto BaseBinaryTree<Traits, Mixins...>::internal_insert(NodePtr& node, const val
 }
 
 template <typename Traits, template <typename> typename... Mixins>
-bool BaseBinaryTree<Traits, Mixins...>::remove(const value_type& value) {
-    std::lock_guard lock(this->m_mutex);
+auto BaseBinaryTree<Traits, Mixins...>::internal_find(const value_type& value) const -> NodePtr {
     NodePtr node = m_root;
     while (node) {
         Side branch = Compare()(node->getValue(), value) ? Right : Left;
@@ -181,10 +182,28 @@ bool BaseBinaryTree<Traits, Mixins...>::remove(const value_type& value) {
             break;
         node = node->m_pChild[branch];
     }
+    return node;
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+bool BaseBinaryTree<Traits, Mixins...>::remove(const value_type& value) {
+    std::lock_guard lock(this->m_mutex);
+    NodePtr node = internal_find(value);
     if (!node)
         return false;
     rebalance(internal_remove(node));
     return true;
+}
+
+template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::find_or_insert(const value_type& value) -> Node& {
+    std::lock_guard lock(this->m_mutex);
+    NodePtr node = internal_find(value);
+    if (!node) {
+        node = internal_insert(m_root, value, Ref{});
+        rebalance(node);
+    }
+    return *node;
 }
 
 template <typename Traits, template <typename> typename... Mixins>

@@ -1,6 +1,9 @@
 #ifndef __GENERAL_NODE_H__
 #define __GENERAL_NODE_H__
+#include <iomanip>
 #include <iostream>
+#include <string>
+#include <type_traits>
 #include "../types.h" // Ref
 
 template <typename T>
@@ -15,17 +18,28 @@ public:
     T    getValue() const { return m_value; }
     Ref  getRef()   const { return m_ref;   }
     T&   value()          { return m_value; } // acceso mutable para ApplyFunction
+    Ref& ref()            { return m_ref;   }
 
     using Delim = std::istream::char_type;
 
     friend std::ostream &operator <<(std::ostream &os, const GeneralNode<T> &node) {
-        os << "(" << node.getValue() << "," << node.getRef() << ")";
+        os << "(";
+        if constexpr (std::is_same_v<T, std::string>)
+            os << std::quoted(node.getValue());
+        else
+            os << node.getValue();
+        os << "," << node.getRef() << ")";
         return os;
     }
 
     friend std::istream &operator >>(std::istream &is, GeneralNode<T> &node){
         Delim d;
-        is >> d >> node.m_value >> d >> node.m_ref >> d;
+        is >> d;
+        if constexpr (std::is_same_v<T, std::string>)
+            is >> std::quoted(node.m_value);
+        else
+            is >> node.m_value;
+        is >> d >> node.m_ref >> d;
         return is;
     }
 };

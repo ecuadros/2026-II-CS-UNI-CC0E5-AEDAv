@@ -8,6 +8,7 @@
 #include <chrono>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
@@ -17,6 +18,7 @@
 #include "containers/Heap.h"
 #include "containers/binarytree.h"
 #include "containers/avl.h"
+#include "containers/hash.h"
 #include "utilities/printcolored.h"
 #include "Demos.h"
 using namespace std;
@@ -469,4 +471,56 @@ void DemoAVL() {
     TestInsertOrder<AVLTree>({{10, 1}, {20, 2}, {30, 3}});
     TestInsertOrder<AVLTree>({{30, 3}, {10, 1}, {20, 2}});
     TestInsertOrder<AVLTree>({{10, 1}, {30, 3}, {20, 2}});
+}
+
+void DemoHash() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para Hash", Color::Yellow);
+    Hash<TX> hash;
+    hash[5] = 54;
+    cout << "Tras hash[5] = 54: " << hash << endl;
+    hash[5] = 60;
+    cout << "Tras hash[5] = 60: " << hash << endl;
+    cout << "hash[5] devuelve " << hash[5] << endl;
+    cout << "hash[9] devuelve " << hash[9] << endl;
+    cout << "Tras leer hash[9]: " << hash << endl;
+    hash[1000000] = 7;
+    cout << "Tras hash[1000000] = 7: " << hash << endl;
+
+    Hash<TX> ordered;
+    for (TX key = 10; key <= 70; key += 10)
+        ordered[key] = key / 10;
+    cout << "Claves 10, 20, ..., 70 en orden: " << ordered << endl;
+    cout << "AVL interno:" << endl;
+    ordered.print(cout);
+
+    ofstream out("hash.txt");
+    out << ordered << endl;
+    out.close();
+    Hash<TX> read;
+    ifstream in("hash.txt");
+    in >> read;
+    in.close();
+    cout << "Hash leido desde archivo: " << read << endl;
+    cout << "AVL del hash leido:" << endl;
+    read.print(cout);
+
+    istringstream repeated("[(5,1),(3,9),(5,2)]");
+    repeated >> read;
+    cout << "Hash leido de [(5,1),(3,9),(5,2)]: " << read << endl;
+
+    Hash<string> words;
+    istringstream text("el gato y el perro y el raton");
+    for (string word; text >> word;)
+        words[word] += 1;
+    cout << "Conteo de palabras: " << words << endl;
+
+    ofstream wordsOut("hash_str.txt");
+    wordsOut << words << endl;
+    wordsOut.close();
+    Hash<string> readWords;
+    ifstream wordsIn("hash_str.txt");
+    wordsIn >> readWords;
+    wordsIn.close();
+    cout << "Conteo leido desde archivo: " << readWords << endl;
 }
