@@ -7,7 +7,7 @@ SRCS     := main.cpp Demos.cpp
 
 all: $(TARGET)
 
-$(TARGET): $(SRCS)
+$(TARGET): $(SRCS) $(wildcard *.h containers/*.h)
 	$(CXX) $(CXXFLAGS) $(SRCS) -o $(TARGET)
 
 run: all

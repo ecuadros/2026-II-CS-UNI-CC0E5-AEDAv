@@ -2,6 +2,7 @@
 #define __VECTOR_H__
 #include <cstddef>
 #include <initializer_list>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <type_traits>
@@ -46,11 +47,11 @@ private:
 
     void resize(size_t new_cap) {
         if (new_cap <= m_capacity) return;
-        Node* new_data = new Node[new_cap];
+        std::unique_ptr<Node[]> new_data(new Node[new_cap]);
         for (size_t i = 0; i < m_size; ++i)
             new_data[i] = m_data[i];
         delete[] m_data;
-        m_data = new_data;
+        m_data = new_data.release();
         m_capacity = new_cap;
     }
 
@@ -65,10 +66,12 @@ public:
 
     Vector(const Vector& other) {
         std::lock_guard lock(other.m_mutex);
-        resize(other.m_size);
+        if (other.m_size == 0) return;
+        std::unique_ptr<Node[]> data(new Node[other.m_size]);
         for (size_t i = 0; i < other.m_size; ++i)
-            m_data[i] = other.m_data[i];
-        m_size = other.m_size;
+            data[i] = other.m_data[i];
+        m_data = data.release();
+        m_size = m_capacity = other.m_size;
     }
 
     Vector(Vector&& other) noexcept { swap(other); }
@@ -89,11 +92,12 @@ public:
 
     void push_back(const value_type& value, Ref ref) {
         std::lock_guard lock(this->m_mutex);
+        Node node(value, ref);
         if (m_size == m_capacity) {
             size_t new_cap = (m_capacity == 0) ? 10 : m_capacity * 2;
             resize(new_cap);
         }
-        m_data[m_size] = Node(value, ref);
+        m_data[m_size] = node;
         ++m_size;
     }
 

@@ -37,4 +37,7 @@ using MinHeap = Heap<HeapTraits<T, std::less<T>>>;
 template <typename T>
 using MaxHeap = Heap<HeapTraits<T, std::greater<T>>>;
 
+template <typename T, typename Hasher = StdMerkleHasher<T>>
+using MerkleOf = MerkleTree<MerkleTreeTraits<T, Hasher>>;
+
 #endif

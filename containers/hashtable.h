@@ -4,12 +4,14 @@
 #include "avl.h"
 #include "traits.h"
 #include <cstddef>
+#include <initializer_list>
 #include <istream>
 #include <ostream>
+#include <utility>
 
-template <typename Key, typename Value> class HashTable {
+template <typename Key, typename Value, typename Comparator = std::less<Key>> class HashTable {
 public:
-    using Tree = AVLTree<AVLTraits<Key, std::less<Key>, Value>>;
+    using Tree = AVLTree<AVLTraits<Key, Comparator, Value>>;
     using value_type = typename Tree::value_type;
     using ref_type = typename Tree::ref_type;
     using Compare = typename Tree::Compare;
@@ -18,6 +20,17 @@ private:
     Tree m_tree;
 
 public:
+    HashTable() = default;
+    HashTable(std::initializer_list<std::pair<Key, Value>> values) {
+        for (const auto& [key, value] : values)
+            m_tree.insert_unique(key, value);
+    }
+
+    auto begin() const { return m_tree.begin(); }
+    auto end() const { return m_tree.end(); }
+    auto rbegin() const { return m_tree.rbegin(); }
+    auto rend() const { return m_tree.rend(); }
+
     Value& operator[](const Key& key) { return m_tree[key]; }
 
     bool insert(const Key& key, const Value& value) { return m_tree.insert_unique(key, value).second; }

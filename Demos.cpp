@@ -16,6 +16,7 @@
 #include <iomanip>
 #include "containers/aliases.h"
 #include "containers/hashtable.h"
+#include "containers/sha256.h"
 #include "Demos.h"
 
 template <typename Container>
@@ -766,6 +767,49 @@ void TestMerkleCopyAndClear() {
     std::cout << "clear, copia y arbol de una hoja OK\n";
 }
 
+void TestMerklePushBack() {
+    PrintColor("TestMerklePushBack");
+    MerkleStrings tree;
+    std::vector<std::string> blocks;
+    for (char c = 'A'; c <= 'I'; ++c) {
+        blocks.push_back(std::string(1, c));
+        tree.push_back(blocks.back());
+        CheckMerkle(tree.size() == blocks.size(), "size tras push_back");
+        CheckMerkle(tree.root_hash() == MerkleStrings(blocks.begin(), blocks.end()).root_hash(),
+                    "push_back no coincide con reconstruir");
+        for (std::size_t i = 0; i < blocks.size(); ++i)
+            CheckMerkle(MerkleStrings::verify(blocks[i], tree.proof(i), tree.root_hash()), "prueba tras push_back");
+    }
+    tree.append("J");
+    CheckMerkle(tree.size() == 10, "append");
+    std::cout << "push_back/append 1..10 hojas: raiz y pruebas coinciden con reconstruir\n";
+}
+
+void DemoMerkleBitcoin() {
+    PrintColor("DemoMerkleBitcoin (SHA256 doble, nodo impar duplicado)");
+    using Btc = MerkleOf<Sha256Digest, BitcoinMerkleHasher>;
+    // bloque 170 de Bitcoin (primera transaccion entre personas)
+    Btc block170{Sha256Digest::from_display_hex("b1fea52486ce0c62bb442b530a3f0132b826c74e473d1f2c220bfa78111c5082"),
+                 Sha256Digest::from_display_hex("f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16")};
+    std::cout << "raiz = " << block170.root_hash().display_hex() << '\n';
+    CheckMerkle(block170.root_hash().display_hex() == "7dac2c5666815c17a3b36427de37bb9d2e2c5ccec3f8633eb91a4205cb4c10ff",
+                "la raiz del bloque 170 no coincide con Bitcoin");
+
+    Sha256Digest a = Sha256::hash("a"), b = Sha256::hash("b"), c = Sha256::hash("c");
+    Btc odd{a, b, c}, even{a, b, c, c};
+    CheckMerkle(odd.root_hash() == even.root_hash(), "[a,b,c] debe dar la misma raiz que [a,b,c,c]");
+    for (std::size_t i = 0; i < 3; ++i) {
+        Sha256Digest leaf = i == 0 ? a : i == 1 ? b : c;
+        CheckMerkle(Btc::verify(leaf, odd.proof(i), odd.root_hash()), "prueba con nodo duplicado");
+    }
+    odd.update(2, a);
+    CheckMerkle(odd.root_hash() == Btc{a, b, a}.root_hash(), "update con nodo duplicado");
+    odd.push_back(c);
+    CheckMerkle(odd.root_hash() == Btc{a, b, a, c}.root_hash(), "push_back en Btc");
+    CheckMerkle(Btc{a}.root_hash() == a, "una sola hoja: la raiz es el txid");
+    std::cout << "raiz del bloque 170, duplicado del impar, pruebas, update y push_back OK\n";
+}
+
 void TestMerkleRace() {
     PrintColor("TestRaceCondition (MerkleTree)");
     MerkleStrings tree{"a", "b", "c", "d", "e", "f", "g", "h"};
@@ -798,6 +842,7 @@ void DemoMerkleTree() {
 
     TestMerkleProofs(tree, blocks);
     TestMerkleUpdate(tree, blocks);
+    TestMerklePushBack();
     TestMerkleCopyAndClear();
     TestMerkleRace();
 }

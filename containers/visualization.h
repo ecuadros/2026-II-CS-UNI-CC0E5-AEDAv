@@ -7,11 +7,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <ostream>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 namespace visual {
@@ -66,13 +68,13 @@ public:
     explicit Painter(const std::ostream& os) : m_on(enabled(os)) {}
 
     std::string operator()(std::string_view code, std::string_view text) const {
-        if (!m_on || text.empty()) return std::string(text);
+        if (!m_on || code.empty() || text.empty()) return std::string(text);
         return "\033[" + std::string(code) + 'm' + std::string(text) + "\033[0m";
     }
 
-    std::string level(std::size_t depth, std::string_view text) const {
-        return (*this)(style::levels[depth % std::size(style::levels)], text);
-    }
+    static std::string_view level_code(std::size_t depth) { return style::levels[depth % std::size(style::levels)]; }
+
+    std::string level(std::size_t depth, std::string_view text) const { return (*this)(level_code(depth), text); }
 
 private:
     static bool enabled(const std::ostream& os) {
@@ -105,15 +107,6 @@ template <TreeView V> std::string label(const V& v, typename V::Handle h) {
     return ss.str();
 }
 
-template <TreeView V> std::size_t height(const V& v, typename V::Handle h) {
-    if constexpr (requires { v.height(h); }) {
-        return v.height(h);
-    } else {
-        if (!v.valid(h)) return 0;
-        return 1 + std::max(height(v, v.child(h, false)), height(v, v.child(h, true)));
-    }
-}
-
 template <TreeView V>
 void sideways(std::ostream& os, const Painter& paint, const V& v, typename V::Handle h, const std::string& prefix,
               int dir, std::size_t depth) {
@@ -124,86 +117,157 @@ void sideways(std::ostream& os, const Painter& paint, const V& v, typename V::Ha
     sideways(os, paint, v, v.child(h, false), prefix + (dir < 0 ? "" : dir == 1 ? "│     " : "      "), 0, depth + 1);
 }
 
-inline void draw_at(std::ostream& os, std::ptrdiff_t x, std::ptrdiff_t y, const std::string& text) {
-    os << "\033[u";
-    if (y > 0) os << "\033[" << y << 'B';
-    if (x > 0) os << "\033[" << x << 'C';
-    os << text;
-}
+class Canvas {
+public:
+    struct Cell {
+        std::string text = " ";
+        std::string_view style;
+        bool blank() const { return text == " "; }
+    };
 
-template <TreeView V>
-std::ptrdiff_t place(std::ostream& os, const Painter& paint, const V& v, typename V::Handle h, std::ptrdiff_t depth,
-                     std::ptrdiff_t& col) {
-    if (!v.valid(h)) return -1;
-    std::ptrdiff_t lc = place(os, paint, v, v.child(h, false), depth + 1, col);
+    void label(std::ptrdiff_t x, std::ptrdiff_t y, std::string_view text, std::string_view style) {
+        auto& row = row_at(y, x + static_cast<std::ptrdiff_t>(text.size()));
+        row[x] = {std::string(text), style};
+        for (std::size_t i = 1; i < text.size(); ++i)
+            row[x + i] = {"", style};
+    }
 
-    std::string text = label(v, h);
-    auto len = static_cast<std::ptrdiff_t>(text.size());
-    std::ptrdiff_t center = col + len / 2;
-    draw_at(os, col, 2 * depth, paint.level(depth, text));
-    col += len + 1;
+    void glyph(std::ptrdiff_t x, std::ptrdiff_t y, std::string_view g, std::string_view style) {
+        row_at(y, x + 1)[x] = {std::string(g), style};
+    }
 
-    std::ptrdiff_t rc = place(os, paint, v, v.child(h, true), depth + 1, col);
+    void hline(std::ptrdiff_t from, std::ptrdiff_t to, std::ptrdiff_t y, std::string_view g, std::string_view style) {
+        for (auto x = from; x <= to; ++x)
+            glyph(x, y, g, style);
+    }
 
-    std::ptrdiff_t y = 2 * depth + 1;
-    if (lc >= 0) draw_at(os, lc, y, paint(style::edge, "┌" + repeat("─", center - lc - 1)));
-    if (rc >= 0) draw_at(os, center + 1, y, paint(style::edge, repeat("─", rc - center - 1) + "┐"));
-    if (lc >= 0 || rc >= 0)
-        draw_at(os, center, y, paint(style::edge, lc >= 0 && rc >= 0 ? "┴" : lc >= 0 ? "┘" : "└"));
-    return center;
-}
+    std::size_t height() const { return m_rows.size(); }
 
-struct Block {
-    std::vector<std::vector<std::string>> rows;
-    std::ptrdiff_t width = 0;
-    std::ptrdiff_t mid = 0;
+    std::size_t width() const {
+        std::size_t w = 0;
+        for (const auto& row : m_rows)
+            w = std::max(w, row.size());
+        return w;
+    }
+
+    void print(std::ostream& os, const Painter& paint) const {
+        for (std::size_t y = 0; y < height(); ++y)
+            print_row(os, paint, y);
+    }
+
+    void print_at_cursor(std::ostream& os, const Painter& paint) const {
+        for (std::size_t y = 0; y < height(); ++y) {
+            os << "\033[u";
+            if (y > 0) os << "\033[" << y << 'B';
+            if (auto x = first_ink(m_rows[y]); x > 0) os << "\033[" << x << 'C';
+            print_row(os, paint, y, true);
+        }
+    }
+
+private:
+    std::vector<std::vector<Cell>> m_rows;
+
+    std::vector<Cell>& row_at(std::ptrdiff_t y, std::ptrdiff_t width) {
+        if (m_rows.size() <= static_cast<std::size_t>(y)) m_rows.resize(y + 1);
+        auto& row = m_rows[y];
+        if (row.size() < static_cast<std::size_t>(width)) row.resize(width);
+        return row;
+    }
+
+    static std::size_t first_ink(const std::vector<Cell>& row) {
+        return std::find_if(row.begin(), row.end(), [](const Cell& c) { return !c.blank(); }) - row.begin();
+    }
+
+    void print_row(std::ostream& os, const Painter& paint, std::size_t y, bool skip_leading = false) const {
+        const auto& row = m_rows[y];
+        auto last = std::find_if(row.rbegin(), row.rend(), [](const Cell& c) { return !c.blank(); }).base();
+        for (auto it = skip_leading ? row.begin() + first_ink(row) : row.begin(); it < last; ++it)
+            os << paint(it->style, it->text);
+        if (!skip_leading) os << '\n';
+    }
 };
 
-template <TreeView V> Block layout(const Painter& paint, const V& v, typename V::Handle h, std::size_t depth = 0) {
-    std::string text = label(v, h);
-    auto len = static_cast<std::ptrdiff_t>(text.size());
+struct Box {
+    std::string text;
+    std::ptrdiff_t dx = 0, x = 0;
+    std::vector<std::pair<std::ptrdiff_t, std::ptrdiff_t>> contour;
+    std::vector<Box> kids;
+    std::ptrdiff_t center() const { return x + static_cast<std::ptrdiff_t>(text.size()) / 2; }
+};
 
-    auto lh = v.child(h, false);
-    auto rh = v.child(h, true);
-    bool hasL = v.valid(lh), hasR = v.valid(rh);
-    Block left = hasL ? layout(paint, v, lh, depth + 1) : Block{};
-    Block right = hasR ? layout(paint, v, rh, depth + 1) : Block{};
+template <TreeView V> Box layout(const V& v, typename V::Handle h) {
+    Box box{label(v, h)};
+    bool only_right = false;
+    for (bool right : {false, true})
+        if (auto c = v.child(h, right); v.valid(c)) {
+            box.kids.push_back(layout(v, c));
+            only_right = right && box.kids.size() == 1;
+        }
 
-    std::ptrdiff_t roff = left.width + (hasL && hasR ? 3 : 0);
-    std::ptrdiff_t lm = left.mid, rm = roff + right.mid;
-    std::ptrdiff_t c = hasL && hasR ? (lm + rm) / 2 : hasL ? lm + 3 : hasR ? rm - 3 : len / 2;
-    std::ptrdiff_t start = c - len / 2;
-    std::ptrdiff_t shift = std::max<std::ptrdiff_t>(0, -start);
-
-    Block b;
-    b.width = std::max(roff + right.width, start + len) + shift;
-    b.mid = c + shift;
-    auto blank = [&] { return std::vector<std::string>(b.width, " "); };
-
-    auto row = blank();
-    for (std::ptrdiff_t i = 0; i < len; ++i)
-        row[start + shift + i] = "";
-    if (len > 0) row[start + shift] = paint.level(depth, text);
-    b.rows.push_back(row);
-    if (!hasL && !hasR) return b;
-
-    row = blank();
-    for (std::ptrdiff_t x = hasL ? lm : c; x <= (hasR ? rm : c); ++x)
-        row[x + shift] = paint(style::edge, "─");
-    if (hasL) row[lm + shift] = paint(style::edge, "┌");
-    if (hasR) row[rm + shift] = paint(style::edge, "┐");
-    row[c + shift] = paint(style::edge, hasL && hasR ? "┴" : hasL ? "┘" : "└");
-    b.rows.push_back(row);
-
-    for (std::size_t i = 0; i < std::max(left.rows.size(), right.rows.size()); ++i) {
-        row = blank();
-        if (i < left.rows.size())
-            std::copy(left.rows[i].begin(), left.rows[i].end(), row.begin() + shift);
-        if (i < right.rows.size())
-            std::copy(right.rows[i].begin(), right.rows[i].end(), row.begin() + roff + shift);
-        b.rows.push_back(row);
+    auto width = static_cast<std::ptrdiff_t>(box.text.size());
+    std::ptrdiff_t center = width / 2;
+    if (box.kids.size() == 2) {
+        auto &l = box.kids[0], &r = box.kids[1];
+        auto shift = std::numeric_limits<std::ptrdiff_t>::min();
+        for (std::size_t i = 0; i < std::min(l.contour.size(), r.contour.size()); ++i)
+            shift = std::max(shift, l.contour[i].second + 2 - r.contour[i].first);
+        r.dx = shift;
+        center = (l.center() + r.dx + r.center()) / 2;
+    } else if (box.kids.size() == 1) {
+        center = box.kids[0].center() + (only_right ? -2 : 2);
     }
-    return b;
+
+    box.x = center - width / 2;
+    box.contour.push_back({box.x, box.x + width - 1});
+    for (const auto& k : box.kids)
+        for (std::size_t i = 0; i < k.contour.size(); ++i) {
+            std::pair range{k.contour[i].first + k.dx, k.contour[i].second + k.dx};
+            if (box.contour.size() <= i + 1)
+                box.contour.push_back(range);
+            else
+                box.contour[i + 1] = {std::min(box.contour[i + 1].first, range.first),
+                                      std::max(box.contour[i + 1].second, range.second)};
+        }
+    return box;
+}
+
+inline void paint_box(Canvas& canvas, const Box& b, std::ptrdiff_t ox, std::size_t depth) {
+    ox += b.dx;
+    auto y = static_cast<std::ptrdiff_t>(2 * depth);
+    canvas.label(ox + b.x, y, b.text, Painter::level_code(depth));
+    if (b.kids.empty()) return;
+
+    auto c = ox + b.center(), lo = c, hi = c;
+    for (const auto& k : b.kids) {
+        paint_box(canvas, k, ox, depth + 1);
+        lo = std::min(lo, ox + k.dx + k.center());
+        hi = std::max(hi, ox + k.dx + k.center());
+    }
+    constexpr auto edge = style::edge;
+    canvas.hline(lo, hi, y + 1, "─", edge);
+    if (lo < c) canvas.glyph(lo, y + 1, "┌", edge);
+    if (hi > c) canvas.glyph(hi, y + 1, "┐", edge);
+    canvas.glyph(c, y + 1, lo < c && hi > c ? "┴" : lo < c ? "┘" : "└", edge);
+}
+
+template <TreeView V> Canvas draw(const V& v) {
+    Canvas canvas;
+    auto box = layout(v, v.root());
+    auto left = std::ranges::min(box.contour, {}, [](const auto& r) { return r.first; }).first;
+    paint_box(canvas, box, -left, 0);
+    return canvas;
+}
+
+inline std::size_t terminal_width(const std::ostream& os) {
+    int fd = &os == &std::cout ? STDOUT_FILENO : &os == &std::cerr ? STDERR_FILENO : -1;
+    winsize ws{};
+    if (fd >= 0 && isatty(fd) && ioctl(fd, TIOCGWINSZ, &ws) == 0) return ws.ws_col;
+    return 0;
+}
+
+inline bool fits(const std::ostream& os, const Canvas& canvas) {
+    auto cols = terminal_width(os);
+    return cols == 0 || canvas.width() <= cols;
 }
 
 template <LinearView C> void print_chain(std::ostream& os, const C& c) {
@@ -248,24 +312,35 @@ template <LinearView C> void print_cells(std::ostream& os, const C& c) {
        << paint(style::index, index) << '\n';
 }
 
+template <TreeView V> std::size_t count(const V& v, typename V::Handle h) {
+    return v.valid(h) ? 1 + count(v, v.child(h, true)) + count(v, v.child(h, false)) : 0;
+}
+
 template <TreeView V> void print_sideways(std::ostream& os, const V& v) {
-    sideways(os, Painter(os), v, v.root(), "", -1, 0);
+    Painter paint(os);
+    auto root = v.root();
+    auto up = count(v, v.child(root, true)), down = count(v, v.child(root, false));
+    sideways(os, paint, v, v.child(root, true), "", 1, 1);
+    for (auto i = up; i < down; ++i)
+        os << paint(style::edge, up ? "│" : "") << '\n';
+    os << paint.level(0, label(v, root)) << '\n';
+    for (auto i = down; i < up; ++i)
+        os << paint(style::edge, down ? "│" : "") << '\n';
+    sideways(os, paint, v, v.child(root, false), "", 0, 1);
 }
 
 template <TreeView V> void print_vertical(std::ostream& os, const V& v) {
-    for (const auto& cells : layout(Painter(os), v, v.root()).rows) {
-        auto last = std::find_if(cells.rbegin(), cells.rend(), [](const std::string& s) { return s != " "; });
-        for (auto it = cells.begin(); it != last.base(); ++it)
-            os << *it;
-        os << '\n';
-    }
+    auto canvas = draw(v);
+    if (!fits(os, canvas)) return print_sideways(os, v);
+    canvas.print(os, Painter(os));
 }
 
 template <TreeView V> void print_cursor(std::ostream& os, const V& v) {
-    auto rows = static_cast<std::ptrdiff_t>(2 * height(v, v.root()) - 1);
+    auto canvas = draw(v);
+    if (!fits(os, canvas)) return print_sideways(os, v);
+    auto rows = canvas.height();
     os << std::string(rows, '\n') << "\033[" << rows << 'A' << "\033[s";
-    std::ptrdiff_t col = 0;
-    place(os, Painter(os), v, v.root(), 0, col);
+    canvas.print_at_cursor(os, Painter(os));
     os << "\033[u\033[" << rows << 'B' << '\r' << std::flush;
 }
 

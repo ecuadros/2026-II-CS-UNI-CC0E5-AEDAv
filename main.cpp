@@ -19,7 +19,8 @@ int main(int argc, char *argv[]) {
       {"hash", DemoHashTable},
       {"avl-steps", DemoAVLStepByStep},
       {"hash-steps", DemoHashTableStepByStep},
-      {"merkle", DemoMerkleTree},
+      {"merkle-base", DemoMerkleTree},
+      {"merkle-bitcoin", DemoMerkleBitcoin},
       {"merkle-steps", DemoMerkleTreeStepByStep},
   };
 

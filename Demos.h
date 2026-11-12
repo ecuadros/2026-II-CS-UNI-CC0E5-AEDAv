@@ -14,6 +14,7 @@ void DemoHashTable();
 void DemoAVLStepByStep();
 void DemoHashTableStepByStep();
 void DemoMerkleTree();
+void DemoMerkleBitcoin();
 void DemoMerkleTreeStepByStep();
 
 #endif // __DEMOS_H__
