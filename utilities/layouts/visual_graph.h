@@ -22,7 +22,6 @@ struct VisualNode {
     std::string label;     /**< Etiqueta formateada (puede incluir secuencias ANSI). */
     TX x = 0;              /**< Coordenada horizontal en celdas de lienzo. */
     TX y = 0;              /**< Coordenada vertical en filas de lienzo. */
-    std::string css_class; /**< Clase CSS opcional para futuros renderizadores vectoriales. */
 };
 
 /** @brief Arista dirigida o no dirigida entre dos `VisualNode` identificados por su `id`. */
