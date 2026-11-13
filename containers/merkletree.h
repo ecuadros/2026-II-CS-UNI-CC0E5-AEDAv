@@ -15,19 +15,30 @@
 #include <stdexcept>
 #include <utility>
 
+/**
+ * Hasher de Merkle basado en `std::hash`. No es criptográfico: sirve para demos y pruebas.
+ * @tparam T Tipo de los bloques de datos.
+ */
 template <typename T> struct StdMerkleHasher {
   using Digest = std::size_t;
 
+  /** Mezcla @p v en @p seed, al estilo de `boost::hash_combine`. */
   static Digest mix(Digest seed, Digest v) {
     return seed ^ (v + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
   }
 
+  /** Hash de una hoja; lleva el prefijo 0x00 para distinguirla de un nodo interno. */
   static Digest leaf(const T &data) { return mix(0x00, std::hash<T>{}(data)); }
+  /** Hash de un nodo interno a partir de sus dos hijos; lleva el prefijo 0x01. */
   static Digest combine(Digest left, Digest right) {
     return mix(mix(0x01, left), right);
   }
 };
 
+/**
+ * Nodo de un árbol de Merkle: su valor es el hash. En las hojas la referencia es el índice del bloque; en los nodos internos es -1.
+ * @tparam Digest Tipo del hash.
+ */
 template <typename Digest>
 class MerkleNode : public BinaryTreeNode<Digest, MerkleNode<Digest>> {
 public:
@@ -35,9 +46,15 @@ public:
   using Parent::Parent;
 };
 
+/** Operaciones del MerkleTree: recorridos, impresión y dibujo; sin lectura desde stream. */
 using MerkleTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
                                         RFirstThatOp, PrintableOp, VisualOp>;
 
+/**
+ * Árbol de Merkle: las hojas guardan el hash de cada bloque y cada nodo interno el hash de sus dos hijos, de modo que la raíz resume todos los datos.
+ * @tparam Traits Tipos de bloque, hasher, digest y nodo.
+ * @tparam Ops Mixins de recorrido e impresión.
+ */
 template <typename Traits, typename Ops = MerkleTraversalOps>
 class MerkleTree : public BinaryTreeBase<Traits, Ops> {
 public:
@@ -48,10 +65,12 @@ public:
   using Node = typename Traits::Node;
   using NodePtr = Node *;
 
+  /** Paso de una prueba de inclusión: el hash hermano y de qué lado va al combinar. */
   struct ProofStep {
     Digest sibling{};
     bool sibling_is_right = false;
   };
+  /** Prueba de inclusión: los pasos desde la hoja hasta la raíz. */
   using Proof = Vector<VectorTraits<ProofStep>>;
 
 private:
@@ -59,13 +78,16 @@ private:
 
   static constexpr bool dup_odd = requires { requires Hasher::duplicate_odd; };
 
+  /** Hojas en el orden de los bloques. */
   Level m_leaves;
 
+  /** Hash del segundo operando de @p parent: el hijo derecho, o el izquierdo si el nodo impar se duplicó. */
   static const Digest &second_hash(const Node *parent) {
     return (parent->m_pChild[1] ? parent->m_pChild[1] : parent->m_pChild[0])
         ->getValue();
   }
 
+  /** Crea el padre de @p left y @p right y lo añade al nivel @p next. Si @p right es nulo, combina @p left consigo mismo. */
   static void join(Level &next, NodePtr left, NodePtr right) {
     NodePtr parent = new Node(
         Hasher::combine(left->getValue(),
@@ -85,6 +107,7 @@ private:
       right->m_pParent = parent;
   }
 
+  /** Libera los nodos internos del subárbol y conserva las hojas. */
   static void drop_internals(NodePtr node) {
     if (!node || node->is_leaf())
       return;
@@ -94,11 +117,13 @@ private:
     delete node;
   }
 
+  /** Libera los subárboles del nivel @p level a partir de la posición @p from. */
   static void discard(Level &level, std::size_t from = 0) {
     for (std::size_t i = from; i < level.size(); ++i)
       destroy(level.at(i).getValue());
   }
 
+  /** Construye los niveles internos desde las hojas hasta la raíz. Un nodo sin pareja sube tal cual al nivel siguiente, o se combina consigo mismo si el hasher define `duplicate_odd`. Si falla, libera todo y el árbol queda vacío. */
   void build() {
     Level level;
     try {
@@ -131,6 +156,7 @@ private:
     this->m_root = level.empty() ? nullptr : level.at(0).getValue();
   }
 
+  /** Reconstruye la lista de hojas recorriendo el árbol de izquierda a derecha. */
   void collect_leaves() {
     m_leaves.clear();
     using Leaves = TreeTraversal<BinaryTreeIterator<Node, TreeOrder::InOrder>>;
@@ -140,14 +166,17 @@ private:
   }
 
 protected:
+  /** Libera los nodos y vacía la lista de hojas. */
   void reset() override {
     Base::reset();
     m_leaves.clear();
   }
 
 public:
+  /** Crea un árbol vacío. */
   MerkleTree() = default;
 
+  /** Construye el árbol con los bloques del rango [first, last). */
   template <std::input_iterator It>
   MerkleTree(It first, It last) {
     try {
@@ -164,18 +193,23 @@ public:
     build();
   }
 
+  /** Construye el árbol con los bloques dados. */
   MerkleTree(std::initializer_list<value_type> blocks)
       : MerkleTree(blocks.begin(), blocks.end()) {}
 
+  /** Copia en profundidad @p other. */
   MerkleTree(const MerkleTree &other) : Base(other) { collect_leaves(); }
 
+  /** Mueve el contenido de @p other, que queda vacío. */
   MerkleTree(MerkleTree &&other) noexcept { swap(other); }
 
+  /** Asigna por copia o por movimiento (copy-and-swap). */
   MerkleTree &operator=(MerkleTree other) noexcept {
     swap(other);
     return *this;
   }
 
+  /** Intercambia el contenido con @p other. */
   void swap(MerkleTree &other) noexcept {
     if (this == &other)
       return;
@@ -184,8 +218,13 @@ public:
     m_leaves.swap(other.m_leaves);
   }
 
+  /** Cantidad de bloques (hojas). */
   std::size_t size() const override { return m_leaves.size(); }
 
+  /**
+   * Devuelve el hash raíz.
+   * @throws std::logic_error si el árbol está vacío.
+   */
   Digest root_hash() const {
     std::lock_guard lock(this->m_mutex);
     if (!this->m_root)
@@ -194,6 +233,7 @@ public:
   }
 
   // shortcut: reconstruye todo el arbol (O(n) hashes); si falla, el arbol queda vacio. Pasar a append incremental (O(log n)) si n es grande.
+  /** Añade un bloque al final y reconstruye los nodos internos. */
   void push_back(const value_type &block) {
     std::lock_guard lock(this->m_mutex);
     Ref index = Ref(m_leaves.size());
@@ -206,8 +246,13 @@ public:
     build();
   }
 
+  /** Equivale a push_back(). */
   void append(const value_type &block) { push_back(block); }
 
+  /**
+   * Reemplaza el bloque @p index y recalcula solo los hashes de su camino hasta la raíz.
+   * @throws std::out_of_range si @p index no existe.
+   */
   void update(std::size_t index, const value_type &block) {
     std::lock_guard lock(this->m_mutex);
     NodePtr node = m_leaves.at(index).getValue();
@@ -216,6 +261,10 @@ public:
       p->value() = Hasher::combine(p->m_pChild[0]->getValue(), second_hash(p));
   }
 
+  /**
+   * Genera la prueba de inclusión del bloque @p index.
+   * @throws std::out_of_range si @p index no existe.
+   */
   Proof proof(std::size_t index) const {
     std::lock_guard lock(this->m_mutex);
     Proof steps;
@@ -229,6 +278,7 @@ public:
     return steps;
   }
 
+  /** Comprueba que @p block pertenece al árbol cuyo hash raíz es @p root, usando solo la prueba @p steps. */
   static bool verify(const value_type &block, const Proof &steps,
                      const Digest &root) {
     Digest hash = Hasher::leaf(block);

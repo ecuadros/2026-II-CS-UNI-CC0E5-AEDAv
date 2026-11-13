@@ -8,15 +8,20 @@
 #include <utility>
 #include <vector>
 
+/** Lectura y escritura de contenedores en formato de texto `[(valor,ref),...]`. */
 namespace container_stream {
 
+/** Tipo de referencia de un contenedor: `C::ref_type` si existe, o `Ref` en caso contrario. */
 template <class C> struct ref_of { using type = Ref; };
+/** Especialización para los contenedores que definen `ref_type`. */
 template <class C> requires requires { typename C::ref_type; }
 struct ref_of<C> { using type = typename C::ref_type; };
+/** Atajo para `ref_of<C>::type`. */
 template <class C> using ref_of_t = typename ref_of<C>::type;
 
 using Delim = StreamDelimiters::Delim;
 
+/** Contenedor que se puede recorrer con `begin()`/`end()` y cuyos nodos se pueden escribir en un stream. */
 template <class Container>
 concept PrintableContainer =
     requires(const Container& c, std::ostream& os) {
@@ -29,6 +34,7 @@ concept PrintableContainer =
         os << *c.begin();
     };
 
+/** Contenedor imprimible que además se puede vaciar y rellenar con `clear()` y `push_back(valor, ref)`. */
 template <class Container>
 concept ReadableContainer =
     PrintableContainer<Container> &&
@@ -41,6 +47,7 @@ concept ReadableContainer =
         c.push_back(value, ref);
     };
 
+/** Escribe el contenedor como `[nodo,nodo,...]`. */
 template <PrintableContainer Container>
 std::ostream& write(std::ostream& os, const Container& container) {
     os << StreamDelimiters::container_open;
@@ -53,6 +60,10 @@ std::ostream& write(std::ostream& os, const Container& container) {
     return os << StreamDelimiters::container_close;
 }
 
+/**
+ * Lee una lista `[nodo,nodo,...]` y la acumula en @p nodes.
+ * @return `false` si el formato es inválido; el stream queda en fallo.
+ */
 template <typename T, typename R>
 bool read_nodes(std::istream& is, std::vector<GeneralNode<T, R>>& nodes) {
     if (!StreamDelimiters::expect(is, StreamDelimiters::container_open)) return false;
@@ -75,6 +86,7 @@ bool read_nodes(std::istream& is, std::vector<GeneralNode<T, R>>& nodes) {
     }
 }
 
+/** Reemplaza el contenido de @p destination por @p nodes. Construye primero un contenedor temporal, así que si falla el destino no cambia. */
 template <ReadableContainer Container>
 void insert_nodes(Container& destination,
                   const std::vector<GeneralNode<typename Container::value_type, ref_of_t<Container>>>& nodes) {
@@ -84,6 +96,7 @@ void insert_nodes(Container& destination,
     destination = std::move(temp);
 }
 
+/** Lee un contenedor completo desde el stream. Si el texto es inválido, el contenedor no se modifica. */
 template <ReadableContainer Container>
 std::istream& read(std::istream& is, Container& container) {
     std::vector<GeneralNode<typename Container::value_type, ref_of_t<Container>>> nodes;

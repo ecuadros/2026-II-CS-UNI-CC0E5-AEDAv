@@ -5,6 +5,10 @@
 
 // Compilar asi: make
 // Ejecutar asi: ./main avl hash   (sin argumentos corre todos)
+/**
+ * Ejecuta las demos indicadas por nombre en los argumentos, o todas si no se pasa ninguno.
+ * @return 0 si todo fue bien, 1 si algún nombre de demo no existe.
+ */
 int main(int argc, char *argv[]) {
   const std::map<std::string_view, void (*)()> demos{
       {"vector", DemoVector},

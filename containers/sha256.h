@@ -15,6 +15,7 @@
 #include <string_view>
 #include <type_traits>
 
+/** Resultado de SHA-256: 32 bytes. */
 struct Sha256Digest {
   using Byte = std::uint8_t;
   using Count = std::size_t;
@@ -29,6 +30,8 @@ struct Sha256Digest {
   bool operator==(const Sha256Digest &) const = default;
 
   // Bitcoin muestra los hashes (txid, raiz) con los bytes invertidos
+  /** Crea un digest a partir del hexadecimal que muestra Bitcoin, con los bytes
+   * en orden inverso. No valida la entrada: espera 64 dígitos hexadecimales. */
   static Sha256Digest from_display_hex(std::string_view hex) {
     Sha256Digest d;
     for (Count i = 0; i < Size; ++i) {
@@ -40,22 +43,29 @@ struct Sha256Digest {
     return d;
   }
 
+  /** Devuelve el digest en hexadecimal con los bytes invertidos, como lo
+   * muestra Bitcoin. */
   std::string display_hex() const {
     std::ostringstream os;
     for (auto it = bytes.rbegin(); it != bytes.rend(); ++it)
-      os << std::hex << std::setw(HexPerByte) << std::setfill('0') << HexValue(*it);
+      os << std::hex << std::setw(HexPerByte) << std::setfill('0')
+         << HexValue(*it);
     return os.str();
   }
 
+  /** Escribe el digest en hexadecimal en su orden natural. */
   friend std::ostream &operator<<(std::ostream &os, const Sha256Digest &d) {
     auto flags = os.flags();
     for (auto b : d.bytes)
-      os << std::hex << std::setw(HexPerByte) << std::setfill('0') << HexValue(b);
+      os << std::hex << std::setw(HexPerByte) << std::setfill('0')
+         << HexValue(b);
     os.flags(flags);
     return os;
   }
 };
 
+/** Implementación de SHA-256 (FIPS 180-4) con interfaz incremental: `update()`
+ * tantas veces como haga falta y `finish()` una vez. */
 class Sha256 {
 public:
   using Digest = Sha256Digest;
@@ -76,8 +86,10 @@ public:
   static constexpr Byte PadMarker = 0x80;
   static constexpr Byte PadFill = 0x00;
 
+  /** Inicia el estado con los valores iniciales del estándar. */
   Sha256() { std::copy(std::begin(InitialState), std::end(InitialState), m_h); }
 
+  /** Añade @p len bytes de @p data al mensaje. */
   void update(const void *data, Count len) {
     auto p = static_cast<const Byte *>(data);
     m_total += len;
@@ -94,6 +106,8 @@ public:
     }
   }
 
+  /** Aplica el relleno final y devuelve el digest. El objeto no debe
+   * reutilizarse después. */
   Digest finish() {
     BitCount bits = m_total * BitsPerByte;
     update(&PadMarker, 1);
@@ -106,20 +120,24 @@ public:
     Digest out;
     for (Count i = 0; i < StateWords; ++i)
       for (Count j = 0; j < WordSize; ++j)
-        out.bytes[WordSize * i + j] = Byte(m_h[i] >> (BitsPerByte * (WordSize - 1 - j)));
+        out.bytes[WordSize * i + j] =
+            Byte(m_h[i] >> (BitsPerByte * (WordSize - 1 - j)));
     return out;
   }
 
+  /** Calcula el SHA-256 de un bloque de bytes. */
   static Digest hash(const void *data, Count len) {
     Sha256 h;
     h.update(data, len);
     return h.finish();
   }
 
+  /** Calcula el SHA-256 de una cadena. */
   static Digest hash(std::string_view s) { return hash(s.data(), s.size()); }
 
 private:
-  // Cantidades de rotacion/desplazamiento de la especificacion (FIPS 180-4, seccion 4.1.2)
+  // Cantidades de rotacion/desplazamiento
+  /** Las tres cantidades de rotación o desplazamiento de una función sigma. */
   struct Rotations {
     Shift first, second, third;
   };
@@ -150,19 +168,29 @@ private:
   Count m_fill = 0;
   BitCount m_total = 0;
 
-  static Word rotr(Word x, Shift n) { return (x >> n) | (x << (BitsPerWord - n)); }
+  /** Rota @p x a la derecha @p n bits. */
+  static Word rotr(Word x, Shift n) {
+    return (x >> n) | (x << (BitsPerWord - n));
+  }
 
+  /** Función Σ del estándar: XOR de tres rotaciones. */
   static Word big_sigma(Word x, const Rotations &r) {
     return rotr(x, r.first) ^ rotr(x, r.second) ^ rotr(x, r.third);
   }
 
+  /** Función σ del estándar: XOR de dos rotaciones y un desplazamiento. */
   static Word small_sigma(Word x, const Rotations &r) {
     return rotr(x, r.first) ^ rotr(x, r.second) ^ (x >> r.third);
   }
 
+  /** Función Ch: cada bit de @p e elige entre el de @p f y el de @p g. */
   static Word choose(Word e, Word f, Word g) { return (e & f) ^ (~e & g); }
-  static Word majority(Word a, Word b, Word c) { return (a & b) ^ (a & c) ^ (b & c); }
+  /** Función Maj: bit mayoritario entre los tres operandos. */
+  static Word majority(Word a, Word b, Word c) {
+    return (a & b) ^ (a & c) ^ (b & c);
+  }
 
+  /** Procesa un bloque de 64 bytes y actualiza el estado. */
   void compress(const Byte *block) {
     Word w[Rounds];
     for (Count i = 0; i < BlockWords; ++i) {
@@ -178,21 +206,41 @@ private:
     for (Count i = 0; i < Rounds; ++i) {
       Word t1 = h + big_sigma(e, BigSigma1) + choose(e, f, g) + K[i] + w[i];
       Word t2 = big_sigma(a, BigSigma0) + majority(a, b, c);
-      h = g; g = f; f = e; e = d + t1;
-      d = c; c = b; b = a; a = t1 + t2;
+      h = g;
+      g = f;
+      f = e;
+      e = d + t1;
+      d = c;
+      c = b;
+      b = a;
+      a = t1 + t2;
     }
-    m_h[0] += a; m_h[1] += b; m_h[2] += c; m_h[3] += d;
-    m_h[4] += e; m_h[5] += f; m_h[6] += g; m_h[7] += h;
+    m_h[0] += a;
+    m_h[1] += b;
+    m_h[2] += c;
+    m_h[3] += d;
+    m_h[4] += e;
+    m_h[5] += f;
+    m_h[6] += g;
+    m_h[7] += h;
   }
 };
 
-// shortcut: T debe ser string-like o trivialmente copiable (bytes crudos), definir otro Hasher para tipos con punteros
+// shortcut: T debe ser string-like o trivialmente copiable (bytes crudos),
+// definir otro Hasher para tipos con punteros
+/**
+ * Hasher de Merkle con SHA-256 y separación de dominio: prefijo 0x00 en las
+ * hojas y 0x01 en los nodos internos.
+ * @tparam T Tipo de los bloques: convertible a `std::string_view` o
+ * trivialmente copiable.
+ */
 template <typename T> struct Sha256MerkleHasher {
   using Digest = Sha256::Digest;
 
   static constexpr Sha256::Byte LeafTag = 0x00;
   static constexpr Sha256::Byte NodeTag = 0x01;
 
+  /** Hash de una hoja: SHA-256 de 0x00 seguido de los bytes del bloque. */
   static Digest leaf(const T &data) {
     Sha256 h;
     h.update(&LeafTag, 1);
@@ -206,6 +254,8 @@ template <typename T> struct Sha256MerkleHasher {
     return h.finish();
   }
 
+  /** Hash de un nodo interno: SHA-256 de 0x01 seguido de los dos hashes hijos.
+   */
   static Digest combine(const Digest &left, const Digest &right) {
     Sha256 h;
     h.update(&NodeTag, 1);
@@ -215,13 +265,18 @@ template <typename T> struct Sha256MerkleHasher {
   }
 };
 
-// Merkle de Bitcoin: hojas = txid ya hasheados, SHA256 doble, y el nodo impar se duplica
+// Merkle de Bitcoin: hojas = txid ya hasheados, SHA256 doble, y el nodo impar
+// se duplica
+/** Hasher de Merkle compatible con Bitcoin: las hojas son txid ya calculados,
+ * los nodos usan doble SHA-256 y el nodo impar se duplica. */
 struct BitcoinMerkleHasher {
   using Digest = Sha256::Digest;
   static constexpr bool duplicate_odd = true;
 
+  /** Devuelve el txid sin modificar. */
   static Digest leaf(const Digest &txid) { return txid; }
 
+  /** Doble SHA-256 de la concatenación de los dos hashes hijos. */
   static Digest combine(const Digest &left, const Digest &right) {
     Sha256 first;
     first.update(left.bytes.data(), left.bytes.size());

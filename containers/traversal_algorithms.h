@@ -6,12 +6,18 @@
 #include <stdexcept>
 #include <type_traits>
 
+/** Algoritmos de recorrido sobre un rango de iteradores, usados por los mixins de traversalops.h. */
 namespace traversal_detail {
 
+/** Aplica @p func a cada elemento del rango, pasándole además @p args. */
 inline constexpr auto for_each = [](auto first, auto last, auto&& func, auto&&... args) {
     std::for_each(first, last, [&](auto& node) { std::invoke(func, node, args...); });
 };
 
+/**
+ * Devuelve el primer elemento que cumple @p pred.
+ * @throws std::runtime_error si ninguno lo cumple.
+ */
 inline constexpr auto first_that = [](auto first, auto last, auto&& pred,
                                       auto&&... args) -> decltype(auto) {
     auto found = std::find_if(first, last, [&](auto& node) {
@@ -21,6 +27,7 @@ inline constexpr auto first_that = [](auto first, auto last, auto&& pred,
     return *found;
 };
 
+/** Si @p func devuelve `void` se comporta como for_each; si devuelve un booleano, como first_that. */
 inline constexpr auto legacy_call = [](auto first, auto last, auto&& func,
                                        auto&&... args) -> decltype(auto) {
     using Result = std::invoke_result_t<decltype(func)&, decltype(*first), decltype(args)&...>;
