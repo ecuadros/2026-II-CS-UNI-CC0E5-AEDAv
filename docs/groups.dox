@@ -1,0 +1,40 @@
+/**
+ * @defgroup core Núcleo, Traits y Mixins
+ * @brief Abstracciones base (`IterableCore`, `ContainerCore`, `GeneralContainer`, `BaseView`), iteradores CRTP, nodos y mixins componibles.
+ */
+
+/**
+ * @defgroup containers Contenedores Lineales y Asociativos
+ * @brief Contenedores secuenciales (`BaseVector`), diccionarios (`BaseHashTable`) y listas enlazadas.
+ * @{
+ */
+
+/**
+ * @defgroup lists Listas Enlazadas
+ * @brief Listas simples, dobles, circulares y circulares dobles.
+ */
+
+/** @} */
+
+/**
+ * @defgroup trees Árboles y Montículos
+ * @brief Árboles binarios de búsqueda, recorridos de Euler, AVL, montículos y árboles de Merkle.
+ */
+
+/**
+ * @defgroup visualization Visualización y Consola
+ * @brief Estilos ANSI, lienzo matricial `Canvas2D`, renderizadores y layouts 2D.
+ * @{
+ */
+
+/**
+ * @defgroup layouts Layouts 2D
+ * @brief Algoritmos de proyección de estructuras hacia `VisualGraph`.
+ */
+
+/** @} */
+
+/**
+ * @defgroup demos Demostraciones y Punto de Entrada
+ * @brief Suites de prueba, concurrencia y ejemplos interactivos en `main.cpp` y `demos.cpp`.
+ */

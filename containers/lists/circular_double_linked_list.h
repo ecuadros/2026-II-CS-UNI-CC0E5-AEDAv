@@ -1,3 +1,9 @@
+/**
+ * @file circular_double_linked_list.h
+ * @ingroup lists
+ * @brief Lista circular doblemente enlazada (`BaseCircularDoubleLinkedList` / `CircularDoubleLinkedList`).
+ */
+
 #ifndef __CIRCULAR_DOUBLE_LINKEDLIST_H__
 #define __CIRCULAR_DOUBLE_LINKEDLIST_H__
 #include "circular_linked_list.h"
@@ -6,9 +12,14 @@
 template <typename Traits, template <typename> typename... Mixins>
 class BaseCircularDoubleLinkedList;
 
+/** @brief Alias estándar de lista circular doblemente enlazada con soporte `Reversible` y `Drawable`. */
 template <typename Traits>
 using CircularDoubleLinkedList = BaseCircularDoubleLinkedList<Traits, Callable, Searchable, Applicable, Reversible, Printable, Readable, Drawable>;
 
+/**
+ * @class BaseCircularDoubleLinkedList
+ * @brief Combina `BaseCircularLinkedList` y `BaseDoubleLinkedList` mediante herencia virtual en diamante.
+ */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseCircularDoubleLinkedList : virtual public BaseCircularLinkedList<Traits, Mixins...>,
                                      virtual public BaseDoubleLinkedList<Traits, Mixins...> {
@@ -21,6 +32,7 @@ protected:
     using Parent::m_pRoot;
     using Parent::m_pTail;
 
+    /** @brief Enlaza tanto el ciclo siguiente/raíz como el ciclo inverso `m_pRoot->m_pPrev = m_pTail`. */
     void linkNode(NodePtr pNew, NodePtr pPrev, NodePtr pNext = nullptr) override;
 public:
     BaseCircularDoubleLinkedList() = default;

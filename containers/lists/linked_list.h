@@ -1,3 +1,9 @@
+/**
+ * @file linked_list.h
+ * @ingroup lists
+ * @brief Lista simplemente enlazada (`BaseLinkedList` / `LinkedList`) e iterador hacia adelante.
+ */
+
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
 #include "../core/general_container.h"
@@ -5,17 +11,27 @@
 #include "../core/general_node.h"
 #include "../core/mixins.h"
 
+/**
+ * @class LinkedListNode
+ * @brief Nodo para listas enlazadas simples, dobles y circulares.
+ * @tparam T Tipo del valor almacenado en el nodo.
+ */
 template <typename T>
 class LinkedListNode : public GeneralNode<T> {
     using Node = LinkedListNode<T>;
     using NodePtr = Node*;
 public:
-    Node* m_pNext = nullptr; // puntero al siguiente nodo
-    Node* m_pPrev = nullptr; // puntero al anterior nodo
+    Node* m_pNext = nullptr; /**< Puntero al siguiente nodo. */
+    Node* m_pPrev = nullptr; /**< Puntero al nodo anterior (usado en listas dobles). */
     LinkedListNode() : GeneralNode<T>(T{}, Ref{}), m_pNext(nullptr) {}
+    /** @brief Construye un nodo enlazado con valor, referencia y puntero al siguiente. */
     LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref), m_pNext(pNext) {}
 };
 
+/**
+ * @class LinkedListForwardIterator
+ * @brief Iterador hacia adelante para listas enlazadas (maneja corte de ciclo en listas circulares).
+ */
 template <typename T>
 class LinkedListForwardIterator : public GeneralIterator<LinkedListForwardIterator<T>, LinkedListNode<T>> {
 public:
@@ -26,30 +42,42 @@ public:
     using Parent::m_ptr;
     using Parent::m_pStart;
 
+    /** @brief Avanza al siguiente nodo y se detiene al volver al nodo inicial en listas circulares. */
     LinkedListForwardIterator& operator++() { 
         m_ptr = m_ptr->m_pNext == m_pStart ? nullptr : m_ptr->m_pNext;
         return *this;
     }
 };
 
+/** @brief Rasgos base de nodo e iterador para listas simplemente enlazadas. */
 template <typename T>
 struct LinkedListTraits {
     using Node              = LinkedListNode<T>;
-    using ForwardIterator   = LinkedListForwardIterator<T>;  // itera sobre Node, no sobre T
+    using ForwardIterator   = LinkedListForwardIterator<T>;  /**< Itera sobre `Node`, no sobre `T`. */
 };
 
+/** @brief Rasgos de lista enlazada con inserción ordenada ascendente. */
 template <typename T>
 struct LinkedListAscTraits : public AscendingTraits<T>, public LinkedListTraits<T> {};
 
+/** @brief Rasgos de lista enlazada con inserción ordenada descendente. */
 template <typename T>
 struct LinkedListDescTraits : public DescendingTraits<T>, public LinkedListTraits<T> {};
 
 template <typename Traits, template <typename> typename... Mixins>
 class BaseLinkedList;
 
+/** @brief Alias estándar de lista simplemente enlazada. */
 template <typename Traits>
 using LinkedList = BaseLinkedList<Traits, Callable, Searchable, Applicable, Printable, Readable>;
 
+/**
+ * @class BaseLinkedList
+ * @brief Lista simplemente enlazada genérica y thread-safe con inserción al final y ordenada.
+ *
+ * @tparam Traits Rasgos de la lista.
+ * @tparam Mixins Mixins aplicados al contenedor.
+ */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseLinkedList : public GeneralContainer<Traits, Mixins...> {
 public:  
@@ -61,16 +89,18 @@ public:
     using typename Parent::Delim;
     using Compare = typename Traits::Compare;
 protected:
-    NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
-    NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
+    NodePtr m_pRoot = nullptr; /**< Puntero al primer nodo de la lista enlazada. */
+    NodePtr m_pTail = nullptr; /**< Puntero al último nodo de la lista enlazada. */
 
-    Compare m_comp; // comparador para ordenar los nodos de la lista
+    Compare m_comp; /**< Comparador para inserción ordenada en `insert()`. */
     using Parent::m_mutex;
 
+    /** @brief Gancho virtual para enlazar punteros adicionales en subclases (doble/circular). */
     virtual void linkNode(NodePtr pNew, NodePtr pPrev, NodePtr pNext = nullptr) {}
 private:
 
     NodePtr GetRoot() const { return m_pRoot; }
+    /** @brief Inserta recursivamente manteniendo el orden definido por `m_comp`. */
     void internalInsert(const value_type& value, Ref ref, NodePtr& rParent, NodePtr pPrev = nullptr);
 
 public:
@@ -79,16 +109,24 @@ public:
     BaseLinkedList(BaseLinkedList&& another) noexcept { *this = std::move(another); }
     BaseLinkedList& operator=(const BaseLinkedList& another);
     BaseLinkedList& operator=(BaseLinkedList&& another) noexcept;
+    /** @brief Construye la lista insertando los pares `(valor, ref)` al final. */
     BaseLinkedList(initializer_list<pair<value_type, Ref>> values) {
         for (const auto &v : values)
             push_back(v.first, v.second);
     }
 
+    /** @brief Libera todos los nodos de la lista. */
     void clear() override;
     virtual ~BaseLinkedList() { clear(); }
 
+    /** @brief Inserta un nodo al final de la lista en O(1). */
     void push_back(const value_type& value, Ref ref) override;
 
+    /**
+     * @brief Inserta un nodo en la posición ordenada según `Compare`.
+     * @param value Valor del nuevo nodo.
+     * @param ref Referencia asociada.
+     */
     void insert(const value_type& value, Ref ref) {
         scoped_lock lock(m_mutex);
         if (m_pTail) m_pTail->m_pNext = nullptr; // Si es circular rompe el ciclo temporalmente

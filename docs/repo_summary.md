@@ -11,7 +11,7 @@ Biblioteca moderna en **C++23/26** de estructuras de datos avanzadas desarrollad
 - **Seguridad Concurrente:** Contenedores protegidos mediante `std::recursive_mutex` con composición thread-safe y operaciones no bloqueantes entre vistas.
 - **Vistas No Propietarias $O(1)$:** Desacoplamiento de iteración mediante `BaseView` y filtrado en tiempo de compilación con `FilterViewMixin`.
 - **Iteradores CRTP y Recorrido de Euler:** Iteradores hacia adelante, reversos y un iterador de recorrido de Euler basado en máquina de estados con fases por bitmask (`Pre`, `In`, `Post`).
-- **Motor de Renderizado Gráfico Terminal:** Trazado de estructuras (árboles y listas) sobre consola con caracteres UTF-8/ANSI (`Canvas2D`, layouts desacoplados y renderizadores).
+- **Motor de Renderizado Gráfico Terminal:** Trazado de estructuras (árboles y listas) directamente sobre consola con caracteres UTF-8/ANSI (`gotoxy`, layouts desacoplados y renderizadores).
 - **Estructuras Criptográficas y Asociativas:** Árbol de Merkle con pruebas de autenticación (RFC 6962) y HashTable asociativa sobre árboles AVL.
 
 ---
@@ -71,8 +71,9 @@ Biblioteca moderna en **C++23/26** de estructuras de datos avanzadas desarrollad
 | Archivo | Rol / Propósito | Componentes Clave |
 | :--- | :--- | :--- |
 | [`ansi_style.h`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/utilities/ansi_style.h) | Utilidades tipográficas y coloración ANSI header-only sin dependencias externas. | `Ansi::Style`, `Ansi::Color`, `Ansi::BgColor`, `StyledBuilder`, `colored(...)`, `styled(...)`, cálculo de longitud visible `visible_length(...)`. |
+| [`gotoxy.h`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/utilities/gotoxy.h) | Posicionamiento directo del cursor en consola mediante secuencias ANSI. | `gotoxy_origin(os, height)`, `gotoxy(os, x, y)`, `gotoxy(x, y)`. |
 | [`print_colored.h`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/utilities/print_colored.h) | Salida coloreada en consola con detección automática de terminal vs archivo. | `PrintColored(os, value, mods...)`, `toAnsi(Color)`. |
-| [`render.h`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/utilities/render.h) | Motor de renderizado gráfico y lienzo 2D UTF-8/ANSI. | `Canvas2D`, `ConsoleGlyphs`, `GraphRenderer`, `SvgGraphRenderer`, `ConsoleGraphRenderer` (estilos `Rounded`, `Sharp`, `DivisionSlash`, `Ascii`). |
+| [`render.h`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/utilities/render.h) | Motor de renderizado gráfico directo en consola UTF-8/ANSI vía `gotoxy`. | `ConsoleGlyphs`, `GraphRenderer`, `SvgGraphRenderer`, `ConsoleGraphRenderer` (estilos `Rounded`, `Sharp`, `DivisionSlash`, `Ascii`). |
 | [`layouts.h`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/utilities/layouts.h) | Cabecera unificada que agrupa todos los layouts de proyección 2D. | Incluye todos los headers en `utilities/layouts/`. |
 
 #### 📐 Subsistema de Layouts (`utilities/layouts/`)
@@ -93,7 +94,7 @@ Biblioteca moderna en **C++23/26** de estructuras de datos avanzadas desarrollad
 
 | Archivo | Rol / Propósito | Componentes Clave |
 | :--- | :--- | :--- |
-| [`main.cpp`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/main.cpp) | Punto de entrada principal. Ejecuta la suite completa de demostraciones. | `main()` invocando `DemoVector`, `DemoRaceCondition`, `DemoLinkedList`, `DemoHeap`, `DemoBinaryTree`, `DemoHashTable`, `DemoMerkleTree`. |
+| [`main.cpp`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/main.cpp) | Punto de entrada principal. Ejecuta la suite completa de demostraciones. | `main()` invocando `DemoVector`, `DemoRaceCondition`, `DemoLinkedList`, `DemoHeap`, `DemoBinaryTree`, `DemoHashTable`, `DemoMerkleTree`, `DemoGotoxy`. |
 | [`demos.h`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/demos.h) | Declaración de prototipos de las demostraciones interactivas. | Funciones de prueba de todas las estructuras y escenarios de concurrencia. |
 | [`demos.cpp`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/demos.cpp) | Implementación de casos de uso, pruebas multi-hilo, serialización a `output/` y visualización gráfica. | Pruebas de mutación funcional, estrés multi-hilo (`std::thread`), serialización a disco, renderizado y verificación Merkle. |
 
@@ -122,11 +123,12 @@ Biblioteca moderna en **C++23/26** de estructuras de datos avanzadas desarrollad
 | [`docs/images/euler_contour.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/euler_contour.svg) | Ilustración del recorrido perimetral/contorno del árbol binario. |
 | [`docs/images/euler_state_machine.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/euler_state_machine.svg) | Transiciones de estados de la máquina del `BinaryTreeIterator`. |
 | [`docs/images/euler_venn.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/euler_venn.svg) | Diagrama de Venn entre recorridos puros e híbridos. |
+| [`docs/images/gotoxy_mechanism.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/gotoxy_mechanism.svg) | Funcionamiento paso a paso de `gotoxy_origin` y `gotoxy(x, y)` con secuencias ANSI. |
 | [`docs/images/heap_rebuild.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/heap_rebuild.svg) | Restauración de la invariante de montículo con `rebuild()`. |
 | [`docs/images/layout_hierarchy.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/layout_hierarchy.svg) | Jerarquía de clases del subsistema de layouts y proyección a `VisualGraph`. |
 | [`docs/images/merkle_tree_proof.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/merkle_tree_proof.svg) | Diagrama del árbol de Merkle, separación de dominios y verificación mediante ruta de auditoría. |
 | [`docs/images/mixin_filter.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/mixin_filter.svg) | Mecanismo de filtrado por metaprogramación `FilterViewMixin` para `BaseView`. |
-| [`docs/images/render_pipeline.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/render_pipeline.svg) | Pipeline de visualización: Contenedor $\to$ Layout $\to$ `VisualGraph` $\to$ `Canvas2D` $\to$ Renderer. |
+| [`docs/images/render_pipeline.svg`](file:///home/aldolunab/repos/2026-II-CS-UNI-CC0E5-AEDAv/docs/images/render_pipeline.svg) | Pipeline de visualización: Contenedor $\to$ Layout $\to$ `VisualGraph` $\to$ `ConsoleGraphRenderer` (`gotoxy`). |
 
 ---
 

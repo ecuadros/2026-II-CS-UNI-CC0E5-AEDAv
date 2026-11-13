@@ -1,3 +1,9 @@
+/**
+ * @file base_layout.h
+ * @ingroup layouts
+ * @brief Clase base `BaseLayout` y formateador por defecto `DefaultNodeFormatter` para proyección 2D.
+ */
+
 #ifndef __LAYOUTS_BASE_LAYOUT_H__
 #define __LAYOUTS_BASE_LAYOUT_H__
 
@@ -8,9 +14,9 @@
 #include <type_traits>
 #include "../../types.h"
 #include "../render.h"
-#include "../ansi_style.h"
+#include "../ansi_metrics.h"
 
-// Formateador por defecto para cualquier tipo de nodo o valor
+/** @brief Formateador por defecto que convierte cualquier nodo o valor a `std::string`. */
 struct DefaultNodeFormatter {
     template <typename Node>
     std::string operator()(const Node& node) const {
@@ -24,15 +30,23 @@ struct DefaultNodeFormatter {
     }
 };
 
-// Clase base abstracta generalista para todos los layouts
-// Abstrae la dirección del grafo (directed), la lógica del formateador lambda y normalización 2D
+/**
+ * @class BaseLayout
+ * @brief Clase base abstracta para todos los layouts de proyección a `VisualGraph`.
+ *
+ * Abstrae la direccionalidad del grafo, el formateo polimórfico de nodos con roles semánticos
+ * y la normalización 2D de coordenadas.
+ * @tparam Formatter Functor o lambda encargada de generar la etiqueta visual de cada nodo.
+ *
+ * @image html layout_hierarchy.svg "Arquitectura modular de layouts 2D y roles"
+ */
 template <typename Formatter = DefaultNodeFormatter>
 class BaseLayout {
 protected:
     Formatter m_formatter{};
     bool m_directed = false;
 
-    // Conversión genérica auxiliar a std::string sin copias redundantes
+    /** @brief Convierte un valor genérico a `std::string` evitando copias si ya es convertible. */
     template <typename V>
     static std::string to_string_val(V&& v) {
         if constexpr (std::is_convertible_v<V, std::string>) {
@@ -44,7 +58,7 @@ protected:
         }
     }
 
-    // Normaliza las coordenadas X a 0 y calcula las dimensiones visuales (bounding box)
+    /** @brief Desplaza las coordenadas `x` para iniciar en 0 y calcula el bounding box (`out_w`, `out_h`). */
     template <typename NodeContainer>
     static void normalize_and_bound(NodeContainer& nodes, TX& out_w, TX& out_h, TX margin_w = 0) {
         if (nodes.empty()) {

@@ -1,3 +1,9 @@
+/**
+ * @file ansi_style.h
+ * @ingroup visualization
+ * @brief Utilidades de estilo y color ANSI SGR (4-bit, 8-bit y 24-bit RGB/Hex) con fluent builder.
+ */
+
 #ifndef __ANSISTYLE_H__
 #define __ANSISTYLE_H__
 
@@ -7,32 +13,38 @@
 #include <cstdint>
 #include <type_traits>
 #include <iostream>
+#include "ansi_metrics.h"
 
+/**
+ * @namespace Ansi
+ * @brief Agrupa enumeraciones SGR, constructores de color, cálculo de longitud visible y `StyledBuilder`.
+ */
 namespace Ansi {
 
-// Atributos y estilos tipográficos (SGR - Select Graphic Rendition)
+/** @brief Atributos y estilos tipográficos (SGR - Select Graphic Rendition). */
 enum class Style : uint8_t {
     Reset = 0, Bold = 1, Dim = 2, Italic = 3, Underline = 4, Blink = 5,
     RapidBlink = 6, Reverse = 7, Hidden = 8, Strike = 9, DoubleUnderline = 21, Overline = 53
 };
 
-// Colores de texto (Foreground) estándar y brillantes (Bright)
+/** @brief Colores de texto (Foreground) estándar y brillantes (Bright). */
 enum class Color : uint8_t {
     Reset = 0, Black = 30, Red = 31, Green = 32, Yellow = 33, Blue = 34, Magenta = 35, Cyan = 36, White = 37, Default = 39,
     BrightBlack = 90, BrightRed = 91, BrightGreen = 92, BrightYellow = 93, BrightBlue = 94, BrightMagenta = 95, BrightCyan = 96, BrightWhite = 97
 };
 
-// Colores de fondo (Background) estándar y brillantes (Bright)
+/** @brief Colores de fondo (Background) estándar y brillantes (Bright). */
 enum class BgColor : uint8_t {
     Default = 49, Black = 40, Red = 41, Green = 42, Yellow = 43, Blue = 44, Magenta = 45, Cyan = 46, White = 47,
     BrightBlack = 100, BrightRed = 101, BrightGreen = 102, BrightYellow = 103, BrightBlue = 104, BrightMagenta = 105, BrightCyan = 106, BrightWhite = 107
 };
 
-// Paleta indexada de 8 bits (256 colores) y Truecolor de 24 bits (RGB)
+/** @brief Color indexado de 8 bits (paleta de 256 colores). */
 struct Color8Val { uint8_t code = 0; bool is_bg = false; };
+/** @brief Color Truecolor de 24 bits (RGB). */
 struct RgbColor  { uint8_t r = 0, g = 0, b = 0; bool is_bg = false; };
 
-// Parser hexadecimal (#RRGGBB o RRGGBB)
+/** @brief Parsea una cadena hexadecimal `#RRGGBB` o `RRGGBB` a `RgbColor`. */
 inline RgbColor parse_hex(std::string_view h, bool bg = false) {
     if (!h.empty() && h[0] == '#') h.remove_prefix(1);
     uint32_t v = 0;
@@ -70,30 +82,6 @@ inline std::string to_sgr_code(E e) { return std::to_string(static_cast<int>(e))
 inline std::string to_sgr_code(const Color8Val& c) { return (c.is_bg ? "48;5;" : "38;5;") + std::to_string(c.code); }
 inline std::string to_sgr_code(const RgbColor& c) {
     return (c.is_bg ? "48;2;" : "38;2;") + std::to_string(c.r) + ";" + std::to_string(c.g) + ";" + std::to_string(c.b);
-}
-
-// Ancho visual en terminal ignorando secuencias ANSI y codepoints UTF-8
-inline size_t visible_length(std::string_view s) {
-    size_t count = 0, i = 0;
-    while (i < s.size()) {
-        if (s[i] == '\033' || s[i] == '\x1B') {
-            i++;
-            if (i < s.size() && s[i] == '[') {
-                i++;
-                while (i < s.size() && (s[i] < '@' || s[i] > '~')) i++;
-                if (i < s.size()) i++;
-            }
-            continue;
-        }
-        unsigned char c = static_cast<unsigned char>(s[i]);
-        if ((c & 0x80) == 0) i += 1;
-        else if ((c & 0xE0) == 0xC0) i += 2;
-        else if ((c & 0xF0) == 0xE0) i += 3;
-        else if ((c & 0xF8) == 0xF0) i += 4;
-        else i += 1;
-        count++;
-    }
-    return count;
 }
 
 // Fluent Builder: styled(value)...

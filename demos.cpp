@@ -1,3 +1,9 @@
+/**
+ * @file demos.cpp
+ * @ingroup demos
+ * @brief Implementación de las funciones de demostración declaradas en `demos.h`.
+ */
+
 #include <filesystem>
 #include <iostream>
 #include <ostream>
@@ -17,6 +23,7 @@
 #include "containers/hash_table.h"
 #include "containers/trees/merkle_tree.h"
 #include "utilities/print_colored.h"
+#include "utilities/gotoxy.h"
 #include "utilities/render.h"
 #include "utilities/layouts.h"
 #include "demos.h"
@@ -772,4 +779,59 @@ void DemoMerkleTree() {
         ConsoleGraphRenderer(cout)
     );
     cout << endl;
+}
+
+void DemoGotoxy() {
+    cout << "========================================\n";
+    PrintColored(cout, "Demo Gotoxy (Coordenadas directas sin Canvas2D)", Color::Yellow);
+    cout << "========================================\n\n";
+
+    const TX box_x = 3;
+    const TX box_y = 1;
+    const TX box_w = 22;
+    const TX box_h = 7;
+    const TX word_x = 6;
+    const TX word_y = 3;
+    const std::string word = "hola";
+
+    const TX total_h = box_y + box_h + 1;
+    gotoxy_origin(cout, total_h);
+
+    // Regla de coordenadas X (arriba) e Y (izquierda) para verificar visualmente
+    for (TX x = box_x; x < box_x + box_w; ++x) {
+        gotoxy(x, 0);
+        cout << styled(x % 10).dim();
+    }
+    for (TX y = box_y; y < box_y + box_h; ++y) {
+        gotoxy(0, y);
+        cout << styled(y).dim();
+    }
+
+    // Dibujar bordes de la caja directamente con gotoxy
+    gotoxy(box_x, box_y);
+    cout << "┌";
+    for (TX x = box_x + 1; x < box_x + box_w - 1; ++x) cout << "─";
+    cout << "┐";
+
+    for (TX y = box_y + 1; y < box_y + box_h - 1; ++y) {
+        gotoxy(box_x, y);
+        cout << "│";
+        gotoxy(box_x + box_w - 1, y);
+        cout << "│";
+    }
+
+    gotoxy(box_x, box_y + box_h - 1);
+    cout << "└";
+    for (TX x = box_x + 1; x < box_x + box_w - 1; ++x) cout << "─";
+    cout << "┘";
+
+    // Imprimir "hola" en una coordenada explícita (no centrada) dentro de la caja
+    gotoxy(word_x, word_y);
+    cout << styled(word).bright_green().bold();
+
+    // Posicionar cursor debajo de la caja e informar la coordenada exacta
+    gotoxy(0, total_h);
+    cout << "Palabra '" << word << "' impresa con gotoxy(" << word_x << ", " << word_y << ")"
+         << " dentro de la caja [" << box_x << ".." << (box_x + box_w - 1)
+         << ", " << box_y << ".." << (box_y + box_h - 1) << "].\n\n";
 }

@@ -1,3 +1,9 @@
+/**
+ * @file merkle_tree_layout.h
+ * @ingroup layouts
+ * @brief Layout especializado (`MerkleTreeLayout`) para árboles de Merkle con hojas de datos vinculadas.
+ */
+
 #ifndef __LAYOUTS_MERKLE_TREE_LAYOUT_H__
 #define __LAYOUTS_MERKLE_TREE_LAYOUT_H__
 
@@ -8,9 +14,10 @@
 #include <utility>
 #include "base_layout.h"
 
-// Roles semánticos para nodos de Merkle Tree
+/** @brief Roles semánticos para nodos de un árbol de Merkle (incluyendo clones y datos crudos). */
 enum class MerkleRole { Root, Internal, Leaf, CloneLeaf, Data, CloneData };
 
+/** @brief Convierte un `MerkleRole` a su clase CSS/identificador textual. */
 constexpr std::string_view to_css_class(MerkleRole r) {
     switch (r) {
         case MerkleRole::Root:      return "root";
@@ -23,13 +30,11 @@ constexpr std::string_view to_css_class(MerkleRole r) {
     return "";
 }
 
-// ============================================================================
-// Layout para Árbol de Merkle (MerkleTreeLayout)
-// Dispone los hashes del árbol binario con longitud abreviada y conecta verticalmente
-// cada hoja con su respectivo dato original (m_raw_data[i]).
-// Por defecto proyecta texto plano sin colorear; el cliente inyecta estilos mediante MerkleRole.
-// ============================================================================
-
+/**
+ * @class MerkleTreeLayout
+ * @brief Proyecta un `MerkleTree` abreviando hashes y conectando verticalmente cada hoja con su dato original.
+ * @tparam Formatter Functor de formateo de nodos; por defecto proyecta texto plano sin colorear.
+ */
 template <typename Formatter = DefaultNodeFormatter>
 class MerkleTreeLayout : public BaseLayout<Formatter> {
 public:

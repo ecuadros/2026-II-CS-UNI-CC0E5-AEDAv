@@ -1,3 +1,9 @@
+/**
+ * @file merkle_tree.h
+ * @ingroup trees
+ * @brief Árbol de Merkle (`BaseMerkleTree` / `MerkleTree`) con separación de dominios y pruebas de auditoría.
+ */
+
 #ifndef __MERKLETREE_H__
 #define __MERKLETREE_H__
 
@@ -13,22 +19,32 @@
 #include <stdexcept>
 #include <iostream>
 
-// Estructura que representa un paso en la ruta de autenticación (Merkle Proof)
+/**
+ * @struct MerkleProofStep
+ * @brief Representa un paso en la ruta de autenticación (Merkle Proof).
+ * @tparam HashType Tipo del resumen hash (por defecto `std::string`).
+ */
 template <typename HashType = std::string>
 struct MerkleProofStep {
-    HashType sibling_hash;
-    bool is_left_sibling = false; // true si el hermano debe concatenarse a la izquierda
+    HashType sibling_hash;       /**< Hash del nodo hermano necesario para reconstruir el padre. */
+    bool is_left_sibling = false; /**< `true` si el hermano debe concatenarse a la izquierda. */
 
+    /** @brief Imprime el paso de prueba indicando lado `[L: ...]` o `[R: ...]`. */
     friend std::ostream& operator<<(std::ostream& os, const MerkleProofStep& step) {
         os << (step.is_left_sibling ? "[L: " : "[R: ") << step.sibling_hash << "]";
         return os;
     }
 };
 
-// Hasher por defecto con separación de dominios (RFC 6962):
-// - "leaf:" previene ataques de segunda preimagen entre hojas y nodos internos.
-// - "node:" se usa para combinar los hashes de dos hijos.
+/**
+ * @struct DefaultMerkleHasher
+ * @brief Hasher por defecto con separación de dominios (RFC 6962).
+ *
+ * - `"leaf:"` previene ataques de segunda preimagen entre hojas y nodos internos.
+ * - `"node:"` combina los hashes de dos nodos hijos.
+ */
 struct DefaultMerkleHasher {
+    /** @brief Calcula el hash hexadecimal de una hoja con prefijo `"leaf:"`. */
     std::string hash_leaf(const std::string& data) const {
         std::hash<std::string> hasher;
         size_t h = hasher("leaf:" + data);
@@ -37,6 +53,7 @@ struct DefaultMerkleHasher {
         return ss.str();
     }
 
+    /** @brief Combina dos hashes hijos con prefijo `"node:"`. */
     std::string hash_nodes(const std::string& left, const std::string& right) const {
         std::hash<std::string> hasher;
         size_t h = hasher("node:" + left + ":" + right);
@@ -46,6 +63,7 @@ struct DefaultMerkleHasher {
     }
 };
 
+/** @brief Rasgos por defecto para `BaseMerkleTree`. */
 template <typename HashType = std::string, typename Hasher = DefaultMerkleHasher>
 struct MerkleTreeTraits {
     using value_type       = HashType;
@@ -59,9 +77,16 @@ struct MerkleTreeTraits {
 template <typename Traits, template <typename> typename... Mixins>
 class BaseMerkleTree;
 
+/** @brief Alias estándar de árbol de Merkle con soporte completo de mixins y visualización. */
 template <typename Traits = MerkleTreeTraits<std::string>>
 using MerkleTree = BaseMerkleTree<Traits, Callable, Applicable, Searchable, Reversible, Printable, Readable, Drawable>;
 
+/**
+ * @class BaseMerkleTree
+ * @brief Árbol binario de hashes criptográficos que permite verificar integridad y pertenencia en O(log n).
+ *
+ * @image html merkle_tree_proof.svg "Árbol Merkle y prueba de auditoría"
+ */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseMerkleTree : public BaseBinaryTree<Traits, Mixins...> {
 public:
@@ -128,6 +153,7 @@ public:
         m_raw_refs.clear();
     }
 
+    /** @brief Agrega un nuevo dato crudo al árbol y reconstruye la estructura. */
     void push_back(const value_type& value, Ref ref = 0) override {
         std::lock_guard lock(m_mutex);
         m_raw_data.push_back(value);
@@ -135,20 +161,24 @@ public:
         rebuild();
     }
 
+    /** @brief Alias semántico de `push_back()` para agregar bloques de datos. */
     void add_data(const std::string& data, Ref ref = 0) {
         push_back(data, ref);
     }
 
+    /** @brief Retorna la cantidad de hojas (datos crudos) en el árbol. */
     size_t size() const {
         std::lock_guard lock(m_mutex);
         return m_raw_data.size();
     }
 
+    /** @brief Indica si el árbol no contiene datos crudos. */
     bool empty() const override {
         std::lock_guard lock(m_mutex);
         return m_raw_data.empty();
     }
 
+    /** @brief Reconstruye bottom-up todos los niveles del árbol de Merkle a partir de `m_raw_data`. */
     void rebuild() override {
         std::lock_guard lock(m_mutex);
 
@@ -211,11 +241,13 @@ public:
         m_pRoot->m_parent = nullptr;
     }
 
+    /** @brief Retorna el hash de la raíz del árbol (Merkle Root), o cadena vacía si está vacío. */
     value_type getRootHash() const {
         std::lock_guard lock(m_mutex);
         return m_pRoot ? m_pRoot->getValue() : value_type{};
     }
 
+    /** @brief Retorna el dato crudo en la posición `index`. */
     const std::string& getData(size_t index) const {
         std::lock_guard lock(m_mutex);
         if (index >= m_raw_data.size()) {
@@ -224,16 +256,19 @@ public:
         return m_raw_data[index];
     }
 
+    /** @brief Retorna el vector completo de datos crudos almacenados. */
     const std::vector<std::string>& getRawData() const {
         std::lock_guard lock(m_mutex);
         return m_raw_data;
     }
 
+    /** @brief Retorna los punteros a los nodos hoja en orden de inserción. */
     const std::vector<NodePtr>& getLeafNodes() const {
         std::lock_guard lock(m_mutex);
         return m_leaf_nodes;
     }
 
+    /** @brief Retorna el hash almacenado en la hoja `index`. */
     value_type getLeafHash(size_t index) const {
         std::lock_guard lock(m_mutex);
         if (index >= m_leaf_nodes.size()) {
@@ -242,6 +277,7 @@ public:
         return m_leaf_nodes[index]->getValue();
     }
 
+    /** @brief Actualiza el dato crudo en `index` y reconstruye el árbol. */
     void update(size_t index, const std::string& new_data) {
         std::lock_guard lock(m_mutex);
         if (index >= m_raw_data.size()) {
@@ -251,7 +287,11 @@ public:
         rebuild();
     }
 
-    // Generación de prueba de inclusión (Merkle Proof) para la hoja en 'index'
+    /**
+     * @brief Genera la ruta de auditoría (Merkle Proof) para verificar la hoja `index`.
+     * @param index Índice de la hoja en `m_leaf_nodes`.
+     * @return Vector de `ProofStep` desde la hoja hasta la raíz.
+     */
     Proof getProof(size_t index) const {
         std::lock_guard lock(m_mutex);
         Proof proof;
@@ -276,7 +316,9 @@ public:
         return proof;
     }
 
-    // Verificación estática e independiente a partir del dato original
+    /**
+     * @brief Verifica estáticamente si `raw_data` pertenece al árbol con raíz `expected_root`.
+     */
     static bool verify(const std::string& raw_data, const Proof& proof, const value_type& expected_root) {
         Hasher hasher;
         value_type curr_hash = hasher.hash_leaf(raw_data);
@@ -291,7 +333,9 @@ public:
         return curr_hash == expected_root;
     }
 
-    // Verificación estática a partir del hash de la hoja
+    /**
+     * @brief Verifica estáticamente una prueba de inclusión a partir del hash de la hoja.
+     */
     static bool verify_hash(const value_type& leaf_hash, const Proof& proof, const value_type& expected_root) {
         Hasher hasher;
         value_type curr_hash = leaf_hash;

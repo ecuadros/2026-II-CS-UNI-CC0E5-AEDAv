@@ -1,0 +1,31 @@
+PROJECT_NAME           = "AEDAv"
+OUTPUT_DIRECTORY       = build/docs
+HTML_OUTPUT            = html
+
+INPUT                  = docs/mainpage.md docs/groups.dox containers utilities foreach.h types.h demos.h main.cpp
+USE_MDFILE_AS_MAINPAGE = docs/mainpage.md
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp *.cpp *.md *.dox
+
+EXTRACT_ALL            = YES
+JAVADOC_AUTOBRIEF      = YES
+GENERATE_LATEX         = NO
+
+# Diagramas e imágenes
+IMAGE_PATH             = docs/images
+
+# Centralización de estilo y modal en TODAS las páginas HTML
+HTML_EXTRA_STYLESHEET  = docs/doxygen/custom.css
+HTML_EXTRA_FILES       = docs/doxygen/modal.js
+HTML_FOOTER            = docs/doxygen/footer.html
+
+# Opcional: si instalas graphviz en CI, Doxygen genera sus propios grafos en SVG
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+<!-- UML_LOOK               = YES -->
+UML_LIMIT_NUM_FIELDS   = 10
+TEMPLATE_RELATIONS     = YES
+COLLABORATION_GRAPH    = YES
+GROUP_GRAPHS           = YES
+DOT_TRANSPARENT        = YES

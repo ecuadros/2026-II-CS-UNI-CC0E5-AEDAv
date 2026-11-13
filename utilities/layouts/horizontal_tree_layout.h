@@ -1,9 +1,19 @@
+/**
+ * @file horizontal_tree_layout.h
+ * @ingroup layouts
+ * @brief Layout horizontal compacto de árbol binario (`HorizontalTreeLayout`) de izquierda a derecha.
+ */
+
 #ifndef __LAYOUTS_HORIZONTAL_TREE_LAYOUT_H__
 #define __LAYOUTS_HORIZONTAL_TREE_LAYOUT_H__
 
 #include "tree_layout.h"
 
-// Disposición horizontal compacta con centrado dinámico en bifurcaciones
+/**
+ * @class HorizontalTreeLayout
+ * @brief Proyecta un árbol binario de izquierda a derecha asignando filas In-Order y centrando padres.
+ * @tparam Formatter Functor de formateo de nodos.
+ */
 template <typename Formatter = DefaultNodeFormatter>
 class HorizontalTreeLayout : public TreeLayout<Formatter> {
 public:
@@ -18,6 +28,7 @@ public:
     explicit HorizontalTreeLayout(Formatter f, bool is_directed = true)
         : Base(std::move(f), is_directed) {}
 
+    /** @brief Retorna una nueva instancia del layout con el formateador `f`. */
     template <typename F>
     auto with_formatter(F&& f) const {
         return HorizontalTreeLayout<std::decay_t<F>>(std::forward<F>(f), this->m_directed);

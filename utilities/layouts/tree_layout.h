@@ -1,12 +1,19 @@
+/**
+ * @file tree_layout.h
+ * @ingroup layouts
+ * @brief Layout base abstracto (`TreeLayout`) y roles semánticos (`TreeRole`) para árboles binarios.
+ */
+
 #ifndef __LAYOUTS_TREE_LAYOUT_H__
 #define __LAYOUTS_TREE_LAYOUT_H__
 
 #include <string_view>
 #include "base_layout.h"
 
-// Roles semánticos para nodos de árbol binario
+/** @brief Roles semánticos asignados a cada nodo durante la proyección de un árbol binario. */
 enum class TreeRole { Root, Leaf, Left, Right };
 
+/** @brief Convierte un `TreeRole` a su clase CSS/identificador textual. */
 constexpr std::string_view to_css_class(TreeRole r) {
     switch (r) {
         case TreeRole::Root:  return "root";
@@ -17,7 +24,13 @@ constexpr std::string_view to_css_class(TreeRole r) {
     return "";
 }
 
-// Clase base abstracta para layouts de árboles (Strategy Pattern + Template Method)
+/**
+ * @class TreeLayout
+ * @brief Clase base abstracta para layouts de árboles (patrones Strategy y Template Method).
+ *
+ * Extrae la topología del árbol, delega el cálculo de coordenadas a `compute_coordinates()`
+ * y normaliza el `VisualGraph` resultante.
+ */
 template <typename Formatter = DefaultNodeFormatter>
 class TreeLayout : public BaseLayout<Formatter> {
 public:

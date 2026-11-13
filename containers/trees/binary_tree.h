@@ -1,3 +1,9 @@
+/**
+ * @file binary_tree.h
+ * @ingroup trees
+ * @brief Árbol binario de búsqueda (`BaseBinaryTree` / `BinaryTree`) e iterador unificado por recorrido de Euler.
+ */
+
 #ifndef __BINARYTREE_H__
 #define __BINARYTREE_H__
 #include "../core/general_node.h"
@@ -8,6 +14,11 @@
 #include "../../utilities/render.h"
 #include <iostream>
 
+/**
+ * @class BinaryTreeNode
+ * @brief Nodo de árbol binario con punteros a hijos izquierdo/derecho, padre y altura.
+ * @tparam T Tipo del valor almacenado.
+ */
 template <typename T>
 class BinaryTreeNode : public GeneralNode<T> {
 public:
@@ -17,17 +28,30 @@ public:
     using NodePtr           = Node*;
     using Parent            = GeneralNode<T>;
     using Parent::Parent; // constructor heredado
-    NodePtr m_pChild[2] = {nullptr, nullptr}; // hijo izquierdo y derecho
-    NodePtr m_parent = nullptr; // padre
-    TX m_height = 0;
+    NodePtr m_pChild[2] = {nullptr, nullptr}; /**< Hijos: índice 0 izquierdo, índice 1 derecho. */
+    NodePtr m_parent = nullptr;               /**< Puntero al nodo padre (`nullptr` en la raíz). */
+    TX m_height = 0;                          /**< Altura del subárbol (usada en `BaseAVLTree`). */
 };
 
 namespace detail {
+    /**
+     * @enum Phase
+     * @brief Máscara de bits para las fases del recorrido de Euler.
+     *
+     * @image html euler_bitmask.svg "Puente entre fases y máscara binaria"
+     */
     enum Phase : TX {
-        Pre  = 0b100,
-        In   = 0b010,
-        Post = 0b001
+        Pre  = 0b100, /**< Visita al descender por primera vez al nodo. */
+        In   = 0b010, /**< Visita entre el subárbol izquierdo y el derecho. */
+        Post = 0b001  /**< Visita al ascender tras procesar ambos subárboles. */
     };
+
+    /**
+     * @enum Order
+     * @brief Combinaciones puras e híbridas de órdenes de recorrido (7 órdenes × 2 direcciones = 14 recorridos).
+     *
+     * @image html euler_venn.svg "Diagrama de Venn de los 14 recorridos posibles"
+     */
     enum Order : TX {
     // Puros
         PreOrder        = Phase::Pre,
@@ -39,6 +63,8 @@ namespace detail {
         InPostOrder     =              Phase::In + Phase::Post,
         PreInPostOrder  = Phase::Pre + Phase::In + Phase::Post,
     };
+
+    /** @brief Dirección del recorrido: `Asc` (izq→der) o `Desc` (der→izq). */
     enum Direction : TX {Asc = 0, Desc = 1 };
 }
 
@@ -46,6 +72,16 @@ using detail::Phase;
 using detail::Order;
 using detail::Direction;
 
+/**
+ * @class BinaryTreeIterator
+ * @brief Iterador unificado mediante máquina de estados sobre el contorno de Euler.
+ *
+ * @tparam T Tipo de dato del nodo.
+ * @tparam Ord Máscara `Order` que selecciona las fases emitidas.
+ * @tparam Dir Dirección del recorrido (`Direction::Asc` o `Direction::Desc`).
+ *
+ * @image html euler_contour.svg "Contorno del recorrido de Euler sobre el árbol binario"
+ */
 template <typename T, Order Ord, Direction Dir>
 class BinaryTreeIterator : public GeneralIterator<BinaryTreeIterator<T, Ord, Dir>, BinaryTreeNode<T>> {
 public:
@@ -58,8 +94,9 @@ protected:
     static const TX order      = Ord;
     static const TX FirstPhase = (Dir == Direction::Asc) ? Phase::Pre  : Phase::Post;
     static const TX LastPhase  = (Dir == Direction::Asc) ? Phase::Post : Phase::Pre;
-    TX m_phase;
+    TX m_phase; /**< Fase actual de la máquina de estados en el nodo `m_ptr`. */
 public:
+    /** @brief Inicializa el iterador en la raíz avanzando hasta la primera fase incluida en `Ord`. */
     BinaryTreeIterator(NodePtr root) : Parent(root) {
         m_phase = FirstPhase;
         if (m_ptr && !(MySelf::order & FirstPhase)) {
@@ -67,6 +104,7 @@ public:
         }
     }
     
+    /** @brief Avanza al siguiente nodo/fase válido según `Ord`. */
     MySelf &operator++();
 
     friend bool operator== (const MySelf& a, const MySelf& b) {
@@ -76,6 +114,11 @@ public:
         return a.m_ptr != b.m_ptr || a.m_phase != b.m_phase;
     }
 
+    /**
+     * @brief Avanza la máquina de estados del recorrido de Euler hasta la próxima fase activa en `Ord`.
+     *
+     * @image html euler_state_machine.svg "Máquina de estados del recorrido de Euler"
+     */
     void step_until_phase();
 };
 
@@ -133,6 +176,13 @@ class BaseBinaryTree;
 template <typename Traits>
 using BinaryTree = BaseBinaryTree<Traits, Callable, Applicable, Searchable, Reversible, Printable, Readable, Drawable>;
 
+/**
+ * @class BaseBinaryTree
+ * @brief Árbol binario de búsqueda genérico y thread-safe con soporte para vistas de Euler.
+ *
+ * @tparam Traits Rasgos del árbol (`BinaryTreeAscTraits` o `BinaryTreeDescTraits`).
+ * @tparam Mixins Mixins aplicados al contenedor.
+ */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBinaryTree : public GeneralContainer<Traits, Mixins...> {
 public:
@@ -146,9 +196,12 @@ public:
     using Compare           = typename Traits::Compare;
 protected:
     using Parent::m_mutex;
-    NodePtr m_pRoot = nullptr; // raíz del árbol binario
+    NodePtr m_pRoot = nullptr; /**< Raíz del árbol binario. */
+    /** @brief Inserción recursiva por cola respetando `Compare`. */
     auto internalInsert(NodePtr& node, const value_type& value, Ref ref, NodePtr parent = nullptr);
+    /** @brief Elimina `node` manejando 0, 1 o 2 hijos y retorna su padre para reequilibrio. */
     auto internalRemove(NodePtr node);
+    /** @brief Gancho virtual de reequilibrio tras inserción o eliminación (sobrescrito en `BaseAVLTree`). */
     virtual void rebalance(NodePtr node) {}
 public:
     BaseBinaryTree() = default;
@@ -156,15 +209,25 @@ public:
     BaseBinaryTree(BaseBinaryTree&& another) noexcept { *this = std::move(another); }
     virtual ~BaseBinaryTree() { clear(); }
 
+    /** @brief Inserta un nuevo nodo y ejecuta `rebalance()`, retornando un puntero al valor insertado. */
     auto* insert(const value_type&, Ref);
+    /** @brief Elimina el nodo apuntado y reequilibra desde su padre. */
     void remove(NodePtr);
 
+    /** @brief Conecta `child` como hijo en la rama `d` (0: izq, 1: der) de `parent`. */
     void connect(NodePtr, NodePtr, TX);
 
+    /** @brief Libera todos los nodos del árbol. */
     void clear() override;
 
+    /** @brief Inserta un elemento delegando a `insert()`. */
     void push_back(const value_type& value, Ref ref) override { insert(value, ref); }
 
+    /**
+     * @brief Busca un valor en el árbol según `Compare`.
+     * @param value Valor a buscar.
+     * @return Puntero mutable al valor encontrado, o `nullptr` si no existe.
+     */
     value_type* find(const value_type& value) {
         NodePtr node = m_pRoot;
         while (node) {
@@ -177,6 +240,7 @@ public:
         return nullptr;
     }
 
+    /** @brief Libera recursivamente el subárbol en post-orden. */
     void clear_recursive(NodePtr);
 
     ForwardIterator begin() const override { return ForwardIterator(m_pRoot); }
@@ -185,6 +249,12 @@ public:
     BackwardIterator rbegin() const { return BackwardIterator(m_pRoot); }
     BackwardIterator rend()   const { return BackwardIterator(nullptr); }
 
+    /**
+     * @brief Genera una vista de solo lectura con cualquier combinación de orden y dirección de Euler.
+     * @tparam Ord Orden de recorrido (`Order::PreOrder`, `Order::InOrder`, híbridos, etc.).
+     * @tparam Dir Dirección (`Direction::Asc` o `Direction::Desc`).
+     * @return `BaseView` sincronizada con el mutex del árbol.
+     */
     template <Order Ord, Direction Dir = Direction::Asc>
     auto traverse() const {
         std::lock_guard lock(this->mutex());
@@ -198,8 +268,11 @@ public:
     BaseBinaryTree& operator=(const BaseBinaryTree&);
     BaseBinaryTree& operator=(BaseBinaryTree&&) noexcept;
 
+    /** @brief Retorna el puntero a la raíz del árbol. */
     NodePtr getRoot() const { return m_pRoot; }
+    /** @brief Calcula recursivamente la altura del subárbol con raíz en `root`. */
     TX height(const NodePtr&) const;
+    /** @brief Retorna la altura total del árbol. */
     TX height() const { return height(m_pRoot); };
 };
 

@@ -1,26 +1,43 @@
+/**
+ * @file heap.h
+ * @ingroup trees
+ * @brief Montículo binario genérico (`BaseHeap` / `Heap`, `MinHeap`, `MaxHeap`) con restauración de invariante.
+ */
+
 #ifndef __HEAP_H__
 #define __HEAP_H__
 #include "../core/general_container.h"
 #include "../vector.h"
 
+/** @brief Rasgos base de nodo e iterador para `BaseHeap`. */
 template <typename T>
 struct HeapTraits {
     using Node              = GeneralNode<T>;
     using ForwardIterator   = VectorForwardIterator<Node>;
 };
 
+/** @brief Rasgos para montículo mínimo (`std::less<T>`). */
 template <typename T>
 struct HeapAscTraits : public AscendingTraits<T>, public HeapTraits<T> {};
 
+/** @brief Rasgos para montículo máximo (`std::greater<T>`). */
 template <typename T>
 struct HeapDescTraits : public DescendingTraits<T>, public HeapTraits<T> {};
 
 template <typename Traits, template <typename> typename... Mixins>
 class BaseHeap;
 
+/** @brief Alias estándar de montículo con mixins de consulta, mutación y serialización. */
 template <typename Traits>
 using Heap = BaseHeap<Traits, Callable, Applicable, Printable, Readable>;
 
+/**
+ * @class BaseHeap
+ * @brief Montículo binario thread-safe almacenado sobre un `Vector` interno.
+ *
+ * @tparam Traits Rasgos del montículo (`HeapAscTraits` o `HeapDescTraits`).
+ * @tparam Mixins Lista de mixins aplicados al contenedor.
+ */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseHeap : public GeneralContainer<Traits, Mixins...> {
 public:
@@ -34,7 +51,7 @@ public:
 protected:
     using Parent::Parent;
     using Parent::m_mutex;
-    Vector<VectorAscTraits<value_type>> m_data;
+    Vector<VectorAscTraits<value_type>> m_data; /**< Arreglo contiguo que almacena los nodos del montículo. */
 public:
     BaseHeap() = default;
     BaseHeap(const BaseHeap& other) { *this = other; }
@@ -50,23 +67,35 @@ public:
         return *this;
     }
 
+    /** @brief Inserta un elemento delegando a `push()`. */
     void push_back(const value_type& value, Ref ref) override { push(value, ref); }
 
+    /** @brief Vacía el montículo. */
     void clear() override {
         std::lock_guard lock(m_mutex);
         m_data.clear();
     }
 
+    /** @brief Retorna el número de elementos en el montículo. */
     size_t size() const {
         std::lock_guard lock(m_mutex);
         return m_data.size();
     }
 
+    /** @brief Inserta `(value, ref)` y restaura la propiedad de montículo hacia arriba. */
     void push(const value_type &value, Ref ref);
+    /** @brief Flota el elemento en `index` hacia la raíz mientras supere a su padre según `Compare`. */
     void HeapifyUp(size_t index);
+    /** @brief Extrae y retorna la raíz del montículo reordenando el resto con `HeapifyDown(0)`. */
     Node pop();
+    /** @brief Hunde el elemento en `index` hacia las hojas restaurando la invariante de montículo. */
     void HeapifyDown(size_t index);
 
+    /**
+     * @brief Restaura la invariante de montículo tras modificaciones externas (por ejemplo vía `ApplyFunction`).
+     *
+     * @image html heap_rebuild.svg "Ciclo de invariante de reconstrucción en Heap"
+     */
     void rebuild() override;
 
     ForwardIterator begin() const override { return m_data.begin(); }

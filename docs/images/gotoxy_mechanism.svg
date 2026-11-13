@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-480 -260 960 520" width="100%" height="100%" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="m-indigo" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#1A237E" />
+    </marker>
+    <marker id="m-blue" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#0288D1" />
+    </marker>
+    <marker id="m-teal" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#00897B" />
+    </marker>
+    <marker id="m-amber" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#EF6C00" />
+    </marker>
+    <marker id="m-red" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#C62828" />
+    </marker>
+
+    <style>
+      .bg         { fill: #FAFAFA; stroke: #CFD8DC; stroke-width: 2; rx: 16; }
+      .title      { font-size: 19px; font-weight: 800; fill: #1A237E; text-anchor: middle; }
+      .subtitle   { font-size: 12.5px; fill: #455A64; text-anchor: middle; }
+
+      .card-stage { fill: #FFFFFF; stroke-width: 2; rx: 14; }
+      .c-st1      { stroke: #283593; }
+      .c-st2      { stroke: #0288D1; }
+      .c-st3      { stroke: #00897B; }
+
+      .st-hdr     { font-size: 13.5px; font-weight: 800; text-anchor: middle; }
+      .st-sub     { font-size: 10.5px; font-family: 'JetBrains Mono', monospace; text-anchor: middle; fill: #546E7A; }
+
+      .term-bg    { fill: #1E272C; stroke: #37474F; stroke-width: 1.5; rx: 10; }
+      .term-txt   { font-size: 10.5px; font-family: 'JetBrains Mono', 'Fira Code', monospace; fill: #B0BEC5; white-space: pre; }
+      .term-dim   { font-size: 9.5px; font-family: 'JetBrains Mono', monospace; fill: #78909C; }
+      .term-cyan  { font-size: 10.5px; font-family: 'JetBrains Mono', monospace; fill: #80CBC4; font-weight: 700; }
+      .term-green { font-size: 11px; font-family: 'JetBrains Mono', monospace; fill: #69F0AE; font-weight: 800; }
+      .term-amber { font-size: 10.5px; font-family: 'JetBrains Mono', monospace; fill: #FFCA28; font-weight: 700; }
+      .term-red   { font-size: 10px; font-family: 'JetBrains Mono', monospace; fill: #EF5350; font-weight: 700; }
+
+      .code-box   { fill: #E8EAF6; stroke: #5C6BC0; stroke-width: 1.2; rx: 7; }
+      .code-txt   { font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 700; fill: #1A237E; }
+      .step-box   { fill: #E1F5FE; stroke: #0288D1; stroke-width: 1.2; rx: 7; }
+      .step-txt   { font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 700; fill: #01579B; }
+      .warn-box   { fill: #FFF3E0; stroke: #EF6C00; stroke-width: 1.3; rx: 8; }
+      .warn-txt   { font-size: 10px; fill: #E65100; font-weight: 700; }
+      .ok-box     { fill: #E0F2F1; stroke: #00897B; stroke-width: 1.3; rx: 8; }
+      .ok-txt     { font-size: 10px; fill: #004D40; font-weight: 700; }
+      .note-txt   { font-size: 10px; fill: #37474F; }
+
+      .conn-arrow { fill: none; stroke-width: 2.6; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <!-- Fondo general -->
+  <rect x="-472" y="-252" width="944" height="504" class="bg" />
+  <text x="0" y="-220" class="title">Mecanismo de Posicionamiento Directo: gotoxy_origin + gotoxy(x, y)</text>
+  <text x="0" y="-198" class="subtitle">Rasterizado sin matriz intermedia en RAM mediante secuencias de control ANSI relativas al origen guardado</text>
+
+  <!-- ==================== ETAPA 1: gotoxy_origin ==================== -->
+  <rect x="-448" y="-172" width="278" height="402" class="card-stage c-st1" />
+  <text x="-309" y="-147" class="st-hdr" fill="#1A237E">1. Reserva y Origen (0, 0)</text>
+  <text x="-309" y="-130" class="st-sub">gotoxy_origin(os, height)</text>
+
+  <!-- Terminal Etapa 1 -->
+  <rect x="-432" y="-114" width="246" height="176" class="term-bg" />
+  <circle cx="-418" cy="-100" r="4" fill="#EF5350" />
+  <circle cx="-405" cy="-100" r="4" fill="#FFEE58" />
+  <circle cx="-392" cy="-100" r="4" fill="#66BB6A" />
+  <text x="-376" y="-96" class="term-dim">Terminal (viewport)</text>
+
+  <text x="-420" y="-76" class="term-dim">Texto previo en consola...</text>
+  <line x1="-422" y1="-67" x2="-198" y2="-67" stroke="#37474F" stroke-dasharray="3,3" />
+
+  <!-- Zona reservada -->
+  <rect x="-420" y="-60" width="222" height="106" fill="#263238" stroke="#5C6BC0" stroke-width="1" stroke-dasharray="4,3" rx="4" />
+  <!-- Origen (0,0) -->
+  <circle cx="-412" cy="-50" r="5" fill="#FFCA28" />
+  <text x="-402" y="-46" class="term-amber">(0, 0) \033[s (Origen)</text>
+
+  <text x="-412" y="-26" class="term-dim">fila 1  (\n reservada)</text>
+  <text x="-412" y="-8"  class="term-dim">fila 2  (\n reservada)</text>
+  <text x="-412" y="10"  class="term-dim">...</text>
+  <text x="-412" y="30"  class="term-dim">fila height - 1</text>
+
+  <!-- Flecha bajada (newlines) y subida (\033[heightA) -->
+  <path d="M -226 -50 L -226 32" stroke="#66BB6A" stroke-width="2" marker-end="url(#m-teal)" />
+  <text x="-232" y="-8" class="term-dim" text-anchor="end">\n × h</text>
+  <path d="M -212 32 L -212 -44" stroke="#FFCA28" stroke-width="2" stroke-dasharray="3,2" marker-end="url(#m-amber)" />
+  <text x="-217" y="-25" class="term-amber" text-anchor="end">\033[hA</text>
+
+  <!-- Explicación paso a paso Etapa 1 -->
+  <rect x="-432" y="74" width="246" height="44" class="code-box" />
+  <text x="-422" y="92" class="code-txt">for (i=0; i&lt;h; ++i) os &lt;&lt; '\n';</text>
+  <text x="-422" y="108" class="note-txt">Fuerza el scroll y reserva h filas.</text>
+
+  <rect x="-432" y="126" width="246" height="46" class="code-box" />
+  <text x="-422" y="144" class="code-txt">os &lt;&lt; "\033[hA\033[1G\033[s";</text>
+  <text x="-422" y="160" class="note-txt">Sube h filas, col 1, guarda origen.</text>
+
+  <text x="-432" y="192" class="note-txt">• No pisa texto impreso arriba.</text>
+  <text x="-432" y="208" class="note-txt">• Garantiza espacio en pantalla.</text>
+
+  <!-- Flecha 1 -> 2 -->
+  <path d="M -170 20 L -142 20" class="conn-arrow" stroke="#0288D1" marker-end="url(#m-blue)" />
+
+  <!-- ==================== ETAPA 2: gotoxy(x, y) ==================== -->
+  <rect x="-138" y="-172" width="308" height="402" class="card-stage c-st2" />
+  <text x="16" y="-147" class="st-hdr" fill="#01579B">2. Salto Directo a (x, y)</text>
+  <text x="16" y="-130" class="st-sub">gotoxy(os, x=6, y=3) &lt;&lt; "hola"</text>
+
+  <!-- Terminal Etapa 2 -->
+  <rect x="-122" y="-114" width="276" height="176" class="term-bg" />
+  <circle cx="-108" cy="-100" r="4" fill="#EF5350" />
+  <circle cx="-95"  cy="-100" r="4" fill="#FFEE58" />
+  <circle cx="-82"  cy="-100" r="4" fill="#66BB6A" />
+  <text x="-66" y="-96" class="term-dim">DemoGotoxy() en vivo</text>
+
+  <!-- Regla X -->
+  <text x="-76" y="-76" class="term-dim">3456789012345678901234</text>
+  <!-- Regla Y y Caja -->
+  <text x="-112" y="-60" class="term-dim">1</text>
+  <text x="-76"  y="-60" class="term-cyan">┌────────────────────┐</text>
+  <text x="-112" y="-44" class="term-dim">2</text>
+  <text x="-76"  y="-44" class="term-cyan">│                    │</text>
+  <text x="-112" y="-28" class="term-dim">3</text>
+  <text x="-76"  y="-28" class="term-cyan">│</text>
+  <text x="-56"  y="-28" class="term-green">hola</text>
+  <text x="56"   y="-28" class="term-cyan">│</text>
+  <text x="-112" y="-12" class="term-dim">4</text>
+  <text x="-76"  y="-12" class="term-cyan">│                    │</text>
+  <text x="-112" y="4"   class="term-dim">5</text>
+  <text x="-76"  y="4"   class="term-cyan">└────────────────────┘</text>
+
+  <!-- Ruta del cursor desde (0,0) hasta (6,3) -->
+  <circle cx="-96" cy="-76" r="4.5" fill="#FFCA28" />
+  <path d="M -96 -72 L -96 -31 L -60 -31" fill="none" stroke="#FFCA28" stroke-width="1.8" stroke-dasharray="3,2" marker-end="url(#m-amber)" />
+  <text x="-114" y="24" class="term-amber">Ruta: \033[u → \033[3B → \033[7G</text>
+  <text x="-114" y="42" class="term-dim">ANSI es 1-indexado: col = x + 1</text>
+
+  <!-- Pasos de gotoxy -->
+  <rect x="-122" y="74" width="276" height="36" class="step-box" />
+  <text x="-112" y="90"  class="step-txt">1. \033[u   (RCP: Restore Cursor)</text>
+  <text x="-112" y="103" class="note-txt">Vuelve al origen (0, 0) guardado.</text>
+
+  <rect x="-122" y="116" width="276" height="36" class="step-box" />
+  <text x="-112" y="132" class="step-txt">2. \033[yB  (CUD: Cursor Down)</text>
+  <text x="-112" y="145" class="note-txt">Baja y filas si y &gt; 0.</text>
+
+  <rect x="-122" y="158" width="276" height="36" class="step-box" />
+  <text x="-112" y="174" class="step-txt">3. \033[(x+1)G (CHA: Horiz. Abs.)</text>
+  <text x="-112" y="187" class="note-txt">Salta directo a la columna x + 1.</text>
+
+  <text x="-122" y="212" class="note-txt">La consola actúa como matriz 2D.</text>
+
+  <!-- Flecha 2 -> 3 -->
+  <path d="M 170 20 L 198 20" class="conn-arrow" stroke="#00897B" marker-end="url(#m-teal)" />
+
+  <!-- ==================== ETAPA 3: Cierre y Límites ==================== -->
+  <rect x="202" y="-172" width="246" height="402" class="card-stage c-st3" />
+  <text x="325" y="-147" class="st-hdr" fill="#004D40">3. Cierre y Límites</text>
+  <text x="325" y="-130" class="st-sub">Flujo y Desbordamiento</text>
+
+  <!-- Bloque OK: Cierre -->
+  <rect x="216" y="-114" width="218" height="96" class="ok-box" />
+  <text x="226" y="-94"  class="ok-txt">Cierre limpio del flujo:</text>
+  <text x="226" y="-76"  class="code-txt">gotoxy(m_os, 0, height);</text>
+  <text x="226" y="-58"  class="note-txt">Deja el cursor debajo del</text>
+  <text x="226" y="-44"  class="note-txt">diagrama para que el resto</text>
+  <text x="226" y="-30"  class="note-txt">de std::cout siga normal.</text>
+
+  <!-- Bloque Clamping -->
+  <rect x="216" y="-4" width="218" height="120" class="term-bg" />
+  <text x="226" y="16" class="term-red">Si x &gt;= ancho_terminal:</text>
+  <text x="226" y="34" class="term-dim">cols = 80, pedido x = 95</text>
+  <text x="226" y="52" class="term-amber">\033[96G  ──► clampa a col 80</text>
+  <text x="226" y="72" class="term-dim">• La coord. 95 se pierde.</text>
+  <text x="226" y="88" class="term-dim">• Si hay wrap, pisa abajo.</text>
+  <text x="226" y="104" class="term-dim">• Ensanchar luego no arregla.</text>
+
+  <!-- Bloque Nota final -->
+  <rect x="216" y="128" width="218" height="86" class="warn-box" />
+  <text x="226" y="148" class="warn-txt">Sin matriz en RAM:</text>
+  <text x="226" y="166" class="note-txt">• Código mínimo y directo.</text>
+  <text x="226" y="182" class="note-txt">• UTF-8 y ANSI nativos.</text>
+  <text x="226" y="198" class="note-txt">• Requiere terminal &gt;= grafo.</text>
+</svg>

@@ -1,3 +1,9 @@
+/**
+ * @file circular_list_layout.h
+ * @ingroup layouts
+ * @brief Layout elíptico para listas circulares (`CircularListLayout`) y roles `CircularListRole`.
+ */
+
 #ifndef __LAYOUTS_CIRCULAR_LIST_LAYOUT_H__
 #define __LAYOUTS_CIRCULAR_LIST_LAYOUT_H__
 
@@ -8,9 +14,10 @@
 #include <algorithm>
 #include "base_layout.h"
 
-// Roles semánticos para nodos de listas circulares
+/** @brief Roles semánticos para nodos de listas circulares (`Head`, `Tail`, `Node`). */
 enum class CircularListRole { Head, Tail, Node };
 
+/** @brief Convierte un `CircularListRole` a su clase CSS/identificador textual. */
 constexpr std::string_view to_css_class(CircularListRole r) {
     switch (r) {
         case CircularListRole::Head: return "head";
@@ -20,8 +27,11 @@ constexpr std::string_view to_css_class(CircularListRole r) {
     return "";
 }
 
-// Layout para listas enlazadas circulares (CircularLinkedList / CircularDoubleLinkedList)
-// Dispone los nodos formando un contorno elíptico cerrado suave con curvatura continua.
+/**
+ * @class CircularListLayout
+ * @brief Dispone los nodos de una lista circular formando un contorno elíptico cerrado.
+ * @tparam Formatter Functor de formateo de nodos.
+ */
 template <typename Formatter = DefaultNodeFormatter>
 class CircularListLayout : public BaseLayout<Formatter> {
     TX m_span_x = 2; // Espaciado horizontal

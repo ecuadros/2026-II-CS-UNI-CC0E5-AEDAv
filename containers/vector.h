@@ -1,3 +1,9 @@
+/**
+ * @file vector.h
+ * @ingroup containers
+ * @brief Implementación de arreglo dinámico genérico (`BaseVector` / `Vector`) con iteradores y mixins.
+ */
+
 #ifndef __VECTOR_H__
 #define __VECTOR_H__
 #include <initializer_list>
@@ -8,6 +14,11 @@
 
 using namespace std;
 
+/**
+ * @class VectorForwardIterator
+ * @brief Iterador hacia adelante para `BaseVector`.
+ * @tparam T Tipo de nodo almacenado en el vector (`GeneralNode<...>`).
+ */
 template <typename T>
 class VectorForwardIterator : public GeneralIterator<VectorForwardIterator<T>, T> {
 public:
@@ -16,10 +27,15 @@ public:
     using Parent            = GeneralIterator<MySelf, T>;
     using Parent::Parent; // Inherit constructor
 
-    // Prefix increment
+    /** @brief Avanza el iterador al siguiente elemento del arreglo. */
     VectorForwardIterator& operator++() { ++Parent::m_ptr; return *this; }
 };
 
+/**
+ * @class VectorBackwardIterator
+ * @brief Iterador inverso para `BaseVector`.
+ * @tparam T Tipo de nodo almacenado en el vector.
+ */
 template <typename T>
 class VectorBackwardIterator : public GeneralIterator<VectorBackwardIterator<T>, T> {
 public:
@@ -28,29 +44,43 @@ public:
     using Parent            = GeneralIterator<MySelf, T>;
     using Parent::Parent; // Inherit constructor
 
-    // Prefix increment
+    /** @brief Retrocede el iterador hacia el elemento anterior del arreglo. */
     VectorBackwardIterator& operator++() { --Parent::m_ptr; return *this; }
 };
 
+/**
+ * @struct VectorTraits
+ * @brief Rasgos base de nodo e iteradores para `BaseVector`.
+ */
 template <typename T>
 struct VectorTraits {
     using Node              = GeneralNode<T>;
-    using ForwardIterator   = VectorForwardIterator<Node>;  // itera sobre Node, no sobre T
-    using BackwardIterator  = VectorBackwardIterator<Node>; // itera sobre Node, no sobre T
+    using ForwardIterator   = VectorForwardIterator<Node>;  /**< Itera sobre `Node`, no sobre `T`. */
+    using BackwardIterator  = VectorBackwardIterator<Node>; /**< Itera en sentido inverso sobre `Node`. */
 };
 
+/** @brief Rasgos de vector con orden ascendente. */
 template <typename T>
 struct VectorAscTraits : public AscendingTraits<T>, public VectorTraits<T> {};
 
+/** @brief Rasgos de vector con orden descendente. */
 template <typename T>
 struct VectorDescTraits : public DescendingTraits<T>, public VectorTraits<T> {};
 
 template <typename Traits, template <typename> typename... Mixins>
 class BaseVector;
 
+/** @brief Alias estándar de vector equipado con mixins de consulta, mutación, reversa y serialización. */
 template <typename Traits>
 using Vector = BaseVector<Traits, Callable, Applicable, Searchable, Reversible, Printable, Readable>;
 
+/**
+ * @class BaseVector
+ * @brief Arreglo dinámico thread-safe basado en `GeneralContainer`.
+ *
+ * @tparam Traits Estructura de rasgos del vector.
+ * @tparam Mixins Lista de mixins aplicados al contenedor.
+ */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseVector : public GeneralContainer<Traits, Mixins...> {
 public:
@@ -64,16 +94,20 @@ public:
 protected:
     using Parent::m_mutex;
 private:
-    NodePtr      m_data     = nullptr;   // puntero al arreglo dinámico
-    size_t       m_size     = 0,         // cantidad actual
-                 m_capacity = 0;         // capacidad
+    NodePtr      m_data     = nullptr;   /**< Puntero al arreglo dinámico de nodos. */
+    size_t       m_size     = 0,         /**< Cantidad actual de elementos. */
+                 m_capacity = 0;         /**< Capacidad reservada en memoria. */
 
+    /** @brief Redimensiona la capacidad interna del arreglo a `new_cap`. */
     void resize(size_t new_cap);
 
 public:
     BaseVector() {}
 
-    // Cada elemento de la lista es una pareja (valor, ref) para un Node
+    /**
+     * @brief Construye el vector a partir de una lista de pares `(valor, ref)`.
+     * @param values Lista inicializadora de pares `(valor, ref)` para cada `Node`.
+     */
     BaseVector(initializer_list<pair<value_type, Ref>> values) {
         for (const auto &v : values)
             push_back(v.first, v.second);
@@ -87,15 +121,22 @@ public:
     BaseVector& operator=(const BaseVector& other);
     BaseVector& operator=(BaseVector&& other) noexcept;
 
+    /** @brief Inserta un nodo al final del vector duplicando la capacidad si es necesario. */
     void push_back(const value_type& value, Ref ref = 0) override;
+    /** @brief Elimina el último elemento del vector si no está vacío. */
     void pop_back();
 
+    /** @brief Acceso indexado con verificación de límites (`std::out_of_range`). */
     Node& operator[](size_t index);
+    /** @brief Acceso indexado con verificación de límites (`std::out_of_range`). */
     Node& at(size_t index);
 
+    /** @brief Retorna la cantidad de elementos almacenados. */
     size_t size()     const { return m_size; }
+    /** @brief Retorna la capacidad actualmente reservada. */
     size_t capacity() const { return m_capacity; }
 
+    /** @brief Libera la memoria reservada y reinicia tamaño y capacidad a 0. */
     void clear() override;
 
     ForwardIterator   begin() const override { return ForwardIterator(m_data); }

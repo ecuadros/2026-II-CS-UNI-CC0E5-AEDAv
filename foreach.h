@@ -1,3 +1,9 @@
+/**
+ * @file foreach.h
+ * @ingroup core
+ * @brief Utilidades genéricas de iteración funcional sobre rangos y contenedores.
+ */
+
 #ifndef __FOREACH_H__
 #define __FOREACH_H__
 #include <utility> // std::forward
@@ -5,6 +11,23 @@
 #include <stdexcept> // std::runtime_error
 using namespace std;
 
+/**
+ * @brief Aplica una función o predicado sobre un rango de iteradores `[begin, end)`.
+ *
+ * Si `func` retorna `void`, se invoca para cada elemento del rango.
+ * Si `func` retorna un valor convertible a `bool`, devuelve la referencia al primer
+ * elemento que satisfaga el predicado; si ninguno lo cumple, lanza `std::runtime_error`.
+ *
+ * @tparam Iterator Tipo de iterador del rango.
+ * @tparam Func Tipo del callable a invocar.
+ * @tparam Args Tipos de argumentos adicionales reenviados a `func`.
+ * @param begin Iterador al inicio del rango.
+ * @param end Iterador al final del rango.
+ * @param func Función o predicado a aplicar sobre cada elemento.
+ * @param args Argumentos adicionales reenviados mediante perfect forwarding.
+ * @return `void` o referencia al primer elemento que cumple el predicado.
+ * @throws std::runtime_error Si `func` es predicado y ningún elemento lo satisface.
+ */
 template <typename Iterator, typename Func, typename... Args>
 decltype(auto) call(Iterator begin, Iterator end, Func func, Args&&... args) {
     if constexpr(is_void_v<invoke_result_t<Func, decltype(*begin), Args...>>) {
@@ -36,7 +59,12 @@ decltype(auto) call(Iterator begin, Iterator end, Func func, Args&&... args) {
 //     }
 // }
 
-// Iterator Level #3
+/**
+ * @brief Aplica `func` a cada elemento en el rango `[begin, end)`.
+ * @tparam Iterator Tipo de iterador del rango.
+ * @tparam Func Tipo de la función o functor.
+ * @tparam Args Tipos de argumentos adicionales.
+ */
 template <typename Iterator, typename Func, typename... Args>
 void ApplyFunction(Iterator begin, Iterator end, Func func, Args&&... args) {
     // for (auto iter = begin; iter != end; ++iter)
@@ -44,6 +72,13 @@ void ApplyFunction(Iterator begin, Iterator end, Func func, Args&&... args) {
     ::call(begin, end, func, std::forward<Args>(args)...);
 }
 
+/**
+ * @brief Busca el primer elemento en `[begin, end)` que satisface el predicado `func`.
+ * @tparam Iterator Tipo de iterador del rango.
+ * @tparam Func Tipo del predicado.
+ * @tparam Args Tipos de argumentos adicionales.
+ * @return Referencia al primer elemento que satisface `func`.
+ */
 template <typename Iterator, typename Func, typename... Args>
 decltype(auto) FirstThat(Iterator begin, Iterator end, Func func, Args&&... args) {
     // for (auto iter = begin; iter != end; ++iter)
@@ -57,7 +92,12 @@ decltype(auto) FirstThat(Iterator begin, Iterator end, Func func, Args&&... args
 //     ::ApplyFunction(container.begin(), container.end(), func, args...);
 // }
 
-// Iterator Level #4
+/**
+ * @brief Sobrecarga de conveniencia que aplica `func` a todos los elementos de `container`.
+ * @tparam Container Tipo del contenedor iterable con range-based `for`.
+ * @tparam Func Tipo de la función o functor.
+ * @tparam Args Tipos de argumentos adicionales.
+ */
 template <typename Container, typename Func, typename... Args>
 void ApplyFunction(Container &container, Func func, Args&&... args) {
     for (auto &v : container)

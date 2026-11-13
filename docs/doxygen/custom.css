@@ -1,0 +1,156 @@
+/* ==========================================================================
+   Estilos centralizados de Doxygen: miniaturas SVG uniformes + modal
+   ========================================================================== */
+
+.svg-thumb-box {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 250px;
+    max-width: 100%;
+    height: 160px;
+    margin: 0.65rem 0.65rem 0.65rem 0;
+    padding: 0.6rem;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    cursor: zoom-in;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    vertical-align: top;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.svg-thumb-box:hover,
+.svg-thumb-box:focus-visible {
+    transform: translateY(-2px);
+    border-color: #0969da;
+    box-shadow: 0 6px 18px rgba(9, 105, 218, 0.16);
+    outline: none;
+}
+
+.svg-thumb-box img {
+    width: 100%;
+    height: calc(100% - 1.5rem);
+    max-width: 100%;
+    max-height: calc(100% - 1.5rem);
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+}
+
+.svg-thumb-hint {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: #57606a;
+    user-select: none;
+}
+
+.image .caption {
+    margin-top: 0.25rem;
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* Modal expansible casi a pantalla completa */
+.svg-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
+    padding: 1.5vh 2vw;
+    box-sizing: border-box;
+}
+
+.svg-modal-overlay.is-open {
+    display: flex;
+}
+
+.svg-modal-dialog {
+    width: 94vw;
+    height: 92vh;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.svg-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8fafc;
+    color: #0f172a;
+    gap: 1rem;
+}
+
+.svg-modal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.svg-modal-close {
+    appearance: none;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 6px;
+    width: 2rem;
+    height: 2rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.svg-modal-close:hover {
+    background: #e2e8f0;
+}
+
+.svg-modal-body {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.svg-modal-body img {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+/* Grafos DOT interactivos y diagramas UML */
+.dotgraph {
+    text-align: center;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.dotgraph object,
+.dotgraph img {
+    max-width: 100%;
+    height: auto;
+}

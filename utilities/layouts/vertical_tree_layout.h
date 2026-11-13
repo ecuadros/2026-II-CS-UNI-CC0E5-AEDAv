@@ -1,9 +1,19 @@
+/**
+ * @file vertical_tree_layout.h
+ * @ingroup layouts
+ * @brief Layout vertical compacto de árbol binario (`VerticalTreeLayout`) mediante contornos dinámicos.
+ */
+
 #ifndef __LAYOUTS_VERTICAL_TREE_LAYOUT_H__
 #define __LAYOUTS_VERTICAL_TREE_LAYOUT_H__
 
 #include "tree_layout.h"
 
-// Disposición vertical compacta de árbol binario con contornos dinámicos
+/**
+ * @class VerticalTreeLayout
+ * @brief Proyecta un árbol binario de arriba hacia abajo evitando colisiones mediante fusión de contornos.
+ * @tparam Formatter Functor de formateo de nodos.
+ */
 template <typename Formatter = DefaultNodeFormatter>
 class VerticalTreeLayout : public TreeLayout<Formatter> {
 public:
@@ -19,6 +29,7 @@ public:
     explicit VerticalTreeLayout(Formatter f, TX cell_w = 3, bool is_directed = false)
         : Base(std::move(f), is_directed, cell_w) {}
 
+    /** @brief Retorna una nueva instancia del layout con el formateador `f`. */
     template <typename F>
     auto with_formatter(F&& f) const {
         return VerticalTreeLayout<std::decay_t<F>>(std::forward<F>(f), m_cell_width, this->m_directed);

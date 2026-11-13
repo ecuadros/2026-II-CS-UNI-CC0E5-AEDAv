@@ -1,3 +1,9 @@
+/**
+ * @file render.h
+ * @ingroup visualization
+ * @brief Subsistema de rasterizado 2D en consola (`gotoxy`, `ConsoleGraphRenderer`) para `VisualGraph`.
+ */
+
 #ifndef __RENDER_H__
 #define __RENDER_H__
 
@@ -7,21 +13,28 @@
 #include <algorithm>
 #include <cmath>
 #include "../types.h"
-#include "ansi_style.h"
+#include "ansi_metrics.h"
+#include "gotoxy.h"
 #include "layouts/visual_graph.h"
 
 
-// Renderizador abstracto
+/**
+ * @class GraphRenderer
+ * @brief Interfaz abstracta para renderizadores de `VisualGraph`.
+ *
+ * @image html render_pipeline.svg "Pipeline de renderizado ASCII: Contenedor -> Layout -> VisualGraph -> ConsoleGraphRenderer"
+ */
 class GraphRenderer {
 public:
     virtual ~GraphRenderer() = default;
+    /** @brief Renderiza `graph` hacia un flujo de salida. */
     virtual std::ostream& render(const VisualGraph&) = 0;
 };
 
-// TODO: Renderizador de grafos 2D vectorial
+/** @brief Placeholder para futuro renderizador vectorial 2D en SVG. */
 class SvgGraphRenderer : public GraphRenderer {};
 
-// 4. Glifos y Lienzo Matricial para Terminal (Rasterizador de Consola)
+/** @brief Conjunto de glifos UTF-8/ASCII utilizados por `ConsoleGraphRenderer` para trazar aristas. */
 struct ConsoleGlyphs {
     std::string h_dash            = "─";
     std::string v_bar             = "│";
@@ -34,73 +47,26 @@ struct ConsoleGlyphs {
     std::string arrow             = "►"; // ►
 };
 
-class Canvas2D {
-private:
-    std::vector<std::vector<std::string>> m_grid;
-    TX m_width = 0;
-    TX m_height = 0;
+/** @brief Estilos de trazo de línea para el renderizador de consola. */
+enum class ConsoleLineStyle {
+    Rounded,       /**< Esquinas curvas/codos UTF-8 (`╭ ╮ ╰ ╯`) con diagonales continuas (`╱ ╲`) y flechas (`►`). */
+    Sharp,         /**< Esquinas rectas UTF-8 (`┌ ┐ └ ┘`) con diagonales continuas (`╱ ╲`) y flechas (`►`). */
+    DivisionSlash, /**< Usa `U+2215 (∕)` y `U+2216 (∖)` en las uniones. */
+    Ascii          /**< ASCII clásico (`-`, `/`, `\`, `>`). */
+};
 
-    void ensure_capacity(TX x, TX y) {
-        if (y >= m_height) {
-            TX new_h = y + 1;
-            m_grid.resize(new_h, std::vector<std::string>(m_width, " "));
-            m_height = new_h;
-        }
-        if (x >= m_width) {
-            TX new_w = x + 1;
-            for (auto& row : m_grid) row.resize(new_w, " ");
-            m_width = new_w;
-        }
-    }
+/**
+ * @class ConsoleGraphRenderer
+ * @brief Renderizador concreto que dibuja un `VisualGraph` directamente en consola usando `gotoxy`.
+ */
+class ConsoleGraphRenderer : public GraphRenderer {
+    std::ostream& m_os;
+    ConsoleLineStyle m_style;
 
-public:
-    Canvas2D() = default;
-
-    void set(TX x, TX y, const std::string& glyph) {
+    void put_at(TX x, TX y, const std::string& glyph) {
         if (x < 0 || y < 0 || glyph.empty()) return;
-        ensure_capacity(x, y);
-        m_grid[y][x] = glyph;
-    }
-
-    void write(TX x, TX y, const std::string& text) {
-        if (x < 0 || y < 0 || text.empty()) return;
-        TX vis_len = static_cast<TX>(visible_length(text));
-        if (vis_len <= 0) return;
-        ensure_capacity(x + vis_len - 1, y);
-
-        size_t i = 0;
-        TX cur_x = x;
-        std::string pending_ansi;
-
-        while (i < text.size()) {
-            if (text[i] == '\033' || text[i] == '\x1B') {
-                size_t start = i++;
-                if (i < text.size() && text[i] == '[') {
-                    i++;
-                    while (i < text.size() && (text[i] < '@' || text[i] > '~')) i++;
-                    if (i < text.size()) i++;
-                }
-                pending_ansi += text.substr(start, i - start);
-                continue;
-            }
-
-            size_t char_len = 1;
-            unsigned char c = static_cast<unsigned char>(text[i]);
-            if ((c & 0x80) == 0) char_len = 1;
-            else if ((c & 0xE0) == 0xC0) char_len = 2;
-            else if ((c & 0xF0) == 0xE0) char_len = 3;
-            else if ((c & 0xF8) == 0xF0) char_len = 4;
-            char_len = std::min(char_len, text.size() - i);
-
-            m_grid[y][cur_x] = pending_ansi + text.substr(i, char_len);
-            pending_ansi.clear();
-            i += char_len;
-            cur_x++;
-        }
-
-        if (!pending_ansi.empty() && cur_x > x) {
-            m_grid[y][cur_x - 1] += pending_ansi;
-        }
+        gotoxy(m_os, x, y);
+        m_os << glyph;
     }
 
     void draw_edge(TX x1, TX y1, TX len1,
@@ -114,7 +80,7 @@ public:
             TX end_x   = (x1 < x2) ? (x2 - 1) : (x1 - 1);
             for (TX x = start_x; x <= end_x; ++x) {
                 bool is_arrow = directed && ((x1 < x2 && x == end_x) || (x2 < x1 && x == start_x));
-                set(x, y1, is_arrow ? glyphs.arrow : glyphs.h_dash);
+                put_at(x, y1, is_arrow ? glyphs.arrow : glyphs.h_dash);
             }
             return;
         }
@@ -126,7 +92,7 @@ public:
             TX y_start = std::min(y1, y2) + 1;
             TX y_end   = std::max(y1, y2) - 1;
             TX col     = (col1 == col2) ? col1 : (x1 + len1 / 2);
-            for (TX y = y_start; y <= y_end; ++y) set(col, y, glyphs.v_bar);
+            for (TX y = y_start; y <= y_end; ++y) put_at(col, y, glyphs.v_bar);
             return;
         }
 
@@ -147,54 +113,26 @@ public:
         if (step_x > 0) {
             TX start_x = h_x + h_len;
             if (corner_x >= start_x) {
-                for (TX x = start_x; x < corner_x; ++x) set(x, h_y, glyphs.h_dash);
-                set(corner_x, h_y, (step_y > 0) ? glyphs.corner_down_left : glyphs.corner_up_left);
+                for (TX x = start_x; x < corner_x; ++x) put_at(x, h_y, glyphs.h_dash);
+                put_at(corner_x, h_y, (step_y > 0) ? glyphs.corner_down_left : glyphs.corner_up_left);
             }
         } else {
             TX end_x = h_x - 1;
             if (corner_x <= end_x) {
-                set(corner_x, h_y, (step_y > 0) ? glyphs.corner_down_right : glyphs.corner_up_right);
+                put_at(corner_x, h_y, (step_y > 0) ? glyphs.corner_down_right : glyphs.corner_up_right);
                 for (TX x = corner_x + 1; x <= end_x; ++x) {
                     bool is_arrow = (!horizontal_at_from && directed && x == end_x);
-                    set(x, h_y, is_arrow ? glyphs.arrow : glyphs.h_dash);
+                    put_at(x, h_y, is_arrow ? glyphs.arrow : glyphs.h_dash);
                 }
             }
         }
 
         const auto& diag_glyph = (step_x == step_y) ? glyphs.diag_down : glyphs.diag_up;
         for (TX i = 1; i < diff_y; ++i) {
-            set(corner_x + i * step_x, h_y + i * step_y, diag_glyph);
+            put_at(corner_x + i * step_x, h_y + i * step_y, diag_glyph);
         }
     }
 
-    std::ostream& render(std::ostream& os) const {
-        for (const auto& row : m_grid) {
-            int last_idx = -1;
-            for (int c = static_cast<int>(row.size()) - 1; c >= 0; --c) {
-                if (!row[c].empty() && row[c] != " ") { last_idx = c; break; }
-            }
-            if (last_idx >= 0) {
-                for (int c = 0; c <= last_idx; ++c) {
-                    os << (row[c].empty() ? " " : row[c]);
-                }
-            }
-            os << '\n';
-        }
-        return os;
-    }
-};
-
-// 5. Renderizador concreto para Consola
-enum class ConsoleLineStyle {
-    Rounded,       // Esquinas curvas/codos UTF-8 (╭ ╮ ╰ ╯) con diagonales continuas (╱ ╲) y flechas (►) [Por defecto]
-    Sharp,         // Esquinas rectas UTF-8 (┌ ┐ └ ┘) con diagonales continuas (╱ ╲) y flechas (►)
-    DivisionSlash, // Usa U+2215 (∕) y U+2216 (∖) en las uniones
-    Ascii          // ASCII clásico (-, /, \, >)
-};
-
-class ConsoleGraphRenderer : public GraphRenderer {
-    std::ostream& m_os;
-    ConsoleLineStyle m_style;
 public:
     explicit ConsoleGraphRenderer(std::ostream& os = std::cout, ConsoleLineStyle style = ConsoleLineStyle::Rounded)
         : m_os(os), m_style(style) {}
@@ -220,14 +158,20 @@ public:
     std::ostream& render(const VisualGraph& graph) override {
         if (graph.nodes.empty()) return m_os;
 
-        Canvas2D canvas;
         ConsoleGlyphs glyphs = getGlyphs();
 
         std::vector<VisualNode> node_list;
         node_list.reserve(graph.nodes.size());
+        TX height = graph.height;
         for (const auto& item_n : graph.nodes) {
-            node_list.push_back(item_n.getValue());
+            const auto& node = item_n.getValue();
+            node_list.push_back(node);
+            if (node.y + 1 > height) height = node.y + 1;
         }
+        if (height <= 0) return m_os;
+
+        // Reservar espacio vertical en el flujo y guardar el origen (0, 0) del grafo
+        gotoxy_origin(m_os, height);
 
         auto find_node = [&](TX id) -> const VisualNode* {
             for (const auto& node : node_list) {
@@ -285,19 +229,21 @@ public:
                 horizontal_at_from = (outgoing_right >= 2) ? false : (from_node->y < to_node->y);
             }
 
-            canvas.draw_edge(
+            draw_edge(
                 from_node->x, from_node->y, static_cast<TX>(visible_length(from_node->label)),
                 to_node->x, to_node->y, static_cast<TX>(visible_length(to_node->label)),
                 horizontal_at_from, glyphs, graph.directed
             );
         }
 
-        // 2. Colocar las etiquetas de los nodos sobre el lienzo
+        // 2. Colocar las etiquetas de los nodos directamente en consola
         for (const auto& node : node_list) {
-            canvas.write(node.x, node.y, node.label);
+            put_at(node.x, node.y, node.label);
         }
 
-        return canvas.render(m_os);
+        // Posicionar el cursor debajo del grafo para continuar el flujo normal
+        gotoxy(m_os, 0, height);
+        return m_os;
     }
 };
 
