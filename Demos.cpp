@@ -19,7 +19,10 @@
 #include "containers/binarytree.h"
 #include "containers/avl.h"
 #include "containers/hash.h"
+#include "containers/merkletree.h"
+#include "utilities/canvas.h"
 #include "utilities/printcolored.h"
+#include "utilities/sha256.h"
 #include "Demos.h"
 using namespace std;
 
@@ -523,4 +526,50 @@ void DemoHash() {
     wordsIn >> readWords;
     wordsIn.close();
     cout << "Conteo leido desde archivo: " << readWords << endl;
+}
+
+void DemoCanvas() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para Canvas", Color::Yellow);
+    Canvas canvas;
+    for (auto [x, y] : vector<pair<size_t, size_t>>{{10, 2}, {0, 0}, {20, 1}, {3, 2}, {12, 4}})
+        canvas.print(x, y, "(" + to_string(x) + "," + to_string(y) + ")");
+    cout << canvas;
+}
+
+void DemoMerkleTree() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleTree", Color::Yellow);
+    cout << "SHA-256 de \"abc\": " << Sha256("abc") << endl;
+
+    using Tree = MerkleTree<TX>;
+    ofstream("merkletree.txt", ios::trunc).close();
+    Tree tree;
+    TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}}, "merkletree.txt");
+    TestTraversal(tree);
+    cout << "Raiz: " << tree.root() << endl;
+    tree.print(cout);
+
+    Tree::Node leaf(80, 8);
+    Tree::Digests proof = tree.proof(2);
+    cout << "Prueba de inclusion de " << leaf << ":";
+    for (const auto &sibling : proof)
+        cout << " " << sibling.getValue().substr(0, 4) << (sibling.getRef() == Left ? " (izq)" : " (der)");
+    cout << endl;
+    cout << "verify" << leaf << ": " << (Tree::verify(leaf, proof, tree.root()) ? "si" : "no") << endl;
+    cout << "verify(80,9) con la misma prueba: " << (Tree::verify(Tree::Node(80, 9), proof, tree.root()) ? "si" : "no") << endl;
+
+    Tree changed = tree;
+    changed.update(2, 81, 8);
+    cout << "Copia tras update(2, 81, 8): " << changed << endl;
+    cout << "Raiz de la copia: " << changed.root() << endl;
+    changed.print(cout);
+    cout << "verify" << leaf << " contra la raiz de la copia: " << (Tree::verify(leaf, proof, changed.root()) ? "si" : "no") << endl;
+
+    Tree read;
+    ifstream in("merkletree.txt");
+    in >> read;
+    in.close();
+    cout << "Arbol leido desde archivo: " << read << endl;
+    cout << "Raiz del arbol leido igual a la original: " << (read.root() == tree.root() ? "si" : "no") << endl;
 }

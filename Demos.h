@@ -11,5 +11,7 @@ void DemoHeap();
 void DemoBinaryTree();
 void DemoAVL();
 void DemoHash();
+void DemoCanvas();
+void DemoMerkleTree();
 
 #endif // __DEMOS_H__
