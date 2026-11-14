@@ -967,6 +967,18 @@ flowchart TD
 - **`contains(key)`**: Consulta de solo lectura que no altera la topología del árbol.
 - **`push_back(pair, ref)`**: Hook requerido por `Readable` que preserva la referencia (`Ref`) original de cada nodo.
 
+#### D. Decisión de Diseño: ¿Por qué `operator[]` vive en `HashTable` y no en `BaseAVLTree`?
+
+Aunque `BaseHashTable` delega su almacenamiento en `BaseAVLTree`, el operador de indexación `operator[]` se mantiene intencionalmente en `BaseHashTable` y **no** se expone en `BaseAVLTree` / `BaseBinaryTree` por tres razones fundamentales (análogas a `std::map` vs `std::set` en la STL de C++):
+
+1. **Preservación del invariante de orden en el árbol:**
+   - En un árbol binario de búsqueda (`BaseBinaryTree` / `BaseAVLTree`), el único dato almacenado en cada nodo (`value_type`) es a la vez el que determina su posición en el árbol según `Compare`. Si `AVL::operator[]` devolviera una referencia mutable `value_type&`, una asignación como `arbol[10] = 999` modificaría en sitio el propio valor ordenador sin reubicar el nodo ni rebalancear el árbol, corrompiendo silenciosamente el invariante BST/AVL.
+   - En cambio, `HashTable` separa cada entrada (`HashEntry<Key, Value>`) en dos roles: `m_key` (criterio de ordenamiento en `operator<=>`, nunca expuesto de forma mutable) y `m_value` (carga útil). Como `HashTable::operator[]` retorna únicamente `Value&`, modificar el valor asociado jamás altera el orden ni el balance del árbol AVL interno.
+2. **Diferencia frente a contenedores secuenciales:**
+   - En `Vector` o listas enlazadas, el orden es puramente posicional; cambiar `vec[i] = 999` no viola ninguna regla estructural porque el elemento permanece en la posición `i`. En un árbol de búsqueda, el orden depende del contenido mismo del elemento.
+3. **Claridad semántica:**
+   - En contenedores secuenciales `c[5]` denota acceso al índice posicional `5`, mientras que en un `AVLTree<int>` resultaría ambiguo al operar sobre valores y no sobre posiciones. Por ello, `BaseHashTable` conserva la semántica asociativa de `operator[]` apoyándose en `find()` e `insert()` del árbol interno.
+
 ---
 
 ### 7. Contenedor Criptográfico MerkleTree y Pruebas de Auditoría
