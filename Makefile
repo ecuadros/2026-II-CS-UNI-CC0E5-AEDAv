@@ -6,9 +6,9 @@ PR_OUT     := tmp/pr_comment.md
 PR_SCRIPT  := scripts/gen_pr_comment.sh
 DOCS_PORT  ?= 8000
 
-.PHONY: all run pr-comment docs clean
+.PHONY: all run pr docs clean
 
-all: clean $(TARGET) run pr-comment
+all: clean $(TARGET) run
 
 $(TARGET): $(SRCS)
 	$(CXX) $(CXXFLAGS) $(SRCS) -o $(TARGET)
@@ -16,7 +16,7 @@ $(TARGET): $(SRCS)
 run: $(TARGET)
 	./$(TARGET)
 
-pr-comment:
+pr:
 	@bash $(PR_SCRIPT) README.md $(PR_OUT)
 
 docs:
