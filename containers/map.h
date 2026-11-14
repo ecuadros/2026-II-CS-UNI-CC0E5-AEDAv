@@ -181,7 +181,9 @@ protected:
 public:
     BaseMap() = default;
 
-    BaseMap(std::initializer_list<std::pair<Key, Value>> values) : BaseMap() {
+    // Sin delegar en BaseMap(): en una clase derivada, la inicialización por valor
+    // del subobjeto base pondría a cero el recursive_mutex de la base virtual ya construida.
+    BaseMap(std::initializer_list<std::pair<Key, Value>> values) {
         for (const auto& [k, v] : values) push_back(value_type(k, v));
     }
 
