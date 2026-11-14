@@ -1111,3 +1111,14 @@ void DemoHashTable() {
     TestMap<HashTable<std::string, int>>("HashTable");
     TestTree<HashTable<TX, Ref>::Tree>("HashTable (AVL interno)");
 }
+
+void DemoCanvas() {
+    PrintColor("DemoCanvas");
+    visual::detail::Canvas canvas;
+    canvas.label(0, 0, "origen (0,0)", visual::style::head);
+    canvas.label(20, 2, "texto en (20,2)", visual::style::value);
+    canvas.label(5, 4, "texto en (5,4)", visual::style::loop);
+    canvas.hline(0, 30, 6, "─", visual::style::edge);
+    canvas.glyph(15, 6, "●", visual::style::end);
+    canvas.print(std::cout, visual::Painter(std::cout));
+}

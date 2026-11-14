@@ -31,5 +31,7 @@ void DemoMerkleTree();
 void DemoMerkleBitcoin();
 /** Demo de MerkleTree que muestra el árbol paso a paso. */
 void DemoMerkleTreeStepByStep();
+/** Demo del lienzo de visualización: escribe texto en posiciones (x, y). */
+void DemoCanvas();
 
 #endif // __DEMOS_H__
