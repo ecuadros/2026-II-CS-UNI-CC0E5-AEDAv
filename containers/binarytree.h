@@ -170,9 +170,9 @@ public:
 protected:
     using Parent::m_mutex;
     NodePtr m_root = nullptr;
+    size_t  m_size = 0;
 
 private:
-    size_t m_size = 0;
 
     void clear_recursive(NodePtr node);
     NodePtr internal_insert(NodePtr& node, const value_type& value, Ref ref, NodePtr parent);
@@ -250,6 +250,13 @@ public:
         return BackwardIterator::make(m_root, order);
     }
 
+    // Etiqueta de cada nodo en PrintVertical (ASCII: una celda por byte)
+    virtual std::string nodeLabel(NodePtr node) const {
+        std::ostringstream text;
+        text << node->getValue();
+        return text.str();
+    }
+
     void PrintVertical(std::ostream& os = std::cout) const {
         static const Color kLevelColors[] = {
             Color::Red, Color::Green, Color::Yellow,
@@ -271,9 +278,7 @@ public:
         for (auto it = begin(TreeOrder::In); it != end(); ++it) {
             NodePtr node = &*it;
 
-            std::ostringstream text;
-            text << node->getValue();
-            std::string label = text.str();
+            std::string label = nodeLabel(node);
 
             size_t depth = 0;
             for (NodePtr p = node->m_parent; p; p = p->m_parent) ++depth;
