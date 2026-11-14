@@ -114,16 +114,21 @@ public:
     }
 };
 
+// Árbol interno del Map. Base permite cambiar el AVL (p. ej. por un Merkle-AVL).
+template <typename Traits, typename Base = BaseAVLTree<Traits>>
+class MapTree;
+
 template <typename _Key, typename _Value>
 struct MapTraits : public AVLTreeAscTraits<MapEntry<_Key, _Value>> {
     using Key   = _Key;
     using Value = _Value;
+    using Tree  = MapTree<MapTraits>;
 };
 
-template <typename Traits>
-class MapTree : public BaseAVLTree<Traits> {
+template <typename Traits, typename Base>
+class MapTree : public Base {
 public:
-    using Parent     = BaseAVLTree<Traits>;
+    using Parent     = Base;
     using NodePtr    = typename Parent::NodePtr;
     using value_type = typename Parent::value_type;
     using Key        = typename Traits::Key;
@@ -169,7 +174,7 @@ public:
     using BackwardIterator = typename Traits::BackwardIterator;
     using Key              = typename Traits::Key;
     using Value            = typename Traits::Value;
-    using Tree             = MapTree<Traits>;
+    using Tree             = typename Traits::Tree;
     using NodePtr          = typename Tree::NodePtr;
 
 protected:
@@ -216,6 +221,7 @@ public:
     Value& operator[](const Key &key){
         Lock lock(m_mutex);
         if (NodePtr n = m_tree.findKey(key)){
+            m_tree.onValueChanged(n);
             return n->value().value();
         }
         return m_tree.insertNew(value_type(key), 0)->value().value();
@@ -226,6 +232,7 @@ public:
         Lock lock(m_mutex);
         if (NodePtr n = m_tree.findKey(entry.key())) {
             n->value().value() = entry.value();
+            m_tree.onValueChanged(n);
             return;
         }
         m_tree.insertNew(entry, ref);
@@ -234,6 +241,7 @@ public:
     Value& at(const Key &key) {
         Lock lock(m_mutex);
         if (NodePtr n = m_tree.findKey(key)){
+            m_tree.onValueChanged(n);
             return n->value().value();
         }
         throw std::out_of_range("Map::at: clave no encontrada");
@@ -289,6 +297,11 @@ public:
     ForwardIterator  end()    const override { return m_tree.end(); }
     BackwardIterator rbegin() const          { Lock lock(m_mutex); return m_tree.rbegin(); }
     BackwardIterator rend()   const          { return m_tree.rend(); }
+
+    void PrintVertical(std::ostream& os = std::cout) const {
+        Lock lock(m_mutex);
+        m_tree.PrintVertical(os);
+    }
 };
 
 template <typename Key, typename Value>
