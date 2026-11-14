@@ -18,6 +18,7 @@
 #include "containers/binarytree.h"
 #include "containers/avltree.h"
 #include "containers/map.h"
+#include "containers/merkletree.h"
 #include "utilities/printcolored.h"
 #include "Demos.h"
 using namespace std;
@@ -590,3 +591,227 @@ void DemoMap() {
     TestMap<Map<int, string>>({{50, "cincuenta"}, {20, "veinte"}, {80, "ochenta"}, {10, "diez"}}, 30, "treinta y uno", "map_int_str.txt");
 }
 
+// ---------------------------------------------------------------------------
+// Merkle Tree (Merkle-AVL)
+// ---------------------------------------------------------------------------
+
+template <typename T>
+string ToText(const T &value) {
+    ostringstream text;
+    text << value;
+    return text.str();
+}
+
+// Oráculo: la raíz incremental (caché) debe coincidir con el recálculo completo
+template <typename MerkleContainer>
+typename MerkleContainer::Digest CheckMerkle(const MerkleContainer &tree, const string &label) {
+    const auto root = tree.rootHash();
+    const bool ok = tree.verify();
+    cout << label << " -> raiz: " << MerkleContainer::toHex(root)
+         << ", verify: " << boolalpha << ok << endl;
+    if (!ok)
+        throw logic_error("Merkle: la raiz incremental no coincide con el recalculo (" + label + ")");
+    return root;
+}
+
+template <typename MapContainer>
+void PrintMerkleProofs(const MapContainer &dict) {
+    const auto root = dict.rootHash();
+    cout << "Pruebas de inclusion:";
+    for (auto &node : dict) {
+        const auto &entry = node.getValue();
+        const auto proof = dict.proof(entry.key());
+        cout << " " << entry.key() << "(" << proof.path.size() << " pasos)="
+             << boolalpha << MapContainer::verifyProof(root, entry.key(), entry.value(), proof);
+    }
+    cout << endl;
+}
+
+template <typename MapContainer>
+void TestMerkleMap(initializer_list<pair<typename MapContainer::Key, typename MapContainer::Value>> entries,
+                   const typename MapContainer::Key &newKey,
+                   const typename MapContainer::Value &newValue,
+                   const string &filename) {
+    using Entry = typename MapContainer::value_type;
+    const auto &firstKey   = entries.begin()->first;
+    const auto &firstValue = entries.begin()->second;
+
+    MapContainer dict(entries);
+    cout << "Construido con lista de inicializacion: " << dict << endl;
+    dict.PrintVertical();
+    const auto original = CheckMerkle(dict, "Inicial");
+    cout << "Altura: " << dict.height() << ", balanceado: " << boolalpha << dict.isBalanced() << endl;
+
+    // Pruebas de inclusión válidas y alteradas
+    PrintMerkleProofs(dict);
+    auto proof = dict.proof(firstKey);
+    cout << "Proof de " << firstKey << " con valor falso (" << newValue << "): "
+         << boolalpha << MapContainer::verifyProof(original, firstKey, newValue, proof) << endl;
+    if (!proof.path.empty()) proof.path.front().sibling ^= 1;
+    else proof.left ^= 1;
+    cout << "Proof de " << firstKey << " con un hash alterado: "
+         << boolalpha << MapContainer::verifyProof(original, firstKey, firstValue, proof) << endl;
+    try {
+        dict.proof(newKey);
+    } catch (const out_of_range &e) {
+        cout << "Error esperado: " << e.what() << endl;
+    }
+
+    // Modificar un valor existente cambia la raíz; restaurarlo la recupera
+    dict[firstKey] = newValue;
+    const auto modified = CheckMerkle(dict, "Tras dict[" + ToText(firstKey) + "] = " + ToText(newValue));
+    cout << "La raiz cambio: " << boolalpha << (modified != original) << endl;
+    dict.push_back(Entry(firstKey, firstValue));
+    const auto restored = CheckMerkle(dict, "Tras push_back(" + ToText(firstKey) + ", " + ToText(firstValue) + ")");
+    cout << "Se recupera la raiz original: " << boolalpha << (restored == original) << endl;
+    dict.at(firstKey) = newValue;
+    const auto viaAt = CheckMerkle(dict, "Tras at(" + ToText(firstKey) + ") = " + ToText(newValue));
+    cout << "Igual que con operator[]: " << boolalpha << (viaAt == modified) << endl;
+    dict.at(firstKey) = firstValue;
+    CheckMerkle(dict, "Tras restaurar con at()");
+
+    // Insertar una clave nueva
+    dict[newKey] = newValue;
+    cout << "Tras dict[" << newKey << "] = " << newValue << ":" << endl;
+    dict.PrintVertical();
+    const auto withNew = CheckMerkle(dict, "Con clave nueva");
+    PrintMerkleProofs(dict);
+
+    // Copia (estructural) y movimiento
+    MapContainer copied(dict);
+    cout << "Copia:" << endl;
+    copied.PrintVertical();
+    const auto copiedRoot = CheckMerkle(copied, "Copia");
+    cout << "Misma raiz que el original: " << boolalpha << (copiedRoot == withNew) << endl;
+    MapContainer moved(std::move(copied));
+    const auto movedRoot = CheckMerkle(moved, "Movida");
+    cout << "Misma raiz tras mover: " << boolalpha << (movedRoot == withNew)
+         << ", origen tras mover: " << copied << " raiz " << MapContainer::toHex(copied.rootHash()) << endl;
+
+    // Persistencia: el contenido coincide, la forma (y raíz) puede no coincidir
+    {
+        ofstream out(filename, ios::trunc);
+        out << dict;
+    }
+    MapContainer loaded;
+    ifstream in(filename);
+    in >> loaded;
+    cout << "Leido desde " << filename << ": " << loaded << endl;
+    loaded.PrintVertical();
+    const auto loadedRoot = CheckMerkle(loaded, "Leido");
+    cout << "Mismo contenido: " << boolalpha << (ToText(loaded) == ToText(dict))
+         << ", misma raiz: " << (loadedRoot == withNew)
+         << " (la raiz depende de la forma del AVL, no solo del contenido)" << endl;
+
+    // Borrado
+    cout << "erase(" << newKey << "): " << boolalpha << dict.erase(newKey) << endl;
+    dict.PrintVertical();
+    CheckMerkle(dict, "Tras erase");
+    PrintMerkleProofs(dict);
+
+    dict.clear();
+    cout << "Tras clear: " << dict << ", raiz: " << MapContainer::toHex(dict.rootHash())
+         << ", verify: " << boolalpha << dict.verify() << endl;
+}
+
+template <typename TreeContainer>
+void TestMerkleInsertion(initializer_list<TX> values) {
+    TreeContainer tree;
+    cout << "Insertando:";
+    for (TX value : values) {
+        cout << " " << value;
+        tree.insert(value, Ref(value));
+    }
+    cout << endl;
+    tree.PrintVertical();
+    CheckMerkle(tree, "Rotacion");
+}
+
+template <typename TreeContainer>
+void TestMerkleAVLTree(const string &filename) {
+    // Los cuatro casos de rotación
+    cout << "Casos de rotacion:" << endl;
+    TestMerkleInsertion<TreeContainer>({10, 20, 30});
+    TestMerkleInsertion<TreeContainer>({30, 20, 10});
+    TestMerkleInsertion<TreeContainer>({30, 10, 20});
+    TestMerkleInsertion<TreeContainer>({10, 30, 20});
+
+    TreeContainer tree;
+    for (TX value = 1; value <= 7; ++value)
+        tree.insert(value, Ref(value));
+    cout << "\nInsercion secuencial del 1 al 7:" << endl;
+    tree.PrintVertical();
+    const auto root = CheckMerkle(tree, "1..7");
+
+    const auto proof = tree.proof(5);
+    cout << "Proof de 5: " << boolalpha << TreeContainer::verifyProof(root, 5, proof)
+         << ", con valor 6: " << TreeContainer::verifyProof(root, 6, proof) << endl;
+
+    // Copia estructural, movimiento y persistencia
+    TreeContainer copied(tree);
+    const auto copiedRoot = CheckMerkle(copied, "Copia");
+    cout << "Misma raiz que el original: " << boolalpha << (copiedRoot == root) << endl;
+    TreeContainer moved(std::move(copied));
+    const auto movedRoot = CheckMerkle(moved, "Movida");
+    cout << "Misma raiz tras mover: " << boolalpha << (movedRoot == root)
+         << ", origen tras mover: " << copied << endl;
+    {
+        ofstream out(filename, ios::trunc);
+        out << tree;
+    }
+    TreeContainer loaded;
+    ifstream in(filename);
+    in >> loaded;
+    cout << "Leido desde " << filename << ": " << loaded << endl;
+    loaded.PrintVertical();
+    const auto loadedRoot = CheckMerkle(loaded, "Leido");
+    cout << "Misma raiz tras leer: " << boolalpha << (loadedRoot == root) << endl;
+
+    // Eliminaciones que fuerzan rotaciones
+    tree.remove(1);
+    tree.remove(3);
+    tree.remove(2);
+    cout << "Tras eliminar 1, 3 y 2:" << endl;
+    tree.PrintVertical();
+    CheckMerkle(tree, "Tras eliminar");
+
+    // Modificación sin pasar por el contenedor: verify() la detecta
+    tree.ApplyFunction(AddOne);
+    cout << "Tras ApplyFunction(AddOne) (sin invalidar la cache): verify = "
+         << boolalpha << tree.verify() << endl;
+
+    // Prueba de carga con el oráculo tras cada mutación
+    TreeContainer large;
+    bool consistent = true;
+    for (TX value = 1; value <= 1000; ++value) {
+        large.insert(value, Ref(value));
+        consistent = consistent && large.verify();
+    }
+    for (TX value = 2; value <= 1000; value += 2) {
+        large.remove(value);
+        consistent = consistent && large.verify();
+    }
+    cout << "\n1000 inserciones y 500 eliminaciones, nodos: " << large.size()
+         << ", altura: " << large.height()
+         << ", balanceado: " << boolalpha << large.isBalanced()
+         << ", raiz consistente en cada paso: " << consistent << endl;
+    CheckMerkle(large, "Carga");
+}
+
+void DemoMerkleTree() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleAVLTree ascendente", Color::Yellow);
+    TestMerkleAVLTree<AscendingMerkleAVLTree<TX>>("merkletree_asc.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleAVLTree descendente", Color::Yellow);
+    TestMerkleAVLTree<DescendingMerkleAVLTree<TX>>("merkletree_desc.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleMap<string, int>", Color::Yellow);
+    TestMerkleMap<MerkleMap<string, int>>({{"pera", 3}, {"manzana", 5}, {"uva", 12}, {"kiwi", 7}}, "mango", 9, "merkle_str_int.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleMap<int, string>", Color::Yellow);
+    TestMerkleMap<MerkleMap<int, string>>({{50, "cincuenta"}, {20, "veinte"}, {80, "ochenta"}, {10, "diez"}}, 30, "treinta", "merkle_int_str.txt");
+}
