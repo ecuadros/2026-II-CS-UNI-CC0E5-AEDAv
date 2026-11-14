@@ -6,6 +6,11 @@
 #include "mixins.h"
 #include "../utilities/printcolored.h"
 
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 enum class TreeOrder : size_t { Pre = 0, In = 1, Post = 2 };
 
 template <typename T, typename Derived>
