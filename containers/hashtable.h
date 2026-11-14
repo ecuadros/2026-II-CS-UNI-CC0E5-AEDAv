@@ -98,7 +98,7 @@ public:
     /** Crea una tabla con los pares dados; si una clave se repite, se conserva la primera. */
     HashTable(std::initializer_list<std::pair<Key, Value>> values) {
         for (const auto& [key, value] : values)
-            m_tree.insert_unique(key, value);
+            m_tree.try_insert(key, value);
     }
 
     /** Iterador a la primera entrada en el orden de las claves; es constante si la tabla lo es. */

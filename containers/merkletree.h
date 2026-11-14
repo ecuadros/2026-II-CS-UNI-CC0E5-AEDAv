@@ -87,14 +87,20 @@ private:
         ->getValue();
   }
 
-  /** Crea el padre de @p left y @p right y lo añade al nivel @p next. Si @p right es nulo, combina @p left consigo mismo. */
-  static void join(Level &next, NodePtr left, NodePtr right) {
+  /** Crea un nodo interno con hijos @p left y @p right sin tocar los padres de los hijos. Si @p right es nulo, combina @p left consigo mismo. */
+  static NodePtr make_parent(NodePtr left, NodePtr right) {
     NodePtr parent = new Node(
         Hasher::combine(left->getValue(),
                         right ? right->getValue() : left->getValue()),
         Ref(-1));
     parent->m_pChild[0] = left;
     parent->m_pChild[1] = right;
+    return parent;
+  }
+
+  /** Crea el padre de @p left y @p right y lo añade al nivel @p next. Si @p right es nulo, combina @p left consigo mismo. */
+  static void join(Level &next, NodePtr left, NodePtr right) {
+    NodePtr parent = make_parent(left, right);
     try {
       next.push_back(parent, Ref(next.size()));
     } catch (...) {
@@ -107,14 +113,27 @@ private:
       right->m_pParent = parent;
   }
 
-  /** Libera los nodos internos del subárbol y conserva las hojas. */
-  static void drop_internals(NodePtr node) {
-    if (!node || node->is_leaf())
-      return;
-    drop_internals(node->m_pChild[0]);
-    drop_internals(node->m_pChild[1]);
-    node->m_pChild[0] = node->m_pChild[1] = nullptr;
-    delete node;
+  /** Hijo por el que continúa la columna derecha: el derecho, o el izquierdo si el nodo duplicó al impar. */
+  static NodePtr spine_child(const Node *node) {
+    return node->m_pChild[1] ? node->m_pChild[1] : node->m_pChild[0];
+  }
+
+  /** Libera los nodos internos desde @p top bajando por la columna derecha hasta @p stop (sin incluirlo). Los hijos no se liberan. */
+  static void release_spine(NodePtr top, const Node *stop) {
+    while (top != stop) {
+      NodePtr next = spine_child(top);
+      top->m_pChild[0] = top->m_pChild[1] = nullptr;
+      delete top;
+      top = next;
+    }
+  }
+
+  /** Enlaza el padre de los hijos de cada nodo de la columna derecha, desde @p top hasta @p stop (sin incluirlo). */
+  static void adopt_spine(NodePtr top, const Node *stop) {
+    for (NodePtr node = top; node != stop; node = spine_child(node))
+      for (NodePtr child : node->m_pChild)
+        if (child)
+          child->m_pParent = node;
   }
 
   /** Libera los subárboles del nivel @p level a partir de la posición @p from. */
@@ -232,18 +251,49 @@ public:
     return this->m_root->getValue();
   }
 
-  // shortcut: reconstruye todo el arbol (O(n) hashes); si falla, el arbol queda vacio. Pasar a append incremental (O(log n)) si n es grande.
-  /** Añade un bloque al final y reconstruye los nodos internos. */
+  /**
+   * Añade un bloque al final. Las hojas se agrupan en subárboles perfectos según los bits de n (los "picos");
+   * solo se rehace la columna derecha que los une, así que cuesta O(log n) hashes. Si falla, el árbol no cambia.
+   */
   void push_back(const value_type &block) {
     std::lock_guard lock(this->m_mutex);
-    Ref index = Ref(m_leaves.size());
-    std::unique_ptr<Node> node(new Node(Hasher::leaf(block), index));
-    m_leaves.push_back(node.get(), index);
-    node.release();
-    drop_internals(std::exchange(this->m_root, nullptr));
-    for (std::size_t i = 0; i < m_leaves.size(); ++i)
-      m_leaves.at(i).getValue()->m_pParent = nullptr;
-    build();
+    constexpr std::size_t MaxPeaks = sizeof(std::size_t) * 8;
+    const std::size_t n = m_leaves.size();
+    Ref index = Ref(n);
+    std::unique_ptr<Node> leaf(new Node(Hasher::leaf(block), index));
+
+    NodePtr peak[MaxPeaks];
+    std::size_t height[MaxPeaks];
+    std::size_t peaks = 0;
+    for (std::size_t bit = MaxPeaks, start = 0; bit-- > 0;)
+      if ((n >> bit) & 1) {
+        NodePtr node = m_leaves.at(start).getValue();
+        for (std::size_t i = 0; i < bit; ++i)
+          node = node->m_pParent;
+        peak[peaks] = node;
+        height[peaks++] = bit;
+        start += std::size_t(1) << bit;
+      }
+
+    NodePtr top = leaf.get();
+    [[maybe_unused]] std::size_t top_height = 0;
+    try {
+      for (std::size_t i = peaks; i-- > 0;) {
+        if constexpr (dup_odd)
+          for (; top_height < height[i]; ++top_height)
+            top = make_parent(top, nullptr);
+        top = make_parent(peak[i], top);
+        top_height = height[i] + 1;
+      }
+      m_leaves.push_back(leaf.get(), index);
+    } catch (...) {
+      release_spine(top, leaf.get());
+      throw;
+    }
+    release_spine(std::exchange(this->m_root, top), peaks ? peak[peaks - 1] : nullptr);
+    top->m_pParent = nullptr;
+    adopt_spine(top, leaf.get());
+    leaf.release();
   }
 
   /** Equivale a push_back(). */

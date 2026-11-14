@@ -746,7 +746,7 @@ void DemoHashTableStepByStep() {
     for (std::string key : {"ana", "luis", "eva", "juan", "rosa", "pedro", "maria", "jose"}) {
         std::string title = "tabla[\"" + key + "\"] = " + std::to_string(age);
         AVLStep(table, title, [&](auto& t, auto& s) {
-            s.insert_unique(key, 0);
+            s.try_insert(key, 0);
             t[key] = age;
         });
         ++age;

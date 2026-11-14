@@ -302,16 +302,6 @@ public:
     }
 
     /**
-     * Inserta el valor solo si no hay uno equivalente.
-     * @return Puntero al valor guardado y si hubo inserción.
-     */
-    std::pair<const value_type*, bool> insert_unique(const value_type& value, const ref_type& ref) {
-        std::lock_guard lock(this->m_mutex);
-        auto [node, inserted] = internal_insert(value, ref, true);
-        return {&node->getValue(), inserted};
-    }
-
-    /**
      * Elimina un nodo con valor equivalente a @p value.
      * @return `false` si no existía.
      */
