@@ -54,44 +54,21 @@ public:
 
 private:
     template <typename T>
-    static void write_elem(std::ostream& os, const T& val) {
-        if constexpr (std::is_same_v<T, std::string>) {
-            os << std::quoted(val);
-        } else {
-            os << val;
-        }
-    }
-
-    template <typename T>
-    static void read_elem(std::istream& is, T& val) {
-        if constexpr (std::is_same_v<T, std::string>) {
-            is >> std::quoted(val);
-        } else {
-            is >> val;
-        }
+    static decltype(auto) elem(T& val) {
+        if constexpr (std::is_same_v<std::remove_const_t<T>, std::string>) return std::quoted(val);
+        else return val;
     }
 
 public:
     /** @brief Serializa la entrada con formato `(clave:valor)`. */
     friend std::ostream& operator<<(std::ostream& os, const HashEntry& entry) {
-        os << "(";
-        write_elem(os, entry.m_key);
-        os << ":";
-        write_elem(os, entry.m_value);
-        os << ")";
-        return os;
+        return os << "(" << elem(entry.m_key) << ":" << elem(entry.m_value) << ")";
     }
 
     /** @brief Deserializa una entrada con formato `(clave:valor)`. */
     friend std::istream& operator>>(std::istream& is, HashEntry& entry) {
-
         Delim open_d, sep, close_d;
-        is >> open_d;
-        read_elem(is, entry.m_key);
-        is >> sep;
-        read_elem(is, entry.m_value);
-        is >> close_d;
-        return is;
+        return is >> open_d >> elem(entry.m_key) >> sep >> elem(entry.m_value) >> close_d;
     }
 };
 
