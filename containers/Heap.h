@@ -1,145 +1,152 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
-#include "GeneralContainer.h"
-#include "vector.h"
 
-template <typename T>
-struct HeapTraits {
-    using Node              = GeneralNode<T>;
-    using ForwardIterator   = VectorForwardIterator<Node>;
-};
+#include "traversalops.h"
+#include "../types.h"
+#include <cstddef>
+#include <initializer_list>
+#include <mutex>
+#include <stdexcept>
+#include <utility>
 
-template <typename T>
-struct HeapAscTraits : public AscendingTraits<T>, public HeapTraits<T> {};
+/**
+ * Heap binario guardado en un arreglo; la raíz es el elemento que el comparador pone primero.
+ * @tparam Traits Tipos de valor, nodo, comparador y almacenamiento.
+ * @tparam Ops Mixins de recorrido, impresión y lectura.
+ */
+template <typename Traits, typename Ops = SearchTraversalOps> class Heap : public Ops {
 
-template <typename T>
-struct HeapDescTraits : public DescendingTraits<T>, public HeapTraits<T> {};
-
-template <typename Traits, template <typename> typename... Mixins>
-class BaseHeap;
-
-template <typename Traits>
-using Heap = BaseHeap<Traits, Callable, Applicable, Printable, Readable>;
-
-template <typename Traits, template <typename> typename... Mixins>
-class BaseHeap : public GeneralContainer<Traits, Mixins...> {
 public:
-    using MySelf = BaseHeap;
-    using Parent = GeneralContainer<Traits, Mixins...>;
-    using typename Parent::value_type;
-    using typename Parent::Node;
-    using typename Parent::NodePtr;
-    using typename Parent::ForwardIterator;
+    using value_type = typename Traits::value_type;
+    using Node = typename Traits::Node;
     using Compare = typename Traits::Compare;
-protected:
-    using Parent::Parent;
-    using Parent::m_mutex;
-    Vector<VectorAscTraits<value_type>> m_data;
+    using Storage = typename Traits::Storage;
+    using ForwardIterator = typename Traits::ForwardIterator;
+    using BackwardIterator = typename Traits::BackwardIterator;
+
+private:
+    Storage m_data;
+    Compare m_comp;
+
+    /** Indica si el elemento en @p a debe estar por encima del elemento en @p b. */
+    bool before(size_t a, size_t b) const { return m_comp(m_data[a].getValue(), m_data[b].getValue()); }
+
+    /** Sube el elemento en @p index hasta restaurar la propiedad de heap. */
+    void HeapifyUp(size_t index) {
+        while (index > 0) {
+            const auto parent = (index - 1) / 2;
+            if (!before(index, parent)) break;
+            std::swap(m_data[index], m_data[parent]);
+            index = parent;
+        }
+    }
+
+    /** Baja el elemento en @p index hasta restaurar la propiedad de heap. */
+    void HeapifyDown(size_t index) {
+        const auto size = m_data.size();
+        while (index < size / 2) {
+            const auto left = 2 * index + 1;
+            const auto right = left + 1;
+            auto best = right < size && before(right, left) ? right : left;
+            if (!before(best, index)) break;
+            std::swap(m_data[index], m_data[best]);
+            index = best;
+        }
+    }
+
+    /**
+     * Comprueba que haya elementos.
+     * @throws std::out_of_range si el heap está vacío.
+     */
+    void ensure_not_empty() const {
+        if (m_data.empty()) throw std::out_of_range("Heap vacio");
+    }
+
 public:
-    BaseHeap() = default;
-    BaseHeap(const BaseHeap& other) { *this = other; }
-    BaseHeap(BaseHeap&& other) noexcept { *this = std::move(other); }
-    virtual ~BaseHeap() { clear(); }
+    /** Crea un heap vacío. */
+    Heap() = default;
 
-    BaseHeap& operator=(const BaseHeap& other) {
-        this->copy_from(other);
-        return *this;
+    /** Crea un heap insertando los pares (valor, ref) dados. */
+    Heap(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
+
+    /** Vista del heap como árbol para visualization.h; los nodos se identifican por su índice. */
+    struct View {
+        using Handle = size_t;
+        const Storage* data;
+
+        /** Índice de la raíz. */
+        Handle root() const { return 0; }
+        /** Índice del hijo izquierdo (@p side falso) o derecho (@p side verdadero). */
+        Handle child(Handle i, bool side) const { return 2 * i + 1 + side; }
+        /** Indica si el índice corresponde a un elemento. */
+        bool valid(Handle i) const { return i < data->size(); }
+        /** Escribe el texto del nodo. */
+        void label(std::ostream& os, Handle i) const { os << (*data)[i]; }
+    };
+
+    /** Devuelve la vista de árbol que usa `print_tree`. */
+    View tree_view() const { return View{&m_data}; }
+
+    /** Iterador al primer elemento en el orden del arreglo, que no es el orden de prioridad. */
+    ForwardIterator begin() const { return m_data.begin(); }
+    /** Iterador de fin. */
+    ForwardIterator end() const { return m_data.end(); }
+    /** Iterador inverso al último elemento del arreglo. */
+    BackwardIterator rbegin() const { return m_data.rbegin(); }
+    /** Iterador inverso de fin. */
+    BackwardIterator rend() const { return m_data.rend(); }
+
+    /** Inserta un elemento en O(log n). */
+    void push(const value_type& value, Ref ref) {
+        std::lock_guard lock(this->m_mutex);
+        m_data.push_back(value, ref);
+        HeapifyUp(m_data.size() - 1);
     }
-    BaseHeap& operator=(BaseHeap&& other) noexcept {
-        this->move_from(other, [&]{ m_data = std::move(other.m_data); });
-        return *this;
+
+    /** Equivale a push(); existe para poder leer el heap desde un stream. */
+    void push_back(const value_type& value, Ref ref) { push(value, ref); }
+
+    /**
+     * Quita y devuelve la raíz.
+     * @throws std::out_of_range si el heap está vacío.
+     */
+    Node pop() {
+        std::lock_guard lock(this->m_mutex);
+        ensure_not_empty();
+        Node root = m_data[0];
+        std::swap(m_data[0], m_data[m_data.size() - 1]);
+        m_data.pop_back();
+        if (!m_data.empty()) HeapifyDown(0);
+        return root;
     }
 
-    void push_back(const value_type& value, Ref ref) override { push(value, ref); }
-
-    void clear() override {
-        std::lock_guard lock(m_mutex);
-        m_data.clear();
+    /**
+     * Devuelve la raíz sin quitarla.
+     * @throws std::out_of_range si el heap está vacío.
+     */
+    Node top() const {
+        std::lock_guard lock(this->m_mutex);
+        ensure_not_empty();
+        return m_data[0];
     }
 
+    /** Indica si no hay elementos. */
+    bool empty() const {
+        std::lock_guard lock(this->m_mutex);
+        return m_data.empty();
+    }
+
+    /** Cantidad de elementos. */
     size_t size() const {
-        std::lock_guard lock(m_mutex);
+        std::lock_guard lock(this->m_mutex);
         return m_data.size();
     }
 
-    void push(const value_type &value, Ref ref);
-    void HeapifyUp(size_t index);
-    Node pop();
-    void HeapifyDown(size_t index);
-
-    template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args&&... args);
-
-    ForwardIterator begin() const override { return m_data.begin(); }
-    ForwardIterator end()   const override { return m_data.end();   }
-};
-
-template <typename Traits, template <typename> typename... Mixins>
-void BaseHeap<Traits, Mixins...>::push(const value_type &value, Ref ref) {
-    std::lock_guard lock(m_mutex);
-    m_data.push_back(value, ref);
-    HeapifyUp(m_data.size() - 1);
-}
-
-template <typename Traits, template <typename> typename... Mixins>
-void BaseHeap<Traits, Mixins...>::HeapifyUp(size_t index) {
-    while (index > 0) {
-        size_t parentIndex = (index - 1) / 2;
-        if (Compare()(m_data[index].getValue(), m_data[parentIndex].getValue())) {
-            std::swap(m_data[index], m_data[parentIndex]);
-            index = parentIndex;
-        } else {
-            break;
-        }
+    /** Elimina todos los elementos. */
+    void clear() {
+        std::lock_guard lock(this->m_mutex);
+        m_data.clear();
     }
-}
-
-template <typename Traits, template <typename> typename... Mixins>
-auto BaseHeap<Traits, Mixins...>::pop() -> Node {
-    std::lock_guard lock(m_mutex);
-    static Node nullNode;
-    if (m_data.empty()) return nullNode;
-    Node root = m_data[0];
-    std::swap(m_data[0], m_data[m_data.size() - 1]);
-    m_data.pop_back();
-
-    if (!m_data.empty()) HeapifyDown(0);
-    return root;
-}
-
-template <typename Traits, template <typename> typename... Mixins>
-void BaseHeap<Traits, Mixins...>::HeapifyDown(size_t index) {
-    while (true) {
-        size_t l = (index * 2) + 1;
-        size_t r = l + 1;
-        size_t best = index;
-        if (l < size() && Compare()(m_data[l].getValue(), m_data[best].getValue())) best = l;
-        if (r < size() && Compare()(m_data[r].getValue(), m_data[best].getValue())) best = r;
-        if (best == index) break;
-        std::swap(m_data[best], m_data[index]);
-        index = best;
-    }
-}
-
-template <typename Traits, template <typename> typename... Mixins>
-template <typename Func, typename... Args>
-void BaseHeap<Traits, Mixins...>::ApplyFunction(Func func, Args&&... args) {
-    std::lock_guard lock(m_mutex);
-    Parent::ApplyFunction(func, std::forward<Args>(args)...);
-    for (size_t i=1; i<size(); ++i) HeapifyUp(i);
-}
-
-class MinHeap : public Heap<HeapAscTraits<TX>> {
-public:
-    using Parent = Heap<HeapAscTraits<TX>>;
-    using Parent::Parent;
-    MinHeap() = default;
-};
-class MaxHeap : public Heap<HeapDescTraits<TX>> {
-public:
-    using Parent = Heap<HeapDescTraits<TX>>;
-    using Parent::Parent;
-    MaxHeap() = default;
 };
 
 #endif // __HEAP_H__
