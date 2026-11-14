@@ -1,6 +1,6 @@
 #include "Demos.h"
 #include <iostream>
-#include <map>
+#include "containers/hashtable.h"
 #include <string_view>
 
 // Compilar asi: make
@@ -10,7 +10,7 @@
  * @return 0 si todo fue bien, 1 si algún nombre de demo no existe.
  */
 int main(int argc, char *argv[]) {
-  const std::map<std::string_view, void (*)()> demos{
+  const HashTable<std::string_view, void (*)()> demos{
       {"vector", DemoVector},
       {"race", DemoRaceCondition},
       {"list", DemoLinkedList},
