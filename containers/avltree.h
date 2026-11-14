@@ -8,12 +8,20 @@
 #include <initializer_list>
 #include <utility>
 
-template <typename T>
-class AVLNode : public BaseBinaryTreeNode<T, AVLNode<T>> {
+// Nodo AVL extensible (CRTP): Derived permite que los hijos tengan el tipo final
+template <typename T, typename Derived>
+class BaseAVLNode : public BaseBinaryTreeNode<T, Derived> {
 public:
-    using Parent = BaseBinaryTreeNode<T, AVLNode<T>>;
+    using Parent = BaseBinaryTreeNode<T, Derived>;
     using Parent::Parent;
     size_t m_height = 1;
+};
+
+template <typename T>
+class AVLNode : public BaseAVLNode<T, AVLNode<T>> {
+public:
+    using Parent = BaseAVLNode<T, AVLNode<T>>;
+    using Parent::Parent;
 };
 
 template <typename T>
@@ -70,7 +78,13 @@ public:
         return isBalancedNode(this->m_root);
     }
 
+    // Hook: el valor del nodo se modificó en el lugar (lo usa Map).
+    virtual void onValueChanged(NodePtr) {}
+
 protected:
+    // Hook: la altura o los hijos del nodo pudieron cambiar.
+    virtual void onNodeChanged(NodePtr) {}
+
     NodePtr insertImpl(const value_type& value, Ref ref) override {
         NodePtr node = Parent::insertImpl(value, ref);
         rebalanceFrom(node->m_parent, true);
@@ -113,6 +127,8 @@ protected:
 
         updateHeight(x);
         updateHeight(y);
+        onNodeChanged(x);
+        onNodeChanged(y);
         return y;
     }
 
@@ -122,6 +138,7 @@ protected:
         while (node) {
             const size_t previous = node->m_height;
             updateHeight(node);
+            onNodeChanged(node);
             const std::ptrdiff_t factor = balanceFactor(node);
 
             if (factor > 1) {
