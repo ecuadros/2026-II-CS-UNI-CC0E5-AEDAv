@@ -17,6 +17,7 @@
 #include "containers/Heap.h"
 #include "containers/binarytree.h"
 #include "containers/avltree.h"
+#include "containers/map.h"
 #include "utilities/printcolored.h"
 #include "Demos.h"
 using namespace std;
@@ -500,3 +501,92 @@ void DemoAVLTree() {
     AVLTree<AVLTreeDescTraits<TX>> desc_tree;
     TestAVLTree(desc_tree, "avltree_desc.txt");
 }
+
+template <typename MapContainer>
+void PrintMapLookup(const MapContainer &dict, const typename MapContainer::Key &key) {
+    cout << "contains(" << key << "): " << boolalpha << dict.contains(key);
+    if (auto value = dict.get(key)){
+        cout << ", get: " << *value;
+    }
+    cout << ", size: " << dict.size() << endl;
+}
+
+template <typename MapContainer>
+void PrintMapKeys(const MapContainer &dict) {
+    cout << "Claves ascendentes:";
+    for (auto &node : dict){
+        cout << " " << node.value().key();
+    }
+    cout << endl;
+
+    cout << "Claves descendentes:";
+    for (auto it = dict.rbegin(); it != dict.rend(); ++it){
+        cout << " " << (*it).value().key();
+    }
+    cout << endl;
+}
+
+template <typename MapContainer>
+void TestMap(initializer_list<pair<typename MapContainer::Key, typename MapContainer::Value>> entries,
+             const typename MapContainer::Key &newKey,
+             const typename MapContainer::Value &newValue,
+             const string &filename) {
+    using Entry = typename MapContainer::value_type;
+    const auto &firstKey = entries.begin()->first;
+
+    MapContainer dict(entries);
+    cout << "Construido con lista de inicializacion: " << dict << endl;
+    PrintMapKeys(dict);
+
+    // operator[]: crea el nodo con Value{} si la clave no existe
+    PrintMapLookup(dict, newKey);
+    dict[newKey];
+    cout << "Tras dict[" << newKey << "]: " << dict << endl;
+    dict[newKey] = newValue;
+    cout << "Tras dict[" << newKey << "] = " << newValue << ": " << dict << endl;
+    PrintMapLookup(dict, newKey);
+
+    // push_back: reemplaza el valor si la clave ya existe
+    dict.push_back(Entry(firstKey, newValue));
+    cout << "Tras push_back(" << firstKey << ", " << newValue << "): " << dict << endl;
+    cout << "at(" << firstKey << "): " << dict.at(firstKey) << endl;
+
+    // Persistencia
+    {
+        ofstream out(filename, ios::trunc);
+        out << dict;
+    }
+    MapContainer loaded;
+    ifstream in(filename);
+    in >> loaded;
+    cout << "Leido desde " << filename << ": " << loaded << endl;
+
+    // Copia y movimiento
+    MapContainer copied(loaded);
+    MapContainer moved(std::move(copied));
+    cout << "Copia movida: " << moved << ", origen tras mover: " << copied << endl;
+
+    // Borrado
+    cout << "erase(" << newKey << "): " << boolalpha << moved.erase(newKey) << ", de nuevo: " << moved.erase(newKey) << endl;
+    cout << "Tras erase: " << moved << endl;
+    try {
+        moved.at(newKey);
+    } catch (const out_of_range &e) {
+        cout << "Error esperado: " << e.what() << endl;
+    }
+
+    moved.clear();
+    cout << "Tras clear: " << moved << ", empty: " << boolalpha << moved.empty() << endl;
+}
+
+
+void DemoMap() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para Map<string, int>", Color::Yellow);
+    TestMap<Map<string, int>>({{"pera", 3}, {"manzana", 5}, {"uva", 12}, {"kiwi", 7}}, "mango", 9, "map_str_int.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para Map<int, string>", Color::Yellow);
+    TestMap<Map<int, string>>({{50, "cincuenta"}, {20, "veinte"}, {80, "ochenta"}, {10, "diez"}}, 30, "treinta y uno", "map_int_str.txt");
+}
+
