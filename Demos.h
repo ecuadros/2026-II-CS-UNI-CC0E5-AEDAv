@@ -9,5 +9,8 @@ void DemoRaceCondition();
 void DemoLinkedList();
 void DemoHeap();
 void DemoBinaryTree();
+void DemoAVLTree();
+void DemoMap();
+void DemoMerkleTree();
 
 #endif // __DEMOS_H__

@@ -3,6 +3,11 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <initializer_list>
+#include <stdexcept>
+#include <utility>
+#include <sstream>
+#include <unordered_map>
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
@@ -11,6 +16,9 @@
 #include "containers/circulardoublelinkedlist.h"
 #include "containers/Heap.h"
 #include "containers/binarytree.h"
+#include "containers/avltree.h"
+#include "containers/map.h"
+#include "containers/merkletree.h"
 #include "utilities/printcolored.h"
 #include "Demos.h"
 using namespace std;
@@ -98,8 +106,12 @@ void TestTraversal(Container &container) {
     // nodo cuyo valor sea mayor que el del primer elemento del container.
     if (!container.empty()) {
         auto threshold = (*container.begin()).getValue();
-        Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
-        cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
+        try {
+            Node &found = container.FirstThat(IsGreaterThan<Node, decltype(threshold)>, threshold);
+            cout << "FirstThat (primer valor > " << threshold << "): " << found << endl;
+        } catch (const runtime_error &e) {
+            cout << "FirstThat: ningun valor es mayor que " << threshold << endl;
+        }
     }
 }
 
@@ -327,31 +339,479 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
 
     // Pruebas de insercion y persistencia
     TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}}, filename);
+
+    {
+        ofstream out(filename, ios::trunc);
+        tree.save(out);
+    }
+
+    cout << "Arbol tras insertar:" << endl;
+    tree.PrintVertical();
+
     // Recorrido in-order
     TestTraversal(tree);
 
     tree.ApplyFunction(AddOne);
     cout << "Arbol tras usar AddOne: " << tree << endl;
+    tree.PrintVertical();
+
     tree.ApplyFunction(AddX<TX>, TX(10));
     cout << "Arbol tras usar AddX(10): " << tree << endl;
+    tree.PrintVertical();
 
     tree.clear();
     cout << "Arbol luego de usar clear: " << tree << endl;
 
-    // lectura
+    // Lectura
     TreeContainer new_tree;
     ifstream in(filename);
     in >> new_tree;
     in.close();
     cout << "Arbol leido desde archivo: " << new_tree << endl;
+    new_tree.PrintVertical();
 
     tree = new_tree;
     cout << "Arbol tras operator=: " << tree << endl;
+    tree.PrintVertical();
+
+    // Eliminacion: nodo sin hijos
+    tree.remove(10);
+    cout << "Arbol tras eliminar 10 (sin hijos): " << tree << endl;
+    tree.PrintVertical();
+
+    // Eliminacion: nodo con un hijo
+    tree.remove(20);
+    cout << "Arbol tras eliminar 20 (un hijo): " << tree << endl;
+    tree.PrintVertical();
+
+    // Eliminacion: raiz con dos hijos
+    tree.remove(50);
+    cout << "Arbol tras eliminar 50 (dos hijos): " << tree << endl;
+    tree.PrintVertical();
+
+    // Eliminacion: valor inexistente
+    try {
+        tree.remove(999);
+    } catch (const out_of_range &e) {
+        cout << "Error esperado: " << e.what() << endl;
+    }
 }
 
 void DemoBinaryTree() {
     cout << "\n";
-    PrintColored(cout, "Pruebas para BinaryTree", Color::Yellow);
-    BinaryTree<BinaryTreeAscTraits<TX>> tree;
-    TestBinaryTree(tree, "binarytree.txt");
+    PrintColored(cout, "Pruebas para BinaryTree ascendente", Color::Yellow);
+    BinaryTree<BinaryTreeAscTraits<TX>> asc_tree;
+    TestBinaryTree(asc_tree, "binarytree_asc.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para BinaryTree descendente", Color::Yellow);
+    BinaryTree<BinaryTreeDescTraits<TX>> desc_tree;
+    TestBinaryTree(desc_tree, "binarytree_desc.txt");
+}
+
+template <typename TreeContainer>
+void PrintAVLStatus(const TreeContainer &tree) {
+    cout << "Altura: " << tree.height()
+         << ", balanceado: " << boolalpha << tree.isBalanced() << endl;
+}
+
+template <typename TreeContainer>
+void TestAVLInsertion(initializer_list<TX> values) {
+    TreeContainer tree;
+    cout << "Insertando:";
+    for (TX value : values) {
+        cout << " " << value;
+        tree.insert(value, Ref(value));
+    }
+    cout << endl;
+
+    tree.PrintVertical();
+    PrintAVLStatus(tree);
+}
+
+template <typename TreeContainer>
+void TestAVLTree(TreeContainer &tree, const string &filename) {
+    // Pruebas generales: persistencia, recorridos, copia y eliminacion
+    TestBinaryTree(tree, filename);
+
+    // Los cuatro casos de rotacion
+    cout << "\nCasos de rotacion:" << endl;
+    TestAVLInsertion<TreeContainer>({10, 20, 30});
+    TestAVLInsertion<TreeContainer>({30, 20, 10});
+    TestAVLInsertion<TreeContainer>({30, 10, 20});
+    TestAVLInsertion<TreeContainer>({10, 30, 20});
+
+    // Insercion secuencial: en un arbol binario formaria una diagonal
+    TreeContainer sequential;
+    for (TX value = 1; value <= 7; ++value)
+        sequential.insert(value, Ref(value));
+
+    cout << "\nInsercion secuencial del 1 al 7: " << sequential << endl;
+    sequential.PrintVertical();
+    PrintAVLStatus(sequential);
+
+    // Copia y movimiento
+    TreeContainer copied(sequential);
+    cout << "\nCopia: " << copied << endl;
+    copied.PrintVertical();
+    PrintAVLStatus(copied);
+
+    TreeContainer moved(std::move(copied));
+    cout << "\nTras mover la copia: " << moved << endl;
+    moved.PrintVertical();
+    PrintAVLStatus(moved);
+
+    // Las eliminaciones vacian un lado y fuerzan una rotacion
+    moved.remove(1);
+    moved.remove(3);
+    moved.remove(2);
+    cout << "\nTras eliminar 1, 3 y 2: " << moved << endl;
+    moved.PrintVertical();
+    PrintAVLStatus(moved);
+
+    // Prueba de carga
+    TreeContainer large;
+    for (TX value = 1; value <= 1000; ++value)
+        large.insert(value, Ref(value));
+
+    cout << "\n1000 nodos insertados" << endl;
+    PrintAVLStatus(large);
+
+    for (TX value = 2; value <= 1000; value += 2)
+        large.remove(value);
+
+    cout << "Tras eliminar los pares, nodos: " << large.size() << endl;
+    PrintAVLStatus(large);
+
+    // Eliminar un valor inexistente
+    try {
+        large.remove(9999);
+    } catch (const out_of_range &e) {
+        cout << "Error esperado: " << e.what() << endl;
+    }
+}
+
+void DemoAVLTree() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para AVLTree ascendente", Color::Yellow);
+    AVLTree<AVLTreeAscTraits<TX>> asc_tree;
+    TestAVLTree(asc_tree, "avltree_asc.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para AVLTree descendente", Color::Yellow);
+    AVLTree<AVLTreeDescTraits<TX>> desc_tree;
+    TestAVLTree(desc_tree, "avltree_desc.txt");
+}
+
+template <typename MapContainer>
+void PrintMapLookup(const MapContainer &dict, const typename MapContainer::Key &key) {
+    cout << "contains(" << key << "): " << boolalpha << dict.contains(key);
+    if (auto value = dict.get(key)){
+        cout << ", get: " << *value;
+    }
+    cout << ", size: " << dict.size() << endl;
+}
+
+template <typename MapContainer>
+void PrintMapKeys(const MapContainer &dict) {
+    cout << "Claves ascendentes:";
+    for (auto &node : dict){
+        cout << " " << node.value().key();
+    }
+    cout << endl;
+
+    cout << "Claves descendentes:";
+    for (auto it = dict.rbegin(); it != dict.rend(); ++it){
+        cout << " " << (*it).value().key();
+    }
+    cout << endl;
+}
+
+template <typename MapContainer>
+void TestMap(initializer_list<pair<typename MapContainer::Key, typename MapContainer::Value>> entries,
+             const typename MapContainer::Key &newKey,
+             const typename MapContainer::Value &newValue,
+             const string &filename) {
+    using Entry = typename MapContainer::value_type;
+    const auto &firstKey = entries.begin()->first;
+
+    MapContainer dict(entries);
+    cout << "Construido con lista de inicializacion: " << dict << endl;
+    PrintMapKeys(dict);
+
+    // operator[]: crea el nodo con Value{} si la clave no existe
+    PrintMapLookup(dict, newKey);
+    dict[newKey];
+    cout << "Tras dict[" << newKey << "]: " << dict << endl;
+    dict[newKey] = newValue;
+    cout << "Tras dict[" << newKey << "] = " << newValue << ": " << dict << endl;
+    PrintMapLookup(dict, newKey);
+
+    // push_back: reemplaza el valor si la clave ya existe
+    dict.push_back(Entry(firstKey, newValue));
+    cout << "Tras push_back(" << firstKey << ", " << newValue << "): " << dict << endl;
+    cout << "at(" << firstKey << "): " << dict.at(firstKey) << endl;
+
+    // Persistencia
+    {
+        ofstream out(filename, ios::trunc);
+        out << dict;
+    }
+    MapContainer loaded;
+    ifstream in(filename);
+    in >> loaded;
+    cout << "Leido desde " << filename << ": " << loaded << endl;
+
+    // Copia y movimiento
+    MapContainer copied(loaded);
+    MapContainer moved(std::move(copied));
+    cout << "Copia movida: " << moved << ", origen tras mover: " << copied << endl;
+
+    // Borrado
+    cout << "erase(" << newKey << "): " << boolalpha << moved.erase(newKey) << ", de nuevo: " << moved.erase(newKey) << endl;
+    cout << "Tras erase: " << moved << endl;
+    try {
+        moved.at(newKey);
+    } catch (const out_of_range &e) {
+        cout << "Error esperado: " << e.what() << endl;
+    }
+
+    moved.clear();
+    cout << "Tras clear: " << moved << ", empty: " << boolalpha << moved.empty() << endl;
+}
+
+
+void DemoMap() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para Map<string, int>", Color::Yellow);
+    TestMap<Map<string, int>>({{"pera", 3}, {"manzana", 5}, {"uva", 12}, {"kiwi", 7}}, "mango", 9, "map_str_int.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para Map<int, string>", Color::Yellow);
+    TestMap<Map<int, string>>({{50, "cincuenta"}, {20, "veinte"}, {80, "ochenta"}, {10, "diez"}}, 30, "treinta y uno", "map_int_str.txt");
+}
+
+// ---------------------------------------------------------------------------
+// Merkle Tree (Merkle-AVL)
+// ---------------------------------------------------------------------------
+
+template <typename T>
+string ToText(const T &value) {
+    ostringstream text;
+    text << value;
+    return text.str();
+}
+
+// Oráculo: la raíz incremental (caché) debe coincidir con el recálculo completo
+template <typename MerkleContainer>
+typename MerkleContainer::Digest CheckMerkle(const MerkleContainer &tree, const string &label) {
+    const auto root = tree.rootHash();
+    const bool ok = tree.verify();
+    cout << label << " -> raiz: " << MerkleContainer::toHex(root)
+         << ", verify: " << boolalpha << ok << endl;
+    if (!ok)
+        throw logic_error("Merkle: la raiz incremental no coincide con el recalculo (" + label + ")");
+    return root;
+}
+
+template <typename MapContainer>
+void PrintMerkleProofs(const MapContainer &dict) {
+    const auto root = dict.rootHash();
+    cout << "Pruebas de inclusion:";
+    for (auto &node : dict) {
+        const auto &entry = node.getValue();
+        const auto proof = dict.proof(entry.key());
+        cout << " " << entry.key() << "(" << proof.path.size() << " pasos)="
+             << boolalpha << MapContainer::verifyProof(root, entry.key(), entry.value(), proof);
+    }
+    cout << endl;
+}
+
+template <typename MapContainer>
+void TestMerkleMap(initializer_list<pair<typename MapContainer::Key, typename MapContainer::Value>> entries,
+                   const typename MapContainer::Key &newKey,
+                   const typename MapContainer::Value &newValue,
+                   const string &filename) {
+    using Entry = typename MapContainer::value_type;
+    const auto &firstKey   = entries.begin()->first;
+    const auto &firstValue = entries.begin()->second;
+
+    MapContainer dict(entries);
+    cout << "Construido con lista de inicializacion: " << dict << endl;
+    dict.PrintVertical();
+    const auto original = CheckMerkle(dict, "Inicial");
+    cout << "Altura: " << dict.height() << ", balanceado: " << boolalpha << dict.isBalanced() << endl;
+
+    // Pruebas de inclusión válidas y alteradas
+    PrintMerkleProofs(dict);
+    auto proof = dict.proof(firstKey);
+    cout << "Proof de " << firstKey << " con valor falso (" << newValue << "): "
+         << boolalpha << MapContainer::verifyProof(original, firstKey, newValue, proof) << endl;
+    if (!proof.path.empty()) proof.path.front().sibling ^= 1;
+    else proof.left ^= 1;
+    cout << "Proof de " << firstKey << " con un hash alterado: "
+         << boolalpha << MapContainer::verifyProof(original, firstKey, firstValue, proof) << endl;
+    try {
+        dict.proof(newKey);
+    } catch (const out_of_range &e) {
+        cout << "Error esperado: " << e.what() << endl;
+    }
+
+    // Modificar un valor existente cambia la raíz; restaurarlo la recupera
+    dict[firstKey] = newValue;
+    const auto modified = CheckMerkle(dict, "Tras dict[" + ToText(firstKey) + "] = " + ToText(newValue));
+    cout << "La raiz cambio: " << boolalpha << (modified != original) << endl;
+    dict.push_back(Entry(firstKey, firstValue));
+    const auto restored = CheckMerkle(dict, "Tras push_back(" + ToText(firstKey) + ", " + ToText(firstValue) + ")");
+    cout << "Se recupera la raiz original: " << boolalpha << (restored == original) << endl;
+    dict.at(firstKey) = newValue;
+    const auto viaAt = CheckMerkle(dict, "Tras at(" + ToText(firstKey) + ") = " + ToText(newValue));
+    cout << "Igual que con operator[]: " << boolalpha << (viaAt == modified) << endl;
+    dict.at(firstKey) = firstValue;
+    CheckMerkle(dict, "Tras restaurar con at()");
+
+    // Insertar una clave nueva
+    dict[newKey] = newValue;
+    cout << "Tras dict[" << newKey << "] = " << newValue << ":" << endl;
+    dict.PrintVertical();
+    const auto withNew = CheckMerkle(dict, "Con clave nueva");
+    PrintMerkleProofs(dict);
+
+    // Copia (estructural) y movimiento
+    MapContainer copied(dict);
+    cout << "Copia:" << endl;
+    copied.PrintVertical();
+    const auto copiedRoot = CheckMerkle(copied, "Copia");
+    cout << "Misma raiz que el original: " << boolalpha << (copiedRoot == withNew) << endl;
+    MapContainer moved(std::move(copied));
+    const auto movedRoot = CheckMerkle(moved, "Movida");
+    cout << "Misma raiz tras mover: " << boolalpha << (movedRoot == withNew)
+         << ", origen tras mover: " << copied << " raiz " << MapContainer::toHex(copied.rootHash()) << endl;
+
+    // Persistencia: el contenido coincide, la forma (y raíz) puede no coincidir
+    {
+        ofstream out(filename, ios::trunc);
+        out << dict;
+    }
+    MapContainer loaded;
+    ifstream in(filename);
+    in >> loaded;
+    cout << "Leido desde " << filename << ": " << loaded << endl;
+    loaded.PrintVertical();
+    const auto loadedRoot = CheckMerkle(loaded, "Leido");
+    cout << "Mismo contenido: " << boolalpha << (ToText(loaded) == ToText(dict))
+         << ", misma raiz: " << (loadedRoot == withNew)
+         << " (la raiz depende de la forma del AVL, no solo del contenido)" << endl;
+
+    // Borrado
+    cout << "erase(" << newKey << "): " << boolalpha << dict.erase(newKey) << endl;
+    dict.PrintVertical();
+    CheckMerkle(dict, "Tras erase");
+    PrintMerkleProofs(dict);
+
+    dict.clear();
+    cout << "Tras clear: " << dict << ", raiz: " << MapContainer::toHex(dict.rootHash())
+         << ", verify: " << boolalpha << dict.verify() << endl;
+}
+
+template <typename TreeContainer>
+void TestMerkleInsertion(initializer_list<TX> values) {
+    TreeContainer tree;
+    cout << "Insertando:";
+    for (TX value : values) {
+        cout << " " << value;
+        tree.insert(value, Ref(value));
+    }
+    cout << endl;
+    tree.PrintVertical();
+    CheckMerkle(tree, "Rotacion");
+}
+
+template <typename TreeContainer>
+void TestMerkleAVLTree(const string &filename) {
+    // Los cuatro casos de rotación
+    cout << "Casos de rotacion:" << endl;
+    TestMerkleInsertion<TreeContainer>({10, 20, 30});
+    TestMerkleInsertion<TreeContainer>({30, 20, 10});
+    TestMerkleInsertion<TreeContainer>({30, 10, 20});
+    TestMerkleInsertion<TreeContainer>({10, 30, 20});
+
+    TreeContainer tree;
+    for (TX value = 1; value <= 7; ++value)
+        tree.insert(value, Ref(value));
+    cout << "\nInsercion secuencial del 1 al 7:" << endl;
+    tree.PrintVertical();
+    const auto root = CheckMerkle(tree, "1..7");
+
+    const auto proof = tree.proof(5);
+    cout << "Proof de 5: " << boolalpha << TreeContainer::verifyProof(root, 5, proof)
+         << ", con valor 6: " << TreeContainer::verifyProof(root, 6, proof) << endl;
+
+    // Copia estructural, movimiento y persistencia
+    TreeContainer copied(tree);
+    const auto copiedRoot = CheckMerkle(copied, "Copia");
+    cout << "Misma raiz que el original: " << boolalpha << (copiedRoot == root) << endl;
+    TreeContainer moved(std::move(copied));
+    const auto movedRoot = CheckMerkle(moved, "Movida");
+    cout << "Misma raiz tras mover: " << boolalpha << (movedRoot == root)
+         << ", origen tras mover: " << copied << endl;
+    {
+        ofstream out(filename, ios::trunc);
+        out << tree;
+    }
+    TreeContainer loaded;
+    ifstream in(filename);
+    in >> loaded;
+    cout << "Leido desde " << filename << ": " << loaded << endl;
+    loaded.PrintVertical();
+    const auto loadedRoot = CheckMerkle(loaded, "Leido");
+    cout << "Misma raiz tras leer: " << boolalpha << (loadedRoot == root) << endl;
+
+    // Eliminaciones que fuerzan rotaciones
+    tree.remove(1);
+    tree.remove(3);
+    tree.remove(2);
+    cout << "Tras eliminar 1, 3 y 2:" << endl;
+    tree.PrintVertical();
+    CheckMerkle(tree, "Tras eliminar");
+
+    // Modificación sin pasar por el contenedor: verify() la detecta
+    tree.ApplyFunction(AddOne);
+    cout << "Tras ApplyFunction(AddOne) (sin invalidar la cache): verify = "
+         << boolalpha << tree.verify() << endl;
+
+    // Prueba de carga con el oráculo tras cada mutación
+    TreeContainer large;
+    bool consistent = true;
+    for (TX value = 1; value <= 1000; ++value) {
+        large.insert(value, Ref(value));
+        consistent = consistent && large.verify();
+    }
+    for (TX value = 2; value <= 1000; value += 2) {
+        large.remove(value);
+        consistent = consistent && large.verify();
+    }
+    cout << "\n1000 inserciones y 500 eliminaciones, nodos: " << large.size()
+         << ", altura: " << large.height()
+         << ", balanceado: " << boolalpha << large.isBalanced()
+         << ", raiz consistente en cada paso: " << consistent << endl;
+    CheckMerkle(large, "Carga");
+}
+
+void DemoMerkleTree() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleAVLTree ascendente", Color::Yellow);
+    TestMerkleAVLTree<AscendingMerkleAVLTree<TX>>("merkletree_asc.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleAVLTree descendente", Color::Yellow);
+    TestMerkleAVLTree<DescendingMerkleAVLTree<TX>>("merkletree_desc.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleMap<string, int>", Color::Yellow);
+    TestMerkleMap<MerkleMap<string, int>>({{"pera", 3}, {"manzana", 5}, {"uva", 12}, {"kiwi", 7}}, "mango", 9, "merkle_str_int.txt");
+
+    cout << "\n";
+    PrintColored(cout, "Pruebas para MerkleMap<int, string>", Color::Yellow);
+    TestMerkleMap<MerkleMap<int, string>>({{50, "cincuenta"}, {20, "veinte"}, {80, "ochenta"}, {10, "diez"}}, 30, "treinta", "merkle_int_str.txt");
 }
