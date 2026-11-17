@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
+#include <istream>
 #include <iterator>
 #include <ostream>
 #include <sstream>
@@ -51,6 +52,26 @@ struct Sha256Digest {
       os << std::hex << std::setw(HexPerByte) << std::setfill('0')
          << HexValue(*it);
     return os.str();
+  }
+
+  /** Lee 64 dígitos hexadecimales en orden natural; si no son válidos, el stream queda en fallo y @p d no cambia. */
+  friend std::istream &operator>>(std::istream &is, Sha256Digest &d) {
+    Sha256Digest read;
+    is >> std::ws;
+    for (auto &byte : read.bytes) {
+      char digits[HexPerByte];
+      HexValue value = 0;
+      if (!is.read(digits, HexPerByte)) return is;
+      auto end = digits + HexPerByte;
+      auto result = std::from_chars(digits, end, value, HexBase);
+      if (result.ec != std::errc{} || result.ptr != end) {
+        is.setstate(std::ios::failbit);
+        return is;
+      }
+      byte = Byte(value);
+    }
+    d = read;
+    return is;
   }
 
   /** Escribe el digest en hexadecimal en su orden natural. */

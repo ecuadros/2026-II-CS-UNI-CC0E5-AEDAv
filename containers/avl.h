@@ -64,7 +64,7 @@ public:
  * @tparam Traits Tipos de valor, nodo, comparador e iteradores.
  * @tparam Ops Mixins de recorrido, impresión y lectura.
  */
-template <typename Traits, typename Ops = SearchTraversalOps>
+template <typename Traits, typename Ops>
 class AVLTree : public BinaryTree<Traits, Ops> {
 public:
   using Parent = BinaryTree<Traits, Ops>;

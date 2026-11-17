@@ -14,6 +14,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 /**
  * Hasher de Merkle basado en `std::hash`. No es criptográfico: sirve para demos y pruebas.
@@ -46,7 +47,7 @@ public:
   using Parent::Parent;
 };
 
-/** Operaciones del MerkleTree: recorridos, impresión y dibujo; sin lectura desde stream. */
+/** Operaciones del MerkleTree: recorridos, impresión y dibujo; la lectura la define MerkleTree::operator>>. */
 using MerkleTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
                                         RFirstThatOp, PrintableOp, VisualOp>;
 
@@ -195,13 +196,14 @@ public:
   /** Crea un árbol vacío. */
   MerkleTree() = default;
 
-  /** Construye el árbol con los bloques del rango [first, last). */
-  template <std::input_iterator It>
-  MerkleTree(It first, It last) {
+private:
+  /** Construye el árbol con una hoja por elemento del rango [first, last), cuyo hash lo da @p digest_of. */
+  template <std::input_iterator It, typename DigestOf>
+  MerkleTree(It first, It last, DigestOf digest_of) {
     try {
       for (; first != last; ++first) {
         Ref index = Ref(m_leaves.size());
-        std::unique_ptr<Node> node(new Node(Hasher::leaf(*first), index));
+        std::unique_ptr<Node> node(new Node(digest_of(*first), index));
         m_leaves.push_back(node.get(), index);
         node.release();
       }
@@ -211,6 +213,12 @@ public:
     }
     build();
   }
+
+public:
+  /** Construye el árbol con los bloques del rango [first, last). */
+  template <std::input_iterator It>
+  MerkleTree(It first, It last)
+      : MerkleTree(first, last, [](const value_type &block) { return Hasher::leaf(block); }) {}
 
   /** Construye el árbol con los bloques dados. */
   MerkleTree(std::initializer_list<value_type> blocks)
@@ -235,6 +243,35 @@ public:
     std::scoped_lock lock(this->m_mutex, other.m_mutex);
     std::swap(this->m_root, other.m_root);
     m_leaves.swap(other.m_leaves);
+  }
+
+  /**
+   * Lee el formato que escribe `operator<<`. Solo toma las hojas del texto, rehace los nodos internos y comprueba
+   * que coinciden con los del texto; si no, el stream queda en fallo y el árbol no cambia.
+   */
+  friend std::istream &operator>>(std::istream &is, MerkleTree &tree) {
+    std::vector<GeneralNode<Digest, Ref>> nodes;
+    if (!container_stream::read_nodes(is, nodes))
+      return is;
+    std::vector<Digest> leaves;
+    for (const auto &node : nodes)
+      if (node.getRef() >= 0)
+        leaves.push_back(node.getValue());
+    MerkleTree loaded(leaves.begin(), leaves.end(), [](const Digest &digest) { return digest; });
+    auto expected = nodes.begin();
+    for (const auto &node : loaded.PostOrder()) {
+      if (expected == nodes.end() || !(node.getValue() == expected->getValue()) || node.getRef() != expected->getRef()) {
+        is.setstate(std::ios::failbit);
+        return is;
+      }
+      ++expected;
+    }
+    if (expected != nodes.end()) {
+      is.setstate(std::ios::failbit);
+      return is;
+    }
+    tree = std::move(loaded);
+    return is;
   }
 
   /** Cantidad de bloques (hojas). */

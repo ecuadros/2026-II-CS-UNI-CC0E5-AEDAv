@@ -3,6 +3,7 @@
 
 #include "binarytree.h"
 #include "avl.h"
+#include "hashtable.h"
 #include "Heap.h"
 #include "vector.h"
 #include "traits.h"
@@ -45,6 +46,10 @@ using MinHeap = Heap<HeapTraits<T, std::less<T>>>;
 /** Heap con el mayor elemento en la raíz. */
 template <typename T>
 using MaxHeap = Heap<HeapTraits<T, std::greater<T>>>;
+
+/** Tabla clave-valor ordenada según @p Compare, con un AVL por dentro. */
+template <typename Key, typename Value, typename Compare = std::less<Key>>
+using HashTableOf = HashTable<HashTableTraits<Key, Value, Compare>>;
 
 /** Árbol de Merkle sobre bloques de tipo @p T con el hasher indicado. */
 template <typename T, typename Hasher = StdMerkleHasher<T>>

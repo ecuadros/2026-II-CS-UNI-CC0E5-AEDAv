@@ -13,14 +13,15 @@
 #include <utility>
 
 /**
- * Tabla clave-valor con interfaz de mapa. Guarda las entradas en un AVL ordenado por clave, por lo que buscar, insertar y eliminar cuestan O(log n) y el recorrido sale ordenado.
- * @tparam Key Tipo de la clave.
- * @tparam Value Tipo del valor asociado.
- * @tparam Comparator Criterio de orden de las claves.
+ * Tabla clave-valor con interfaz de mapa. Guarda las entradas en un árbol ordenado por clave (un AVL por defecto), por lo que buscar, insertar y eliminar cuestan O(log n) y el recorrido sale ordenado.
+ * @tparam Traits Tipos de la tabla: `key_type`, `mapped_type` y `Tree`, el árbol que guarda las entradas.
  */
-template <typename Key, typename Value, typename Comparator = std::less<Key>> class HashTable {
+template <typename Traits> class HashTable {
+    using Key = typename Traits::key_type;
+    using Value = typename Traits::mapped_type;
+
 public:
-    using Tree = AVLTree<AVLTraits<Key, Comparator, Value>>;
+    using Tree = typename Traits::Tree;
     using key_type = Key;
     using mapped_type = Value;
     using value_type = std::pair<const Key, Value>;

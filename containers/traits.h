@@ -11,6 +11,7 @@ template <typename T, bool Reverse> class VectorIterator;
 template <typename Traits, typename Ops = FullTraversalOps> class Vector;
 template <typename T, typename Derived = void, typename R = Ref> class BinaryTreeNode;
 template <typename T, typename R = Ref> class AVLNode;
+template <typename Traits, typename Ops = SearchTraversalOps> class AVLTree;
 
 /**
  * Tipos que configuran un Vector: valor, nodo e iteradores.
@@ -60,6 +61,21 @@ template <typename T, typename NodeType, typename Comparator> struct ListTraits 
     using Node = NodeType;
     using ForwardIterator = LinkedListForwardIterator<T, Node>;
     using Compare = Comparator;
+};
+
+/**
+ * Tipos que configuran una HashTable.
+ * @tparam Key Tipo de la clave.
+ * @tparam Value Tipo del valor asociado.
+ * @tparam Comparator Criterio de orden de las claves.
+ * @tparam TreeType Árbol que guarda las entradas; por defecto un AVL, pero sirve cualquier árbol con la misma interfaz.
+ */
+template <typename Key, typename Value, typename Comparator = std::less<Key>,
+          typename TreeType = AVLTree<AVLTraits<Key, Comparator, Value>>>
+struct HashTableTraits {
+    using key_type = Key;
+    using mapped_type = Value;
+    using Tree = TreeType;
 };
 
 /** Traits de la lista simplemente enlazada. */

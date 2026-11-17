@@ -82,10 +82,13 @@ concept MapLike = requires(M& m, const M& cm, const typename M::key_type& key, c
     requires std::convertible_to<typename M::iterator, typename M::const_iterator>;
 };
 
-/** Árbol de Merkle: raíz, pruebas de inclusión, verificación, `update` y `push_back`. */
+/** Árbol de Merkle: raíz, pruebas de inclusión, verificación, `update`, `push_back` y lectura/escritura. */
 template <typename M>
 concept MerkleLike = requires(M& m, const M& cm, std::size_t index, const typename M::value_type& block,
-                              const typename M::value_type* first, const typename M::Digest& root) {
+                              const typename M::value_type* first, const typename M::Digest& root, std::ostream& os,
+                              std::istream& is) {
+    os << cm;
+    is >> m;
     requires std::equality_comparable<typename M::Digest>;
     requires std::copy_constructible<M>;
     M(first, first);
@@ -740,7 +743,7 @@ void DemoAVLStepByStep() {
 
 void DemoHashTableStepByStep() {
     PrintColor("DemoHashTable paso a paso (AVL ordenado por clave)");
-    using Table = HashTable<std::string, int>;
+    using Table = HashTableOf<std::string, int>;
     Table table;
     int age = 18;
     for (std::string key : {"ana", "luis", "eva", "juan", "rosa", "pedro", "maria", "jose"}) {
@@ -937,6 +940,35 @@ void TestMerklePushBack(const Blocks<Tree>& blocks, const std::string& name) {
     std::cout << "push_back 1.." << blocks.size() << " hojas: raiz y pruebas coinciden con reconstruir\n";
 }
 
+/** Comprueba que `<<` y `>>` guardan y recuperan el árbol, y que un texto alterado se rechaza sin cambiar el árbol. */
+template <MerkleLike Tree>
+void TestMerklePersistence(const Blocks<Tree>& blocks, const std::string& name) {
+    PrintColor("TestMerklePersistence (" + name + ")");
+    Tree tree = BuildMerkle<Tree>(blocks);
+    std::stringstream saved;
+    saved << tree;
+    Tree loaded;
+    saved >> loaded;
+    Check(loaded.size() == tree.size() && loaded.root_hash() == tree.root_hash(), name, "el arbol leido no coincide");
+    for (std::size_t i = 0; i < blocks.size(); ++i)
+        Check(Tree::verify(blocks[i], loaded.proof(i), loaded.root_hash()), name, "prueba del arbol leido");
+
+    std::stringstream none;
+    none << Tree{};
+    Tree emptied(tree);
+    none >> emptied;
+    Check(emptied.empty(), name, "leer un arbol vacio no lo vacio");
+
+    std::string text = saved.str();
+    char& digit = text[text.find('(') + 1];
+    digit = digit == '9' ? '8' : digit + 1;
+    std::istringstream tampered(text);
+    Tree target(tree);
+    tampered >> target;
+    Check(tampered.fail() && target.root_hash() == tree.root_hash(), name, "un texto alterado debio rechazarse");
+    std::cout << "escribir y leer " << tree.size() << " hojas OK; un hash alterado se rechaza y el arbol no cambia\n";
+}
+
 /** Llama a `update`, `proof` y `root_hash` desde varios hilos y comprueba que el estado final es consistente. */
 template <MerkleLike Tree>
 void TestMerkleRace(const Blocks<Tree>& blocks, const typename Tree::value_type& extra, const std::string& name) {
@@ -971,6 +1003,7 @@ void TestMerkle(const Blocks<Tree>& blocks, const typename Tree::value_type& ext
     TestMerkleUpdate(tree, blocks, extra, name);
     TestMerklePushBack<Tree>(blocks, name);
     TestMerkleCopyAndClear<Tree>(blocks, name);
+    TestMerklePersistence<Tree>(blocks, name);
     TestMerkleRace<Tree>(blocks, extra, name);
 }
 
@@ -1108,8 +1141,8 @@ template <MapLike Map> void TestMap(const std::string& name) {
 
 void DemoHashTable() {
     PrintColor("DemoHashTable (interfaz de mapa, clave string)");
-    TestMap<HashTable<std::string, int>>("HashTable");
-    TestTree<HashTable<TX, Ref>::Tree>("HashTable (AVL interno)");
+    TestMap<HashTableOf<std::string, int>>("HashTable");
+    TestTree<HashTableOf<TX, Ref>::Tree>("HashTable (AVL interno)");
 }
 
 void DemoCanvas() {
