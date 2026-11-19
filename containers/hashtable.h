@@ -1,8 +1,7 @@
 #ifndef __HASHTABLE_H__
 #define __HASHTABLE_H__
 
-#include "avl.h"
-#include "traits.h"
+#include "visualization.h"
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>

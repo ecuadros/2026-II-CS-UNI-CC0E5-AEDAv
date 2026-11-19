@@ -27,6 +27,8 @@ int main(int argc, char *argv[]) {
       {"merkle-bitcoin", DemoMerkleBitcoin},
       {"merkle-steps", DemoMerkleTreeStepByStep},
       {"canvas", DemoCanvas},
+      {"sheet", DemoSheet},
+      {"sheet-steps", DemoSheetStepByStep},
   };
 
   if (argc == 1) {

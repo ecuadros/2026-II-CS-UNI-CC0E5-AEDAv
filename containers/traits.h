@@ -6,12 +6,16 @@
 #include "binarytreeiterator.h"
 #include "traversalops.h"
 #include <functional>
+#include <string>
 
 template <typename T, bool Reverse> class VectorIterator;
 template <typename Traits, typename Ops = FullTraversalOps> class Vector;
 template <typename T, typename Derived = void, typename R = Ref> class BinaryTreeNode;
 template <typename T, typename R = Ref> class AVLNode;
 template <typename Traits, typename Ops = SearchTraversalOps> class AVLTree;
+template <typename Traits> class HashTable;
+template <typename Traits, typename Ops = ExprTraversalOps> class ExprTree;
+template <typename Number> struct ExprItem;
 
 /**
  * Tipos que configuran un Vector: valor, nodo e iteradores.
@@ -119,6 +123,39 @@ struct MerkleTreeTraits {
     using Node = MerkleNode<Digest>;
     using ForwardIterator = BinaryTreeIterator<const Node, TreeOrder::PostOrder>;
     using BackwardIterator = BinaryTreeIterator<const Node, TreeOrder::PostOrder, true>;
+};
+
+/**
+ * Tipos que configuran un ExprTree, el árbol de sintaxis de una fórmula.
+ * @tparam Number Tipo numérico de los resultados.
+ * @tparam SequenceType Traits de la secuencia que usa para tokens y para la pila de evaluación.
+ */
+template <typename Number = double, template <typename> typename SequenceType = VectorTraits>
+struct ExprTreeTraits {
+    using number_type = Number;
+    using value_type = ExprItem<Number>;
+    using Node = BinaryTreeNode<value_type>;
+    using ForwardIterator = BinaryTreeIterator<const Node, TreeOrder::PostOrder>;
+    using BackwardIterator = BinaryTreeIterator<const Node, TreeOrder::PostOrder, true>;
+    template <typename U> using Sequence = Vector<SequenceType<U>>;
+};
+
+/**
+ * Tipos que configuran una Sheet: las piezas con las que se arma la hoja.
+ * @tparam Number Tipo numérico de los resultados.
+ * @tparam CellsType Tabla nombre de celda -> texto escrito.
+ * @tparam SequenceType Traits de la secuencia de la pila de ciclos y de los rangos.
+ * @tparam FormulaType Árbol que lee y evalúa cada fórmula.
+ */
+template <typename Number = double,
+          typename CellsType = HashTable<HashTableTraits<std::string, std::string>>,
+          template <typename> typename SequenceType = VectorTraits,
+          typename FormulaType = ExprTree<ExprTreeTraits<Number, SequenceType>>>
+struct SheetTraits {
+    using number_type = Number;
+    using Cells = CellsType;
+    using Formula = FormulaType;
+    template <typename U> using Sequence = Vector<SequenceType<U>>;
 };
 
 #endif // __CONTAINERS_TRAITS_H__

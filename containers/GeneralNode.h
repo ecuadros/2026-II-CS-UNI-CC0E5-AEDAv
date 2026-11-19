@@ -1,5 +1,6 @@
 #ifndef __GENERAL_NODE_H__
 #define __GENERAL_NODE_H__
+#include <cctype>
 #include <iostream>
 #include <string>
 #include <type_traits>
@@ -45,13 +46,45 @@ private:
     T m_value;
     R m_ref{};
 
-    /** Lee un campo del nodo desde el stream. Las cadenas se leen hasta el delimitador @p stop, sin consumirlo; el resto de tipos usa `operator>>`. */
+    /** Indica si la cadena @p text necesita comillas para no confundirse con los delimitadores. */
+    static bool needs_quotes(const std::string& text) {
+        return text.find_first_of("[](),\"\\") != std::string::npos || (!text.empty() && std::isspace(static_cast<unsigned char>(text[0])));
+    }
+
+    /** Escribe un campo; las cadenas con delimitadores van entre comillas con `\"` y `\\` escapados. */
+    template <typename V>
+    static void write_field(std::ostream& os, const V& field) {
+        if constexpr (std::is_same_v<V, std::string>) {
+            if (needs_quotes(field)) {
+                os << '"';
+                for (char c : field) {
+                    if (c == '"' || c == '\\') os << '\\';
+                    os << c;
+                }
+                os << '"';
+                return;
+            }
+        }
+        os << field;
+    }
+
+    /** Lee un campo del nodo desde el stream. Las cadenas entre comillas se leen con escapes; las demás, hasta el delimitador @p stop, sin consumirlo. El resto de tipos usa `operator>>`. */
     template <typename V>
     static bool read_field(std::istream& is, V& field, StreamDelimiters::Delim stop) {
         if constexpr (std::is_same_v<V, std::string>) {
             field.clear();
             is >> std::ws;
             char c;
+            if (is.peek() == '"') {
+                is.get();
+                while (is.get(c)) {
+                    if (c == '"') return true;
+                    if (c == '\\' && !is.get(c)) break;
+                    field.push_back(c);
+                }
+                is.setstate(std::ios::failbit);
+                return false;
+            }
             while (is.get(c)) {
                 if (c == stop) {
                     is.unget();
@@ -82,14 +115,13 @@ public:
 
     using Delim = StreamDelimiters::Delim;
 
-    /** Escribe el nodo como `(valor,ref)`. */
+    /** Escribe el nodo como `(valor,ref)`; las cadenas con delimitadores van entre comillas. */
     friend std::ostream &operator <<(std::ostream &os, const GeneralNode<T, R> &node) {
-        os << StreamDelimiters::node_open
-           << node.getValue()
-           << StreamDelimiters::separator
-           << node.getRef()
-           << StreamDelimiters::node_close;
-        return os;
+        os << StreamDelimiters::node_open;
+        write_field(os, node.getValue());
+        os << StreamDelimiters::separator;
+        write_field(os, node.getRef());
+        return os << StreamDelimiters::node_close;
     }
 
     /** Lee un nodo con formato `(valor,ref)`; si el formato no coincide, el stream queda en fallo. */

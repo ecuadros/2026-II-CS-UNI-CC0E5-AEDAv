@@ -198,4 +198,7 @@ using ForwardSearchTraversalOps = TraversalOps<CallOp, FirstThatOp, PrintableOp,
 using SearchTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThatOp,
                                         PrintableOp, ReadableOp, VisualOp>;
 
+/** Operaciones del árbol de una fórmula (ExprTree): recorridos, impresión y dibujo; no se lee desde un stream. */
+using ExprTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThatOp, PrintableOp, VisualOp>;
+
 #endif // TRAVERSALOPS_H

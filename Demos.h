@@ -33,5 +33,9 @@ void DemoMerkleBitcoin();
 void DemoMerkleTreeStepByStep();
 /** Demo del lienzo de visualización: escribe texto en posiciones (x, y). */
 void DemoCanvas();
+/** Hoja de cálculo de texto: fórmulas, funciones, errores, archivo e hilos. */
+void DemoSheet();
+/** Hoja de cálculo paso a paso: cada set y su tabla, cascada, errores y lectura/escritura. */
+void DemoSheetStepByStep();
 
 #endif // __DEMOS_H__

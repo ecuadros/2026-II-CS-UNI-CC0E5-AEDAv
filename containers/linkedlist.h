@@ -1,6 +1,5 @@
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
-#include "listnodes.h"
 #include "traversalops.h"
 #include <initializer_list>
 #include <mutex>

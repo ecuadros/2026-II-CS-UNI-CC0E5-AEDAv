@@ -9,6 +9,8 @@
 #include "traits.h"
 #include "linkedlist.h"
 #include "merkletree.h"
+#include "exprtree.h"
+#include "spreadsheet.h"
 #include <functional>
 
 /** Vector de elementos de tipo @p T. */
@@ -54,5 +56,13 @@ using HashTableOf = HashTable<HashTableTraits<Key, Value, Compare>>;
 /** Árbol de Merkle sobre bloques de tipo @p T con el hasher indicado. */
 template <typename T, typename Hasher = StdMerkleHasher<T>>
 using MerkleOf = MerkleTree<MerkleTreeTraits<T, Hasher>>;
+
+/** Árbol de sintaxis de una fórmula con resultados de tipo @p Number. */
+template <typename Number = double>
+using ExprTreeOf = ExprTree<ExprTreeTraits<Number>>;
+
+/** Hoja de cálculo de texto con resultados de tipo @p Number. */
+template <typename Number = double>
+using SheetOf = Sheet<SheetTraits<Number>>;
 
 #endif

@@ -1133,6 +1133,20 @@ template <MapLike Map> void TestMap(const std::string& name) {
     stream.str("");
     stream << edades;
     check(stream.str() == "[(ana,22),(beto,18),(zoe,40)]", "operator<< fallo");
+
+    const std::string rara = R"( di "hola", \ (x) [y])";
+    edades[rara] = 7;
+    stream.clear();
+    stream.str("");
+    stream << edades;
+    std::cout << name << " con clave entre comillas: " << stream.str() << '\n';
+    Map leida;
+    stream >> leida;
+    check(stream && leida.size() == 4 && leida[rara] == 7, "clave con comillas y delimitadores no se recupero");
+    std::istringstream sin_cerrar(R"([(ana,1),("abierta,2)])");
+    sin_cerrar >> leida;
+    check(sin_cerrar.fail() && leida.size() == 4, "comilla sin cerrar debio rechazarse");
+    edades.erase(rara);
     TestInvalidRead(edades, name);
     std::cout << name << " leido de texto desordenado: " << edades << '\n';
     edades.print_tree(std::cout);
@@ -1154,4 +1168,142 @@ void DemoCanvas() {
     canvas.hline(0, 30, 6, "─", visual::style::edge);
     canvas.glyph(15, 6, "●", visual::style::end);
     canvas.print(std::cout, visual::Painter(std::cout));
+}
+
+void DemoSheet() {
+    PrintColor("DemoSheet (hoja de calculo de texto)");
+    const std::string name = "Sheet";
+    SheetOf<> sheet;
+    sheet.set("A1", "10");
+    sheet.set("A2", "20");
+    sheet.set("A3", "30");
+    sheet.set("B1", "=(A1+A2)*2 - -A3/3");
+    sheet.set("B2", "=SUMA(A1:A3, 4)");
+    sheet.set("B3", "=PROM(A1:A3) + MAX(A1, A2) - MIN(A1:A3) + CONTAR(A1:B2)");
+    sheet.set("C1", "Total");
+    sheet.set("C2", "=2^3^2");
+    sheet.set("C3", "=A1/(A2-20)");
+    sheet.set("D1", "=D2");
+    sheet.set("D2", "=D1+1");
+    sheet.set("D3", "=NADA(1)");
+    Check(sheet.value("B1") == 70, name, "parentesis o menos unario");
+    Check(sheet.value("b2") == 64, name, "SUMA con rango");
+    Check(sheet.value("B3") == 20 + 20 - 10 + 4, name, "PROM/MAX/MIN/CONTAR");
+    Check(sheet.value("C2") == 512, name, "^ asocia a la derecha");
+    Check(sheet.text("C1") == "Total" && sheet.text("C3") == "#DIV/0" && sheet.text("D1") == "#CICLO" &&
+              sheet.text("D3") == "#NAME" && sheet.text("Z9").empty(),
+          name, "codigos de error");
+    sheet.set("A1", "0");
+    Check(sheet.value("B1") == 50, name, "el cambio no se propago");
+
+    auto postorder = [](const SheetOf<>::Formula& tree) {
+        std::string order;
+        for (const auto& node : tree.PostOrder()) order += node.getValue().text + " ";
+        return order;
+    };
+    using Formula = SheetOf<>::Formula;
+    Check(postorder(Formula("(A1+A2)*2")) == "A1 A2 + 2 * " && postorder(Formula("A1+A2*2")) == "A1 A2 2 * + ",
+          name, "los parentesis no cambiaron la forma del AST");
+    Check(postorder(Formula("suma(A1:A3, 4, -1)")) == "A1:A3 4 1 - , , SUMA " && Formula("2^3^2").size() == 5 &&
+              sheet.formula("C1").empty(),
+          name, "AST de funciones o potencias");
+    for (std::string bad : {"(1+2", "1 2", "SUMA(A1:)", "A1:A3", "1+#"}) {
+        bool threw = false;
+        try {
+            Formula tree(bad);
+        } catch (const SheetError& error) {
+            threw = std::string(error.what()) == "#SYNTAX";
+        }
+        Check(threw, name, "\"" + bad + "\" debio dar #SYNTAX");
+    }
+    sheet.print(std::cout);
+
+    WithDemoFile("demo_sheet.txt", [&] {
+        SaveTo("demo_sheet.txt", sheet);
+        SheetOf<> loaded;
+        LoadFrom("demo_sheet.txt", loaded);
+        std::ostringstream a, b;
+        a << sheet;
+        b << loaded;
+        Check(a.str() == b.str() && loaded.value("B2") == 54 && loaded.text("C1") == "Total", name,
+              "el archivo leido no coincide");
+        std::cout << a.str() << '\n';
+    });
+    std::istringstream invalid("[(A1,5),(nada,1)]");
+    SheetOf<> target;
+    target.set("A1", "7");
+    invalid >> target;
+    Check(invalid.fail() && target.value("A1") == 7, name, "un texto invalido debio rechazarse");
+
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 4; ++t)
+        threads.emplace_back([&, t] {
+            for (int i = 1; i <= 200; ++i) {
+                sheet.set("E" + std::to_string(t * 200 + i), "1");
+                sheet.value("B3");
+            }
+        });
+    for (auto& thread : threads) thread.join();
+    sheet.set("F1", "=SUMA(E1:E800)");
+    Check(sheet.value("F1") == 800, name, "escrituras concurrentes perdidas");
+    std::cout << name << ": formulas, archivo y 4 hilos OK\n";
+}
+
+void DemoSheetStepByStep() {
+    PrintColor("DemoSheet paso a paso");
+    const std::string name = "Sheet paso a paso";
+    SheetOf<> sheet;
+    auto step = [&](const std::string& title) {
+        PrintColor(title, "1;33");
+        sheet.print(std::cout);
+    };
+
+    sheet.set("A1", "10");
+    sheet.set("A2", "20");
+    sheet.set("A3", "30");
+    sheet.set("C1", "Notas");
+    step("set A1=10, A2=20, A3=30, C1=Notas: numeros y texto se guardan tal cual en la HashTable");
+
+    sheet.set("B1", "=(A1+A2)*2");
+    step("B1 = (A1+A2)*2: el parser resuelve primero el parentesis -> (10+20)*2");
+    Check(sheet.value("B1") == 60, name, "parentesis");
+
+    auto show = [](const std::string& title, const SheetOf<>::Formula& tree) {
+        PrintColor(title, "1;33");
+        tree.print_tree(std::cout);
+        std::cout << "PostOrder:";
+        for (const auto& node : tree.PostOrder()) std::cout << ' ' << node.getValue();
+        std::cout << '\n';
+    };
+    show("AST de B1 = (A1+A2)*2: el parentesis deja el + debajo del *; no genera nodo", sheet.formula("B1"));
+    show("AST de A1+A2*2 sin parentesis: ahora el * queda debajo del +", SheetOf<>::Formula("A1+A2*2"));
+    PrintColor("Evaluar B1 recorriendo el AST en PostOrder con una pila:", "1;33");
+    std::cout << "A1 -> [10]   A2 -> [10, 20]   + -> [30]   2 -> [30, 2]   * -> [60]\n";
+
+    sheet.set("B2", "=SUMA(A1:A3)");
+    sheet.set("B3", "=PROM(A1:A3) + MAX(A1, A2) - MIN(A1:A3)");
+    step("B2 = SUMA(A1:A3), B3 = PROM(A1:A3) + MAX(A1, A2) - MIN(A1:A3): un rango aporta cada celda numerica");
+    Check(sheet.value("B2") == 60 && sheet.value("B3") == 30, name, "funciones con rango");
+    show("AST de B3: un rango es una hoja; los argumentos se encadenan con nodos ','", sheet.formula("B3"));
+
+    sheet.set("A1", "40");
+    step("A1 = 40: no se guardan resultados, asi que B1, B2 y B3 se recalculan en cascada");
+    Check(sheet.value("B1") == 120 && sheet.value("B2") == 90, name, "cascada");
+
+    sheet.set("D1", "=D2");
+    sheet.set("D2", "=D1+1");
+    sheet.set("D3", "=A1/(A2-20)");
+    step("D1 = D2, D2 = D1+1 -> #CICLO;  D3 = A1/(A2-20) -> #DIV/0");
+    Check(sheet.text("D1") == "#CICLO" && sheet.text("D3") == "#DIV/0", name, "errores");
+
+    PrintColor("operator<<: la HashTable escribe [(celda,texto),...]; las formulas con , o ) van entre comillas", "1;33");
+    std::stringstream saved;
+    saved << sheet;
+    std::cout << saved.str() << '\n';
+
+    SheetOf<> loaded;
+    saved >> loaded;
+    PrintColor("operator>>: se lee en otra hoja y se recalcula igual", "1;33");
+    loaded.print(std::cout);
+    Check(saved && loaded.text("B3") == sheet.text("B3") && loaded.text("D1") == "#CICLO", name, "lectura");
 }
