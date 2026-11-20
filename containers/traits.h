@@ -144,17 +144,20 @@ struct ExprTreeTraits {
  * Tipos que configuran una Sheet: las piezas con las que se arma la hoja.
  * @tparam Number Tipo numérico de los resultados.
  * @tparam CellsType Tabla nombre de celda -> texto escrito.
- * @tparam SequenceType Traits de la secuencia de la pila de ciclos y de los rangos.
+ * @tparam SequenceType Traits de la secuencia usada por `FormulaType` para tokens y argumentos.
  * @tparam FormulaType Árbol que lee y evalúa cada fórmula.
+ * @tparam CacheType Mapa temporal usado por consulta para memoizar valores evaluados.
  */
 template <typename Number = double,
           typename CellsType = HashTable<HashTableTraits<std::string, std::string>>,
           template <typename> typename SequenceType = VectorTraits,
-          typename FormulaType = ExprTree<ExprTreeTraits<Number, SequenceType>>>
+          typename FormulaType = ExprTree<ExprTreeTraits<Number, SequenceType>>,
+          typename CacheType = HashTable<HashTableTraits<std::string, typename FormulaType::Value>>>
 struct SheetTraits {
     using number_type = Number;
     using Cells = CellsType;
     using Formula = FormulaType;
+    using Cache = CacheType;
     template <typename U> using Sequence = Vector<SequenceType<U>>;
 };
 

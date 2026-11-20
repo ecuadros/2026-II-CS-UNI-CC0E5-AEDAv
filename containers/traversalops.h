@@ -129,7 +129,8 @@ public:
 /** Mixin que habilita `operator<<` para el contenedor. */
 class PrintableOp {
     /** Escribe el contenedor en formato `[(valor,ref),...]`. */
-    template <container_stream::PrintableContainer Container>
+    template <class Container>
+        requires container_stream::PrintableContainer<Container> || container_stream::StreamWritable<Container>
     friend std::ostream& operator<<(std::ostream& os, const Container& container) {
         return container_stream::write(os, container);
     }
@@ -138,7 +139,8 @@ class PrintableOp {
 /** Mixin que habilita `operator>>` para el contenedor. */
 class ReadableOp {
     /** Lee el contenedor desde el formato `[(valor,ref),...]`, reemplazando su contenido. */
-    template <container_stream::ReadableContainer Container>
+    template <class Container>
+        requires container_stream::ReadableContainer<Container> || container_stream::StreamReadable<Container>
     friend std::istream& operator>>(std::istream& is, Container& container) {
         return container_stream::read(is, container);
     }
@@ -164,14 +166,26 @@ public:
         visual::print_linear(os, self);
     }
 
-    /** Dibuja el contenedor como árbol si tiene vista de árbol, y como secuencia en caso contrario. */
+    /** Dibuja el contenedor como tabla con columnas y filas numeradas; asume que `table_view()` es thread-safe (snapshot). */
     template <class Self>
-        requires visual::HasTreeView<Self> || visual::LinearView<Self>
+        requires visual::HasTableView<Self>
+    void print_table(this const Self& self, std::ostream& os) {
+        visual::print_table(os, self.table_view());
+    }
+
+    /** Dibuja el contenedor como árbol, como tabla, como secuencia o con `print(os)`. */
+    template <class Self>
+        requires visual::HasTreeView<Self> || visual::HasTableView<Self> || visual::LinearView<Self> ||
+                 visual::PrintableView<Self>
     void visualize(this const Self& self, std::ostream& os) {
         if constexpr (visual::HasTreeView<Self>)
             self.print_tree(os);
-        else
+        else if constexpr (visual::HasTableView<Self>)
+            self.print_table(os);
+        else if constexpr (visual::LinearView<Self>)
             self.print_linear(os);
+        else
+            self.print(os);
     }
 };
 
@@ -200,5 +214,8 @@ using SearchTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThat
 
 /** Operaciones del árbol de una fórmula (ExprTree): recorridos, impresión y dibujo; no se lee desde un stream. */
 using ExprTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThatOp, PrintableOp, VisualOp>;
+
+/** Operaciones de la hoja de cálculo (Sheet): bloqueo, serialización (`<<`/`>>`) y visualización. */
+using SheetTraversalOps = TraversalOps<PrintableOp, ReadableOp, VisualOp>;
 
 #endif // TRAVERSALOPS_H

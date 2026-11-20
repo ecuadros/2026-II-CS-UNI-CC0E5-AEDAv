@@ -47,6 +47,20 @@ concept ReadableContainer =
         c.push_back(value, ref);
     };
 
+/** Tipo que delega su escritura en stream a `write_stream(os)`. */
+template <class T>
+concept StreamWritable =
+    requires(const T& obj, std::ostream& os) {
+        { obj.write_stream(os) } -> std::same_as<std::ostream&>;
+    };
+
+/** Tipo que delega su lectura desde stream a `read_stream(is)`. */
+template <class T>
+concept StreamReadable =
+    requires(T& obj, std::istream& is) {
+        { obj.read_stream(is) } -> std::same_as<std::istream&>;
+    };
+
 /** Escribe el contenedor como `[nodo,nodo,...]`. */
 template <PrintableContainer Container>
 std::ostream& write(std::ostream& os, const Container& container) {
@@ -60,12 +74,19 @@ std::ostream& write(std::ostream& os, const Container& container) {
     return os << StreamDelimiters::container_close;
 }
 
+/** Escribe un objeto `StreamWritable` delegando en `write_stream(os)`. */
+template <StreamWritable Target>
+    requires (!PrintableContainer<Target>)
+std::ostream& write(std::ostream& os, const Target& target) {
+    return target.write_stream(os);
+}
+
 /**
  * Lee una lista `[nodo,nodo,...]` y la acumula en @p nodes.
  * @return `false` si el formato es inválido; el stream queda en fallo.
  */
-template <typename T, typename R>
-bool read_nodes(std::istream& is, std::vector<GeneralNode<T, R>>& nodes) {
+template <typename T, typename R, typename Nodes>
+bool read_nodes(std::istream& is, Nodes& nodes) {
     if (!StreamDelimiters::expect(is, StreamDelimiters::container_open)) return false;
     is >> std::ws;
     if (is.peek() == StreamDelimiters::container_close) {
@@ -75,7 +96,8 @@ bool read_nodes(std::istream& is, std::vector<GeneralNode<T, R>>& nodes) {
     while (true) {
         GeneralNode<T, R> node;
         if (!(is >> node)) return false;
-        nodes.push_back(node);
+        if constexpr (requires { nodes.push_back(node); }) nodes.push_back(node);
+        else nodes.push_back(node.getValue(), node.getRef());
         Delim separator;
         if (!(is >> separator)) return false;
         if (separator == StreamDelimiters::container_close) return true;
@@ -100,9 +122,16 @@ void insert_nodes(Container& destination,
 template <ReadableContainer Container>
 std::istream& read(std::istream& is, Container& container) {
     std::vector<GeneralNode<typename Container::value_type, ref_of_t<Container>>> nodes;
-    if (read_nodes(is, nodes))
+    if (read_nodes<typename Container::value_type, ref_of_t<Container>>(is, nodes))
         insert_nodes(container, nodes);
     return is;
+}
+
+/** Lee un objeto `StreamReadable` delegando en `read_stream(is)`. */
+template <StreamReadable Target>
+    requires (!ReadableContainer<Target>)
+std::istream& read(std::istream& is, Target& target) {
+    return target.read_stream(is);
 }
 
 } // namespace container_stream

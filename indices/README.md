@@ -2,7 +2,7 @@
 
 Un índice es una estructura de datos aparte de la tabla que, dado un valor buscado, dice en qué filas está sin leer la tabla entera. Cada tipo de índice es una estructura distinta y por eso responde bien a preguntas distintas.
 
-Los ejemplos son para **PostgreSQL** (GiST es propio de PostgreSQL). Cada script crea sus tablas, muestra el plan con `EXPLAIN` y termina en `ROLLBACK`, así que no deja nada en la base:
+Los ejemplos son para **PostgreSQL** (GiST es propio de PostgreSQL). Cada script crea tablas grandes (`500 000` filas, `100 000` en el caso de rangos de tiempo), mide primero **sin índice** y luego **con índice** usando `\timing on` y `EXPLAIN (ANALYZE, BUFFERS)` —para ver el cambio de plan, el tiempo real en milisegundos, los bloques leídos y que los resultados de las consultas son exactamente los mismos—, y termina en `ROLLBACK`, así que no deja nada en la base:
 
 ```bash
 psql -d <base> -f indices/btree.sql

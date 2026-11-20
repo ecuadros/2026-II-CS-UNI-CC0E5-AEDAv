@@ -6,10 +6,12 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <ostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,6 +42,30 @@ concept LinearView = requires(const C& c, std::ostream& os) {
     c.begin();
     c.end();
     os << *c.begin();
+};
+
+/** Contenedor que se dibuja en un stream con `print(os)`. */
+template <class C>
+concept PrintableView = requires(const C& c, std::ostream& os) {
+    c.print(os);
+};
+
+/** Vista de tabla: da las dimensiones, el encabezado de cada columna y el texto de cada celda. */
+template <class V>
+concept TableView = requires(const V& v, int row, int col) {
+    { v.rows() } -> std::convertible_to<int>;
+    { v.cols() } -> std::convertible_to<int>;
+    { v.col_header(col) } -> std::convertible_to<std::string>;
+    { v.cell_text(row, col) } -> std::convertible_to<std::string>;
+};
+
+/**
+ * Contenedor que ofrece una vista de tabla con `table_view()`.
+ * `table_view()` debe devolver una vista autocontenida y segura frente a accesos concurrentes.
+ */
+template <class C>
+concept HasTableView = requires(const C& c) {
+    { c.table_view() } -> TableView;
 };
 
 /** Secuencia cuyos nodos tienen `m_pNext` (lista enlazada). */
@@ -410,6 +436,53 @@ template <LinearView C> void print_linear(std::ostream& os, const C& c) {
         detail::print_chain(os, c);
     else
         detail::print_cells(os, c);
+}
+
+/** Límite máximo de celdas imprimibles en `print_table`. */
+inline constexpr std::size_t max_table_cells = 100'000;
+
+/**
+ * Comprueba que las dimensiones @p cols x @p rows no superen `max_table_cells`.
+ * @throws std::length_error si las dimensiones superan el límite imprimible.
+ */
+inline void check_table_bounds(int cols, int rows) {
+    if (cols < 0 || rows < 0) return;
+    if (static_cast<std::size_t>(cols) > max_table_cells ||
+        static_cast<std::size_t>(rows) > max_table_cells ||
+        (cols > 0 && rows > 0 &&
+         static_cast<std::size_t>(cols) > max_table_cells / static_cast<std::size_t>(rows))) {
+        throw std::length_error("Tabla demasiado grande para imprimir");
+    }
+}
+
+/**
+ * Dibuja una tabla con encabezados de columna y filas numeradas.
+ * @throws std::length_error si las dimensiones superan `max_table_cells` (`100'000` celdas).
+ */
+template <TableView V> void print_table(std::ostream& os, const V& v) {
+    constexpr int row_num_width = 4;
+    constexpr std::size_t min_col_width = 10;
+    int cols = v.cols(), rows = v.rows();
+    if (cols < 0 || rows < 0) return;
+    check_table_bounds(cols, rows);
+    std::size_t width = min_col_width;
+    for (int col = 1; col <= cols; ++col) width = std::max(width, v.col_header(col).size());
+    for (int row = 1; row <= rows; ++row)
+        for (int col = 1; col <= cols; ++col) width = std::max(width, v.cell_text(row, col).size());
+
+    int col_w = static_cast<int>(width);
+    auto put_col = [&](const std::string& s) { os << std::setw(col_w) << s << " |"; };
+    os << std::setw(row_num_width + 1) << "" << '|';
+    for (int col = 1; col <= cols; ++col) put_col(v.col_header(col));
+    os << '\n' << std::string(row_num_width + 1, '-') << '+';
+    std::string sep(width + 1, '-');
+    for (int col = 1; col <= cols; ++col) os << sep << '+';
+    os << '\n';
+    for (int row = 1; row <= rows; ++row) {
+        os << std::setw(row_num_width) << row << " |";
+        for (int col = 1; col <= cols; ++col) put_col(v.cell_text(row, col));
+        os << '\n';
+    }
 }
 
 } // namespace visual

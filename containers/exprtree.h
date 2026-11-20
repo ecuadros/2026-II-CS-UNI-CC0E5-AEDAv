@@ -1,42 +1,25 @@
-#ifndef __EXPRTREE_H__
-#define __EXPRTREE_H__
+#ifndef CONTAINERS_EXPRTREE_H
+#define CONTAINERS_EXPRTREE_H
 
 #include "binarytree.h"
+#include "exprvalue.h"
+#include "hashtable.h"
 #include "traits.h"
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <cstddef>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
-
-/** Error al leer o evaluar una fórmula; `what()` es el código que se muestra (`#DIV/0`, `#REF`, `#SYNTAX`, `#CICLO`, `#VALUE`, `#NAME`). */
-struct ExprError : std::runtime_error {
-    using std::runtime_error::runtime_error;
-};
+#include <vector>
 
 /**
- * Valor de un nodo del AST: qué es, el texto con el que se dibuja y, si es un número, su valor.
- * @tparam N Tipo numérico.
- */
-template <typename N> struct ExprItem {
-    /** Clase de nodo. `List` une dos argumentos de una función; `Range` es una hoja con el texto `A1:B3`. */
-    enum class Kind { Number, Ref, Range, Negate, Binary, List, Call };
-
-    Kind kind = Kind::Number;
-    std::string text;
-    N number{};
-
-    /** Escribe el texto del nodo: el operador, el número, la celda o el nombre de la función. */
-    friend std::ostream& operator<<(std::ostream& os, const ExprItem& item) { return os << item.text; }
-};
-
-/**
- * Árbol de sintaxis abstracta de una fórmula. El constructor la lee con un parser de descenso recursivo y arma los nodos a mano, como MerkleTree; evaluate() la recorre en postorden con una pila.
+ * Árbol de sintaxis abstracta de una fórmula. El constructor la lee con un parser de descenso recursivo y arma los nodos a mano, como MerkleTree; `evaluate()` la evalúa de forma iterativa con pila explícita y cortocircuito en `SI`.
  * Los paréntesis no generan nodos: solo deciden qué queda debajo de qué. Los argumentos de una función se encadenan con nodos `,` hacia la derecha.
  * @tparam Traits Tipos de número, valor, nodo, secuencia e iteradores.
  * @tparam Ops Mixins de recorrido, impresión y dibujo.
@@ -45,6 +28,7 @@ template <typename Traits, typename Ops> class ExprTree : public BinaryTreeBase<
 public:
     using Base = BinaryTreeBase<Traits, Ops>;
     using Number = typename Traits::number_type;
+    using Value = ExprValue<Number>;
     using value_type = typename Traits::value_type;
     using Node = typename Traits::Node;
     using NodePtr = Node*;
@@ -52,15 +36,30 @@ public:
     template <typename T> using Sequence = typename Traits::template Sequence<T>;
 
 private:
+    using EvalOps = ExprOps<Number, Sequence>;
     std::size_t m_size = 0;
+
+    /** Libera un subárbol de forma iterativa. */
+    static void destroy_subtree(NodePtr root) {
+        if (!root) return;
+        std::vector<NodePtr> stack{root};
+        while (!stack.empty()) {
+            NodePtr cur = stack.back();
+            stack.pop_back();
+            if (cur->m_pChild[0]) stack.push_back(cur->m_pChild[0]);
+            if (cur->m_pChild[1]) stack.push_back(cur->m_pChild[1]);
+            delete cur;
+        }
+    }
 
     /** Libera un subárbol que todavía no cuelga del árbol. */
     struct Free {
-        void operator()(NodePtr node) const { destroy(node); }
+        void operator()(NodePtr node) const { destroy_subtree(node); }
     };
     using Owned = std::unique_ptr<Node, Free>;
 
-    enum class Tok { Number, Ref, Ident, Op, LParen, RParen, Comma, Colon, End };
+    enum class Tok { Number, String, Ref, Ident, Op, LParen, RParen, Comma, Colon, End };
+    friend std::ostream& operator<<(std::ostream& os, Tok t) { return os << static_cast<int>(t); }
 
     /** Unidad léxica de una fórmula. */
     struct Token {
@@ -75,6 +74,17 @@ private:
         return text;
     }
 
+    /** Tabla de signos de puntuación reconocidos por el lexer. */
+    static const HashTable<HashTableTraits<char, Tok>>& punctuation() {
+        static const HashTable<HashTableTraits<char, Tok>> table{
+            {'(', Tok::LParen},
+            {')', Tok::RParen},
+            {',', Tok::Comma},
+            {':', Tok::Colon},
+        };
+        return table;
+    }
+
     /** Convierte el texto de una fórmula en tokens; el último siempre es `End`. */
     static Sequence<Token> tokenize(const std::string& s) {
         Sequence<Token> tokens;
@@ -86,9 +96,29 @@ private:
                 ++i;
                 continue;
             }
-            if (std::isdigit(c) || c == '.') {
+            if (c == '"') {
+                std::string text;
+                std::size_t j = i + 1;
+                bool closed = false;
+                while (j < s.size()) {
+                    if (s[j] == '\\' && j + 1 < s.size() && (s[j + 1] == '"' || s[j + 1] == '\\')) {
+                        text.push_back(s[j + 1]);
+                        j += 2;
+                    } else if (s[j] == '"') {
+                        closed = true;
+                        ++j;
+                        break;
+                    } else {
+                        text.push_back(s[j++]);
+                    }
+                }
+                if (!closed) throw ExprError(ExprError::Syntax);
+                token.type = Tok::String;
+                token.text = std::move(text);
+                i = j;
+            } else if (std::isdigit(c) || c == '.') {
                 std::size_t used = 0;
-                if (!to_number(s, token.number, i, &used)) throw ExprError("#SYNTAX");
+                if (!to_number(s, token.number, i, &used)) throw ExprError(ExprError::Syntax);
                 token.type = Tok::Number;
                 token.text = s.substr(i, used);
                 i += used;
@@ -101,14 +131,20 @@ private:
                 token.text = upper(s.substr(i, k - i));
                 i = k;
             } else {
-                token.text = std::string(1, s[i++]);
-                switch (token.text[0]) {
-                case '+': case '-': case '*': case '/': case '^': token.type = Tok::Op; break;
-                case '(': token.type = Tok::LParen; break;
-                case ')': token.type = Tok::RParen; break;
-                case ',': token.type = Tok::Comma; break;
-                case ':': token.type = Tok::Colon; break;
-                default: throw ExprError("#SYNTAX");
+                if (i + 1 < s.size() && EvalOps::binary_ops().contains(s.substr(i, 2))) {
+                    token.type = Tok::Op;
+                    token.text = s.substr(i, 2);
+                    i += 2;
+                } else {
+                    char sym = s[i++];
+                    token.text = std::string(1, sym);
+                    if (EvalOps::binary_ops().contains(token.text)) {
+                        token.type = Tok::Op;
+                    } else if (auto it = punctuation().find(sym); it != punctuation().end()) {
+                        token.type = it->second;
+                    } else {
+                        throw ExprError(ExprError::Syntax);
+                    }
                 }
             }
             tokens.push_back(token, 0);
@@ -119,13 +155,24 @@ private:
 
     /**
      * Parser de descenso recursivo que construye el AST.
-     * Gramática: expr := term (('+'|'-') term)*, term := power (('*'|'/') power)*, power := unary ('^' power)?,
-     * unary := ('+'|'-') unary | primary, primary := número | celda | '(' expr ')' | función '(' argumentos ')'.
+     * Gramática: compare := expr (('='|'<>'|'<'|'>'|'<='|'>=') expr)*, expr := term (('+'|'-') term)*,
+     * term := power (('*'|'/') power)*, power := unary ('^' power)?, unary := ('+'|'-') unary | primary,
+     * primary := número | cadena | celda | '(' compare ')' | función '(' argumentos ')'.
      */
     class Parser {
+        static constexpr int max_depth = static_cast<int>(expr_max_depth);
         ExprTree& m_tree;
         Sequence<Token> m_tokens;
         std::size_t m_pos = 0;
+        int m_depth = 0;
+
+        struct DepthGuard {
+            int& depth;
+            explicit DepthGuard(int& d) : depth(d) {
+                if (++depth > max_depth) throw ExprError(ExprError::Syntax);
+            }
+            ~DepthGuard() { --depth; }
+        };
 
         /** Token @p ahead posiciones adelante, sin consumirlo. */
         const Token& peek(std::size_t ahead = 0) const {
@@ -145,10 +192,10 @@ private:
         }
         /** Consume un token de tipo @p type o falla. */
         void expect(Tok type) {
-            if (!accept(type)) throw ExprError("#SYNTAX");
+            if (!accept(type)) throw ExprError(ExprError::Syntax);
         }
         /** Indica si el token actual es el operador @p op. */
-        bool is_op(char op) const { return peek().type == Tok::Op && peek().text[0] == op; }
+        bool is_op(std::string_view op) const { return peek().type == Tok::Op && peek().text == op; }
 
         /** Crea un nodo con hijos @p left y @p right; si `new` falla, los hijos se liberan solos. */
         Owned make(value_type item, Owned left = nullptr, Owned right = nullptr) {
@@ -163,49 +210,64 @@ private:
         }
 
         /** Nodo binario con el operador @p op. */
-        Owned binary(char op, Owned left, Owned right) {
-            return make({Kind::Binary, std::string(1, op)}, std::move(left), std::move(right));
+        Owned binary(std::string op, Owned left, Owned right) {
+            return make({Kind::Binary, std::move(op)}, std::move(left), std::move(right));
+        }
+
+        /** Analiza una secuencia asociativa a la izquierda de operadores @p ops sobre el nivel @p next. */
+        template <typename Next> Owned left_assoc(Next&& next, std::initializer_list<const char*> ops) {
+            Owned left = next();
+            auto matches = [&] {
+                return std::any_of(ops.begin(), ops.end(), [&](const char* op) { return is_op(op); });
+            };
+            while (matches()) {
+                std::string op = take().text;
+                left = binary(std::move(op), std::move(left), next());
+            }
+            return left;
+        }
+
+        Owned compare() {
+            return left_assoc([this] { return expr(); }, {"=", "<", ">", "<=", ">=", "<>"});
         }
 
         Owned expr() {
-            Owned left = term();
-            while (is_op('+') || is_op('-')) {
-                char op = take().text[0];
-                left = binary(op, std::move(left), term());
-            }
-            return left;
+            return left_assoc([this] { return term(); }, {"+", "-"});
         }
 
         Owned term() {
-            Owned left = power();
-            while (is_op('*') || is_op('/')) {
-                char op = take().text[0];
-                left = binary(op, std::move(left), power());
-            }
-            return left;
+            return left_assoc([this] { return power(); }, {"*", "/"});
         }
 
         Owned power() {
             Owned base = unary();
-            if (!is_op('^')) return base;
+            if (!is_op("^")) return base;
+            DepthGuard guard(m_depth);
             take();
-            return binary('^', std::move(base), power());
+            return binary("^", std::move(base), power());
         }
 
         Owned unary() {
-            if (is_op('+')) return take(), unary();
-            if (!is_op('-')) return primary();
+            if (is_op("+")) {
+                DepthGuard guard(m_depth);
+                take();
+                return unary();
+            }
+            if (!is_op("-")) return primary();
+            DepthGuard guard(m_depth);
             take();
             return make({Kind::Negate, "-"}, unary());
         }
 
         Owned primary() {
+            DepthGuard guard(m_depth);
             Token token = take();
             switch (token.type) {
             case Tok::Number: return make({Kind::Number, token.text, token.number});
+            case Tok::String: return make({Kind::String, token.text});
             case Tok::Ref: return make({Kind::Ref, token.text});
             case Tok::LParen: {
-                Owned inner = expr();
+                Owned inner = compare();
                 expect(Tok::RParen);
                 return inner;
             }
@@ -215,21 +277,22 @@ private:
                 expect(Tok::RParen);
                 return make({Kind::Call, token.text}, std::move(args));
             }
-            default: throw ExprError("#SYNTAX");
+            default: throw ExprError(ExprError::Syntax);
             }
         }
 
         /** Un argumento: un rango `A1:B3` (hoja `Range`) o una expresión. */
         Owned argument() {
-            if (peek().type != Tok::Ref || peek(1).type != Tok::Colon) return expr();
+            if (peek().type != Tok::Ref || peek(1).type != Tok::Colon) return compare();
             std::string from = take().text;
             take();
-            if (peek().type != Tok::Ref) throw ExprError("#SYNTAX");
+            if (peek().type != Tok::Ref) throw ExprError(ExprError::Syntax);
             return make({Kind::Range, from + ":" + take().text});
         }
 
         /** Argumentos separados por `,`, encadenados hacia la derecha: `a, b, c` es `,(a, ,(b, c))`. */
         Owned arguments() {
+            DepthGuard guard(m_depth);
             Owned first = argument();
             if (!accept(Tok::Comma)) return first;
             return make({Kind::List, ","}, std::move(first), arguments());
@@ -241,49 +304,16 @@ private:
 
         /** Lee toda la fórmula y devuelve la raíz del AST. */
         Owned run() {
-            Owned root = expr();
-            if (peek().type != Tok::End) throw ExprError("#SYNTAX");
+            Owned root = compare();
+            if (peek().type != Tok::End) throw ExprError(ExprError::Syntax);
             return root;
         }
     };
 
-    /** Aplica el operador binario @p op. */
-    static Number apply(char op, Number left, Number right) {
-        switch (op) {
-        case '+': return left + right;
-        case '-': return left - right;
-        case '*': return left * right;
-        case '^': return std::pow(left, right);
-        default:
-            if (right == 0) throw ExprError("#DIV/0");
-            return left / right;
-        }
-    }
-
-    /** Aplica la función @p name a sus argumentos. */
-    static Number call(const std::string& name, const Sequence<Number>& args) {
-        Number sum = 0;
-        for (auto&& arg : args) sum += arg.getValue();
-        if (name == "SUMA") return sum;
-        if (name == "CONTAR") return static_cast<Number>(args.size());
-        if (name == "PROM") {
-            if (args.empty()) throw ExprError("#DIV/0");
-            return sum / static_cast<Number>(args.size());
-        }
-        if (name == "MAX" || name == "MIN") {
-            if (args.empty()) return 0;
-            Number best = args.at(0).getValue();
-            for (auto&& arg : args)
-                best = name == "MAX" ? std::max(best, arg.getValue()) : std::min(best, arg.getValue());
-            return best;
-        }
-        throw ExprError("#NAME");
-    }
-
 protected:
-    /** Libera los nodos y pone el tamaño a cero. */
+    /** Libera los nodos de forma iterativa y pone el tamaño a cero. */
     void reset() override {
-        Base::reset();
+        destroy_subtree(std::exchange(this->m_root, nullptr));
         m_size = 0;
     }
 
@@ -292,18 +322,11 @@ protected:
 
 public:
     /**
-     * Convierte @p text en número. Sin @p used exige que se consuma todo el texto; con @p used, lee desde @p start y guarda cuántos caracteres usó.
-     * @return `false` si no empieza con un número.
+     * Convierte @p text en número usando `ExprOps::to_number`.
+     * @return `false` si no empieza con un número válido o desborda `Number`.
      */
     static bool to_number(const std::string& text, Number& out, std::size_t start = 0, std::size_t* used = nullptr) {
-        try {
-            std::size_t n = 0;
-            out = static_cast<Number>(std::stold(text.substr(start), &n));
-            if (used) *used = n;
-            return used || start + n == text.size();
-        } catch (const std::logic_error&) {
-            return false;
-        }
+        return EvalOps::to_number(text, out, start, used);
     }
 
     /** Crea un árbol vacío. */
@@ -317,23 +340,54 @@ public:
         this->m_root = Parser(*this, formula).run().release();
     }
 
-    /** Copia en profundidad @p other. */
-    ExprTree(const ExprTree& other) : Base(other) {
+    /** Clona de forma iterativa el subárbol @p src con seguridad ante excepciones. */
+    static Owned clone_subtree(const Node* src) {
+        if (!src) return nullptr;
+        Owned root(new Node(src->getValue(), src->getRef()));
+        struct Frame {
+            const Node* src;
+            NodePtr dst;
+        };
+        std::vector<Frame> stack{{src, root.get()}};
+        while (!stack.empty()) {
+            auto [s, d] = stack.back();
+            stack.pop_back();
+            for (bool side : {false, true}) {
+                if (const Node* child = s->m_pChild[side]) {
+                    Owned copy(new Node(child->getValue(), child->getRef()));
+                    copy->m_pParent = d;
+                    d->m_pChild[side] = copy.release();
+                    stack.push_back({child, d->m_pChild[side]});
+                }
+            }
+        }
+        return root;
+    }
+
+    /** Destructor iterativo para evitar desbordamiento de pila en ASTs profundos. */
+    ~ExprTree() override {
+        destroy_subtree(std::exchange(this->m_root, nullptr));
+        m_size = 0;
+    }
+
+    /** Copia en profundidad @p other bajo un único bloqueo de `other.m_mutex`. */
+    ExprTree(const ExprTree& other) : Base() {
         std::lock_guard lock(other.m_mutex);
+        this->m_root = clone_subtree(other.m_root).release();
         m_size = other.m_size;
     }
 
     /** Mueve el contenido de @p other, que queda vacío. */
-    ExprTree(ExprTree&& other) noexcept { swap(other); }
+    ExprTree(ExprTree&& other) { swap(other); }
 
     /** Asigna por copia o por movimiento (copy-and-swap). */
-    ExprTree& operator=(ExprTree other) noexcept {
+    ExprTree& operator=(ExprTree other) {
         swap(other);
         return *this;
     }
 
     /** Intercambia el contenido con @p other. */
-    void swap(ExprTree& other) noexcept {
+    void swap(ExprTree& other) {
         if (this == &other) return;
         std::scoped_lock lock(this->m_mutex, other.m_mutex);
         std::swap(this->m_root, other.m_root);
@@ -347,66 +401,124 @@ public:
     }
 
     /**
-     * Evalúa el AST recorriéndolo en postorden: cada hoja apila sus valores y cada operador desapila los de sus hijos.
-     * La pila guarda listas de números porque un rango aporta varios; un operador exige listas de un solo valor.
-     * @param resolve Devuelve el valor de una celda: `Number(const std::string&)`.
-     * @param expand Agrega a la lista los valores de un rango `"A1:B3"`: `void(const std::string&, Sequence<Number>&)`.
+     * Evalúa el AST de forma iterativa con pila explícita; `SI(cond, a, b)` evalúa en cortocircuito solo la rama elegida.
+     * Un rango de más de una celda fuera de funciones agregadas (p. ej. en `SI` o `LARGO`) produce `#VALUE`.
+     * @param resolve Devuelve el valor de una celda: `Value(const std::string&)`.
+     * @param expand Agrega a la lista los valores de un rango `"A1:B3"`: `void(const std::string&, Sequence<Value>&)`.
      * @throws ExprError con el código del error.
      */
-    template <typename Resolve, typename Expand> Number evaluate(Resolve&& resolve, Expand&& expand) const {
+    template <typename Resolve, typename Expand> Value evaluate(Resolve&& resolve, Expand&& expand) const {
         std::lock_guard lock(this->m_mutex);
-        if (!this->m_root) throw ExprError("#SYNTAX");
-        Sequence<Sequence<Number>> stack;
-        auto push = [&](Number value) {
-            Sequence<Number> list;
-            list.push_back(value, 0);
-            stack.push_back(list, 0);
+        if (!this->m_root) throw ExprError(ExprError::Syntax);
+
+        auto collect_arg_nodes = [](NodePtr arg_root, std::vector<NodePtr>& out) {
+            NodePtr cur = arg_root;
+            while (cur && cur->getValue().kind == Kind::List) {
+                if (cur->m_pChild[0]) out.push_back(cur->m_pChild[0]);
+                cur = cur->m_pChild[1];
+            }
+            if (cur) out.push_back(cur);
         };
-        auto pop = [&] {
-            Sequence<Number> top = stack.at(stack.size() - 1).getValue();
-            stack.pop_back();
-            return top;
+
+        struct Task {
+            enum class Op { Eval, Negate, Binary, SiBranch, ExpandRange, Call };
+            Op op = Op::Eval;
+            NodePtr node = nullptr;
+            std::size_t base = 0;
         };
-        auto single = [&] {
-            Sequence<Number> list = pop();
-            if (list.size() != 1) throw ExprError("#VALUE");
-            return list.at(0).getValue();
+
+        std::vector<Task> tasks{{Task::Op::Eval, this->m_root, 0}};
+        std::vector<Value> values;
+
+        auto schedule_call = [&](NodePtr node) {
+            std::vector<NodePtr> arg_nodes;
+            if (node->m_pChild[0]) collect_arg_nodes(node->m_pChild[0], arg_nodes);
+            if (node->getValue().text == "SI") {
+                if (arg_nodes.size() != 3) throw ExprError(ExprError::Value);
+                tasks.push_back({Task::Op::SiBranch, node, 0});
+                tasks.push_back({Task::Op::Eval, arg_nodes[0], 0});
+                return;
+            }
+            tasks.push_back({Task::Op::Call, node, values.size()});
+            for (std::size_t i = arg_nodes.size(); i > 0; --i) {
+                NodePtr arg = arg_nodes[i - 1];
+                auto op = arg->getValue().kind == Kind::Range ? Task::Op::ExpandRange : Task::Op::Eval;
+                tasks.push_back({op, arg, 0});
+            }
         };
-        for (const auto& node : this->PostOrder()) {
-            const value_type& item = node.getValue();
-            switch (item.kind) {
-            case Kind::Number: push(item.number); break;
-            case Kind::Ref: push(resolve(item.text)); break;
-            case Kind::Range: {
-                Sequence<Number> list;
+
+        auto eval_node = [&](NodePtr node) {
+            const value_type& item = node->getValue();
+            if (item.kind == Kind::Number) return values.emplace_back(item.number), void();
+            if (item.kind == Kind::String) return values.emplace_back(item.text), void();
+            if (item.kind == Kind::Ref) return values.push_back(resolve(item.text)), void();
+            if (item.kind == Kind::Range) {
+                Sequence<Value> list;
                 expand(item.text, list);
-                stack.push_back(list, 0);
-                break;
+                if (list.size() != 1) throw ExprError(ExprError::Value);
+                values.push_back(list.at(0).getValue());
+                return;
             }
-            case Kind::Negate: push(-single()); break;
-            case Kind::Binary: {
-                Number right = single();
-                Number left = single();
-                push(apply(item.text[0], left, right));
-                break;
+            if (item.kind == Kind::Negate) {
+                tasks.push_back({Task::Op::Negate, node, 0});
+                tasks.push_back({Task::Op::Eval, node->m_pChild[0], 0});
+                return;
             }
-            case Kind::List: {
-                Sequence<Number> right = pop();
-                Sequence<Number> left = pop();
-                for (auto&& value : right) left.push_back(value.getValue(), 0);
-                stack.push_back(left, 0);
-                break;
+            if (item.kind == Kind::Binary) {
+                tasks.push_back({Task::Op::Binary, node, 0});
+                tasks.push_back({Task::Op::Eval, node->m_pChild[1], 0});
+                tasks.push_back({Task::Op::Eval, node->m_pChild[0], 0});
+                return;
             }
-            case Kind::Call: {
-                Sequence<Number> args;
-                if (node.m_pChild[0]) args = pop();
-                push(call(item.text, args));
-                break;
+            if (item.kind == Kind::Call) return schedule_call(node);
+            throw ExprError(ExprError::Syntax);
+        };
+
+        auto run_task = [&](const Task& task) {
+            NodePtr node = task.node;
+            if (!node) throw ExprError(ExprError::Syntax);
+            const value_type& item = node->getValue();
+            if (task.op == Task::Op::Eval) return eval_node(node);
+            if (task.op == Task::Op::Negate) {
+                values.back() = Value(EvalOps::checked_number(-values.back().number()));
+                return;
             }
+            if (task.op == Task::Op::Binary) {
+                Value right = std::move(values.back());
+                values.pop_back();
+                Value left = std::move(values.back());
+                values.back() = EvalOps::apply(item.text, left, right);
+                return;
             }
+            if (task.op == Task::Op::SiBranch) {
+                bool cond = values.back().number() != 0;
+                values.pop_back();
+                std::vector<NodePtr> arg_nodes;
+                collect_arg_nodes(node->m_pChild[0], arg_nodes);
+                tasks.push_back({Task::Op::Eval, arg_nodes[cond ? 1 : 2], 0});
+                return;
+            }
+            if (task.op == Task::Op::ExpandRange) {
+                Sequence<Value> list;
+                expand(item.text, list);
+                for (auto&& v : list) values.push_back(v.getValue());
+                return;
+            }
+            Sequence<Value> args;
+            for (std::size_t i = task.base; i < values.size(); ++i) args.push_back(std::move(values[i]), 0);
+            values.resize(task.base);
+            values.push_back(EvalOps::call(item.text, args));
+        };
+
+        while (!tasks.empty()) {
+            Task task = tasks.back();
+            tasks.pop_back();
+            run_task(task);
         }
-        return single();
+
+        if (values.size() != 1) throw ExprError(ExprError::Syntax);
+        return std::move(values.back());
     }
 };
 
-#endif // !__EXPRTREE_H__
+#endif // !CONTAINERS_EXPRTREE_H

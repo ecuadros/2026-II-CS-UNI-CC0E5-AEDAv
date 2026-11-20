@@ -32,6 +32,12 @@ public:
         else                   ++Parent::m_ptr;
         return *this;
     }
+
+    VectorIterator operator++(int) {
+        VectorIterator previous = *this;
+        ++*this;
+        return previous;
+    }
 };
 
 /**

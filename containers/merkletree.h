@@ -14,7 +14,6 @@
 #include <mutex>
 #include <stdexcept>
 #include <utility>
-#include <vector>
 
 /**
  * Hasher de Merkle basado en `std::hash`. No es criptográfico: sirve para demos y pruebas.
@@ -250,14 +249,14 @@ public:
    * que coinciden con los del texto; si no, el stream queda en fallo y el árbol no cambia.
    */
   friend std::istream &operator>>(std::istream &is, MerkleTree &tree) {
-    std::vector<GeneralNode<Digest, Ref>> nodes;
-    if (!container_stream::read_nodes(is, nodes))
+    Vector<VectorTraits<Digest>> nodes;
+    if (!container_stream::read_nodes<Digest, Ref>(is, nodes))
       return is;
-    std::vector<Digest> leaves;
+    Vector<VectorTraits<Digest>> leaves;
     for (const auto &node : nodes)
       if (node.getRef() >= 0)
-        leaves.push_back(node.getValue());
-    MerkleTree loaded(leaves.begin(), leaves.end(), [](const Digest &digest) { return digest; });
+        leaves.push_back(node.getValue(), node.getRef());
+    MerkleTree loaded(leaves.begin(), leaves.end(), [](const auto &leaf) { return leaf.getValue(); });
     auto expected = nodes.begin();
     for (const auto &node : loaded.PostOrder()) {
       if (expected == nodes.end() || !(node.getValue() == expected->getValue()) || node.getRef() != expected->getRef()) {

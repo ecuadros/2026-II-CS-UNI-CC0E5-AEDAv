@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <string>
+#include <cctype>
 #include <thread>
 #include <vector>
 #include <algorithm>
@@ -835,18 +836,15 @@ void Check(bool ok, const std::string& name, const std::string& what) {
 /** Igual que Check() con el nombre `MerkleTree`. */
 void CheckMerkle(bool ok, const std::string& what) { Check(ok, "MerkleTree", what); }
 
-/** Imprime el subárbol tumbado, con el bloque junto a cada hoja. */
-void PrintMerkleNode(const MerkleStrings::Node* node, const std::vector<std::string>& blocks, int depth) {
-    if (!node) return;
-    PrintMerkleNode(node->m_pChild[1], blocks, depth + 1);
-    std::cout << std::string(depth * 8, ' ') << (node->is_leaf() ? blocks[node->getRef()] + ":" : "")
-              << ShortHash(node->getValue()) << '\n';
-    PrintMerkleNode(node->m_pChild[0], blocks, depth + 1);
-}
-
 /** Imprime el árbol con su raíz, cantidad de hojas y altura. */
 void ShowMerkle(const MerkleStrings& tree, const std::vector<std::string>& blocks) {
-    PrintMerkleNode(tree.tree_view().root(), blocks, 0);
+    struct View : decltype(tree.tree_view()) {
+        const std::vector<std::string>* blocks;
+        void label(std::ostream& os, Handle node) const {
+            os << (node->is_leaf() ? (*blocks)[node->getRef()] + ":" : "") << ShortHash(node->getValue());
+        }
+    };
+    visual::print_tree(std::cout, View{{tree.tree_view()}, &blocks});
     std::cout << "raiz = " << ShortHash(tree.root_hash()) << ", hojas = " << tree.size()
               << ", altura = " << tree.height() << "\n\n";
 }
@@ -1196,6 +1194,12 @@ void DemoSheet() {
     sheet.set("A1", "0");
     Check(sheet.value("B1") == 50, name, "el cambio no se propago");
 
+    sheet.set("G1", "=SI(A2>15, \"Alto\", \"Bajo\")");
+    sheet.set("G2", "=CONCAT(C1, \": \", B1)");
+    sheet.set("G3", "=LARGO(C1) + SI(A1=0, 10, 0)");
+    Check(sheet.text("G1") == "Alto" && sheet.text("G2") == "Total: 50" && sheet.value("G3") == 15, name,
+          "SI, comparaciones y cadenas");
+
     auto postorder = [](const SheetOf<>::Formula& tree) {
         std::string order;
         for (const auto& node : tree.PostOrder()) order += node.getValue().text + " ";
@@ -1249,6 +1253,94 @@ void DemoSheet() {
     std::cout << name << ": formulas, archivo y 4 hilos OK\n";
 }
 
+/** Imprime el texto serializado `[(celda,texto),...]` agrupado por columna y con color. */
+void PrintSerializedSheet(const std::string& serialized, std::ostream& os = std::cout) {
+    if (serialized.size() < 2 || serialized.front() != '[' || serialized.back() != ']') {
+        os << serialized << '\n';
+        return;
+    }
+
+    std::vector<std::string> entries;
+    bool in_quotes = false;
+    bool escaped = false;
+    int depth = 0;
+    std::size_t start = 1;
+    for (std::size_t i = 1; i + 1 < serialized.size(); ++i) {
+        char ch = serialized[i];
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (in_quotes) {
+            if (ch == '\\') escaped = true;
+            else if (ch == '"') in_quotes = false;
+            continue;
+        }
+        if (ch == '"') in_quotes = true;
+        else if (ch == '(') ++depth;
+        else if (ch == ')') --depth;
+        else if (ch == ',' && depth == 0) {
+            entries.push_back(serialized.substr(start, i - start));
+            start = i + 1;
+        }
+    }
+    if (start < serialized.size() - 1)
+        entries.push_back(serialized.substr(start, serialized.size() - 1 - start));
+
+    auto col_of = [](const std::string& entry) {
+        std::string col;
+        for (std::size_t i = 1; i < entry.size() && std::isalpha(static_cast<unsigned char>(entry[i])); ++i)
+            col += entry[i];
+        return col;
+    };
+
+    visual::Painter paint(os);
+    auto print_entry = [&](const std::string& entry, bool trailing_comma) {
+        std::size_t comma = entry.find(',');
+        if (comma == std::string::npos || entry.front() != '(' || entry.back() != ')') {
+            os << entry << (trailing_comma ? "," : "");
+            return;
+        }
+        std::string cell = entry.substr(1, comma - 1);
+        std::string val = entry.substr(comma + 1, entry.size() - comma - 2);
+        bool is_formula = (!val.empty() && val.front() == '=') || (val.size() >= 2 && val[0] == '"' && val[1] == '=');
+        os << paint("2", "(") << paint("1;36", cell) << paint("2", ",")
+           << (is_formula ? paint("0;32", val) : val) << paint("2", trailing_comma ? ")," : ")");
+    };
+
+    os << paint("2", "[") << '\n';
+    std::size_t i = 0;
+    while (i < entries.size()) {
+        std::string col = col_of(entries[i]);
+        std::size_t j = i + 1;
+        while (j < entries.size() && col_of(entries[j]) == col) ++j;
+
+        std::size_t line_len = 2;
+        for (std::size_t k = i; k < j; ++k) {
+            line_len += entries[k].size();
+            if (k + 1 < entries.size()) ++line_len;
+            if (k + 1 < j) ++line_len;
+        }
+
+        if (line_len <= 78) {
+            os << "  ";
+            for (std::size_t k = i; k < j; ++k) {
+                if (k > i) os << ' ';
+                print_entry(entries[k], k + 1 < entries.size());
+            }
+            os << '\n';
+        } else {
+            for (std::size_t k = i; k < j; ++k) {
+                os << (k == i ? "  " : "    ");
+                print_entry(entries[k], k + 1 < entries.size());
+                os << '\n';
+            }
+        }
+        i = j;
+    }
+    os << paint("2", "]") << '\n';
+}
+
 void DemoSheetStepByStep() {
     PrintColor("DemoSheet paso a paso");
     const std::string name = "Sheet paso a paso";
@@ -1296,14 +1388,75 @@ void DemoSheetStepByStep() {
     step("D1 = D2, D2 = D1+1 -> #CICLO;  D3 = A1/(A2-20) -> #DIV/0");
     Check(sheet.text("D1") == "#CICLO" && sheet.text("D3") == "#DIV/0", name, "errores");
 
+    SheetOf<> grades;
+    auto gstep = [&](const std::string& title) {
+        PrintColor(title, "1;33");
+        grades.print(std::cout);
+    };
+    auto gstatus = [&](const std::string& student_cell, const std::string& prom_cell,
+                       const std::string& state_cell, const std::string& summary_cell) {
+        std::string st = grades.text(state_cell);
+        std::cout << "  " << grades.text(student_cell) << " (prom=" << grades.text(prom_cell) << ") -> ";
+        PrintColor(st + " | " + grades.text(summary_cell), st == "Aprobado" ? "1;32" : "1;31");
+    };
+
+    grades.set("A1", "Alumno");
+    grades.set("B1", "Nota1");
+    grades.set("C1", "Nota2");
+    grades.set("D1", "Prom");
+    grades.set("E1", "Estado");
+    grades.set("F1", "Resumen");
+
+    grades.set("A2", "Ana");
+    grades.set("B2", "14");
+    grades.set("C2", "16.5");
+    grades.set("D2", "=PROM(B2:C2)");
+    grades.set("E2", "=SI(D2>=11, \"Aprobado\", \"Desaprobado\")");
+    grades.set("F2", "=CONCAT(A2, \": \", E2)");
+
+    grades.set("A3", "Luis");
+    grades.set("B3", "8");
+    grades.set("C3", "11");
+    grades.set("D3", "=PROM(B3:C3)");
+    grades.set("E3", "=SI(D3>=11, \"Aprobado\", \"Desaprobado\")");
+    grades.set("F3", "=CONCAT(A3, \": \", E3, \" (\", LARGO(E3), \")\")");
+
+    gstep("Registro de notas: texto, decimales, PROM, SI y CONCAT");
+    gstatus("A2", "D2", "E2", "F2");
+    gstatus("A3", "D3", "E3", "F3");
+    Check(grades.text("E2") == "Aprobado" && grades.text("E3") == "Desaprobado" && grades.text("F2") == "Ana: Aprobado",
+          name, "registro inicial con SI y CONCAT");
+
+    grades.set("C3", "16");
+    gstep("Cambio C3 = 16: Luis sube de promedio y pasa a Aprobado en cascada");
+    gstatus("A3", "D3", "E3", "F3");
+    Check(grades.value("D3") == 12 && grades.text("E3") == "Aprobado", name, "cambio de Desaprobado a Aprobado");
+
+    grades.remove("C3");
+    grades.set("G1", "=B2 + 1");
+    grades.remove("B2");
+    gstep("remove(C3) y remove(B2): en rango PROM ignora vacias; en ref directa G1=B2+1 da #REF");
+    gstatus("A2", "D2", "E2", "F2");
+    gstatus("A3", "D3", "E3", "F3");
+    Check(grades.value("D3") == 8 && grades.text("E3") == "Desaprobado" && grades.text("G1") == "#REF", name,
+          "remove en rango y en referencia directa");
+
+    grades.set("G2", "=G3");
+    grades.set("G3", "=G2+1");
+    grades.set("G4", "=A1+1");
+    grades.set("G5", "=NOEXISTE(1)");
+    gstep("Errores: G1=#REF, G2/G3=#CICLO, G4=A1+1 (#VALUE por sumar texto), G5=#NAME");
+    Check(grades.text("G2") == "#CICLO" && grades.text("G4") == "#VALUE" && grades.text("G5") == "#NAME", name,
+          "errores variados");
+
     PrintColor("operator<<: la HashTable escribe [(celda,texto),...]; las formulas con , o ) van entre comillas", "1;33");
     std::stringstream saved;
-    saved << sheet;
-    std::cout << saved.str() << '\n';
+    saved << grades;
+    PrintSerializedSheet(saved.str());
 
     SheetOf<> loaded;
     saved >> loaded;
     PrintColor("operator>>: se lee en otra hoja y se recalcula igual", "1;33");
     loaded.print(std::cout);
-    Check(saved && loaded.text("B3") == sheet.text("B3") && loaded.text("D1") == "#CICLO", name, "lectura");
+    Check(saved && loaded.text("E2") == grades.text("E2") && loaded.text("G2") == "#CICLO", name, "lectura");
 }
