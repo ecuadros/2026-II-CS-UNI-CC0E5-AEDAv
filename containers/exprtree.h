@@ -6,6 +6,7 @@
 #include "hashtable.h"
 #include "traits.h"
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <initializer_list>
@@ -411,113 +412,131 @@ public:
         std::lock_guard lock(this->m_mutex);
         if (!this->m_root) throw ExprError(ExprError::Syntax);
 
-        auto collect_arg_nodes = [](NodePtr arg_root, std::vector<NodePtr>& out) {
-            NodePtr cur = arg_root;
-            while (cur && cur->getValue().kind == Kind::List) {
-                if (cur->m_pChild[0]) out.push_back(cur->m_pChild[0]);
-                cur = cur->m_pChild[1];
-            }
-            if (cur) out.push_back(cur);
-        };
-
         struct Task {
-            enum class Op { Eval, Negate, Binary, SiBranch, ExpandRange, Call };
+            enum class Op { Eval, Negate, Binary, SiBranch, ExpandRange, Call, Count };
             Op op = Op::Eval;
             NodePtr node = nullptr;
             std::size_t base = 0;
         };
 
-        std::vector<Task> tasks{{Task::Op::Eval, this->m_root, 0}};
-        std::vector<Value> values;
+        struct EvalCtx {
+            Resolve& resolve;
+            Expand& expand;
+            std::vector<Task> tasks;
+            std::vector<Value> values;
 
-        auto schedule_call = [&](NodePtr node) {
-            std::vector<NodePtr> arg_nodes;
-            if (node->m_pChild[0]) collect_arg_nodes(node->m_pChild[0], arg_nodes);
-            if (node->getValue().text == "SI") {
-                if (arg_nodes.size() != 3) throw ExprError(ExprError::Value);
-                tasks.push_back({Task::Op::SiBranch, node, 0});
-                tasks.push_back({Task::Op::Eval, arg_nodes[0], 0});
-                return;
-            }
-            tasks.push_back({Task::Op::Call, node, values.size()});
-            for (std::size_t i = arg_nodes.size(); i > 0; --i) {
-                NodePtr arg = arg_nodes[i - 1];
-                auto op = arg->getValue().kind == Kind::Range ? Task::Op::ExpandRange : Task::Op::Eval;
-                tasks.push_back({op, arg, 0});
+            static void collect_arg_nodes(NodePtr arg_root, std::vector<NodePtr>& out) {
+                NodePtr cur = arg_root;
+                while (cur && cur->getValue().kind == Kind::List) {
+                    if (cur->m_pChild[0]) out.push_back(cur->m_pChild[0]);
+                    cur = cur->m_pChild[1];
+                }
+                if (cur) out.push_back(cur);
             }
         };
 
-        auto eval_node = [&](NodePtr node) {
-            const value_type& item = node->getValue();
-            if (item.kind == Kind::Number) return values.emplace_back(item.number), void();
-            if (item.kind == Kind::String) return values.emplace_back(item.text), void();
-            if (item.kind == Kind::Ref) return values.push_back(resolve(item.text)), void();
-            if (item.kind == Kind::Range) {
+        using KindHandler = void (*)(EvalCtx&, NodePtr);
+        using TaskHandler = void (*)(EvalCtx&, const Task&);
+
+        static constexpr std::array<KindHandler, 8> kind_handlers = {
+            // Kind::Number
+            [](EvalCtx& ctx, NodePtr node) { ctx.values.emplace_back(node->getValue().number); },
+            // Kind::String
+            [](EvalCtx& ctx, NodePtr node) { ctx.values.emplace_back(node->getValue().text); },
+            // Kind::Ref
+            [](EvalCtx& ctx, NodePtr node) { ctx.values.push_back(ctx.resolve(node->getValue().text)); },
+            // Kind::Range
+            [](EvalCtx& ctx, NodePtr node) {
                 Sequence<Value> list;
-                expand(item.text, list);
+                ctx.expand(node->getValue().text, list);
                 if (list.size() != 1) throw ExprError(ExprError::Value);
-                values.push_back(list.at(0).getValue());
-                return;
-            }
-            if (item.kind == Kind::Negate) {
-                tasks.push_back({Task::Op::Negate, node, 0});
-                tasks.push_back({Task::Op::Eval, node->m_pChild[0], 0});
-                return;
-            }
-            if (item.kind == Kind::Binary) {
-                tasks.push_back({Task::Op::Binary, node, 0});
-                tasks.push_back({Task::Op::Eval, node->m_pChild[1], 0});
-                tasks.push_back({Task::Op::Eval, node->m_pChild[0], 0});
-                return;
-            }
-            if (item.kind == Kind::Call) return schedule_call(node);
-            throw ExprError(ExprError::Syntax);
-        };
-
-        auto run_task = [&](const Task& task) {
-            NodePtr node = task.node;
-            if (!node) throw ExprError(ExprError::Syntax);
-            const value_type& item = node->getValue();
-            if (task.op == Task::Op::Eval) return eval_node(node);
-            if (task.op == Task::Op::Negate) {
-                values.back() = Value(EvalOps::checked_number(-values.back().number()));
-                return;
-            }
-            if (task.op == Task::Op::Binary) {
-                Value right = std::move(values.back());
-                values.pop_back();
-                Value left = std::move(values.back());
-                values.back() = EvalOps::apply(item.text, left, right);
-                return;
-            }
-            if (task.op == Task::Op::SiBranch) {
-                bool cond = values.back().number() != 0;
-                values.pop_back();
+                ctx.values.push_back(list.at(0).getValue());
+            },
+            // Kind::Negate
+            [](EvalCtx& ctx, NodePtr node) {
+                ctx.tasks.push_back({Task::Op::Negate, node, 0});
+                ctx.tasks.push_back({Task::Op::Eval, node->m_pChild[0], 0});
+            },
+            // Kind::Binary
+            [](EvalCtx& ctx, NodePtr node) {
+                ctx.tasks.push_back({Task::Op::Binary, node, 0});
+                ctx.tasks.push_back({Task::Op::Eval, node->m_pChild[1], 0});
+                ctx.tasks.push_back({Task::Op::Eval, node->m_pChild[0], 0});
+            },
+            // Kind::List
+            [](EvalCtx&, NodePtr) { throw ExprError(ExprError::Syntax); },
+            // Kind::Call
+            [](EvalCtx& ctx, NodePtr node) {
                 std::vector<NodePtr> arg_nodes;
-                collect_arg_nodes(node->m_pChild[0], arg_nodes);
-                tasks.push_back({Task::Op::Eval, arg_nodes[cond ? 1 : 2], 0});
-                return;
-            }
-            if (task.op == Task::Op::ExpandRange) {
-                Sequence<Value> list;
-                expand(item.text, list);
-                for (auto&& v : list) values.push_back(v.getValue());
-                return;
-            }
-            Sequence<Value> args;
-            for (std::size_t i = task.base; i < values.size(); ++i) args.push_back(std::move(values[i]), 0);
-            values.resize(task.base);
-            values.push_back(EvalOps::call(item.text, args));
+                if (node->m_pChild[0]) EvalCtx::collect_arg_nodes(node->m_pChild[0], arg_nodes);
+                if (node->getValue().text == "SI") {
+                    if (arg_nodes.size() != 3) throw ExprError(ExprError::Value);
+                    ctx.tasks.push_back({Task::Op::SiBranch, node, 0});
+                    ctx.tasks.push_back({Task::Op::Eval, arg_nodes[0], 0});
+                    return;
+                }
+                ctx.tasks.push_back({Task::Op::Call, node, ctx.values.size()});
+                for (std::size_t i = arg_nodes.size(); i > 0; --i) {
+                    NodePtr arg = arg_nodes[i - 1];
+                    auto op = arg->getValue().kind == Kind::Range ? Task::Op::ExpandRange : Task::Op::Eval;
+                    ctx.tasks.push_back({op, arg, 0});
+                }
+            },
         };
 
-        while (!tasks.empty()) {
-            Task task = tasks.back();
-            tasks.pop_back();
-            run_task(task);
+        static constexpr std::array<TaskHandler, static_cast<std::size_t>(Task::Op::Count)> task_handlers = {
+            // Task::Op::Eval
+            [](EvalCtx& ctx, const Task& task) {
+                const auto idx = static_cast<std::size_t>(task.node->getValue().kind);
+                if (idx >= kind_handlers.size()) throw ExprError(ExprError::Syntax);
+                kind_handlers[idx](ctx, task.node);
+            },
+            // Task::Op::Negate
+            [](EvalCtx& ctx, const Task&) {
+                ctx.values.back() = Value(EvalOps::checked_number(-ctx.values.back().number()));
+            },
+            // Task::Op::Binary
+            [](EvalCtx& ctx, const Task& task) {
+                Value right = std::move(ctx.values.back());
+                ctx.values.pop_back();
+                Value left = std::move(ctx.values.back());
+                ctx.values.back() = EvalOps::apply(task.node->getValue().text, left, right);
+            },
+            // Task::Op::SiBranch
+            [](EvalCtx& ctx, const Task& task) {
+                bool cond = ctx.values.back().number() != 0;
+                ctx.values.pop_back();
+                std::vector<NodePtr> arg_nodes;
+                EvalCtx::collect_arg_nodes(task.node->m_pChild[0], arg_nodes);
+                ctx.tasks.push_back({Task::Op::Eval, arg_nodes[cond ? 1 : 2], 0});
+            },
+            // Task::Op::ExpandRange
+            [](EvalCtx& ctx, const Task& task) {
+                Sequence<Value> list;
+                ctx.expand(task.node->getValue().text, list);
+                for (auto&& v : list) ctx.values.push_back(v.getValue());
+            },
+            // Task::Op::Call
+            [](EvalCtx& ctx, const Task& task) {
+                Sequence<Value> args;
+                for (std::size_t i = task.base; i < ctx.values.size(); ++i)
+                    args.push_back(std::move(ctx.values[i]), 0);
+                ctx.values.resize(task.base);
+                ctx.values.push_back(EvalOps::call(task.node->getValue().text, args));
+            },
+        };
+
+        EvalCtx ctx{resolve, expand, {{Task::Op::Eval, this->m_root, 0}}, {}};
+
+        while (!ctx.tasks.empty()) {
+            Task task = ctx.tasks.back();
+            ctx.tasks.pop_back();
+            if (!task.node) throw ExprError(ExprError::Syntax);
+            task_handlers[static_cast<std::size_t>(task.op)](ctx, task);
         }
 
-        if (values.size() != 1) throw ExprError(ExprError::Syntax);
-        return std::move(values.back());
+        if (ctx.values.size() != 1) throw ExprError(ExprError::Syntax);
+        return std::move(ctx.values.back());
     }
 };
 
