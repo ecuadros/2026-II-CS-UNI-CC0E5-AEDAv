@@ -72,6 +72,8 @@ template <typename N> struct ExprItem {
     /** Clase de nodo. `List` une dos argumentos de una función; `Range` es una hoja con el texto `A1:B3`. */
     enum class Kind { Number, String, Ref, Range, Negate, Binary, List, Call };
 
+    friend std::ostream& operator<<(std::ostream& os, Kind k) { return os << static_cast<int>(k); }
+
     Kind kind = Kind::Number;
     std::string text;
     N number{};
