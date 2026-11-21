@@ -5,7 +5,6 @@
 #include "exprvalue.h"
 #include "hashtable.h"
 #include "traits.h"
-#include "vector.h"
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
@@ -13,7 +12,6 @@
 #include <memory>
 #include <mutex>
 #include <ostream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
