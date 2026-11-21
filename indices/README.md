@@ -22,7 +22,7 @@ psql -d <base> -f indices/gist.sql
 
 Es el índice por defecto (`CREATE INDEX` sin `USING` crea un B-tree), y también el que crean `PRIMARY KEY` y `UNIQUE`.
 
-**Cómo funciona.** Es un árbol de búsqueda balanceado como el AVL de `containers/avl.h`, pero cada nodo es una página de disco (8 KB) con cientos de claves ordenadas, no una sola. Así el árbol es muy bajo: con 3 o 4 niveles alcanza para millones de filas, y cada nivel es una lectura de disco. Las hojas están enlazadas entre sí, de modo que para un rango se baja una vez hasta el primer valor y luego se avanza por las hojas.
+**Cómo funciona.** Es un árbol de búsqueda balanceado como el AVL de `containers/trees/avl.h`, pero cada nodo es una página de disco (8 KB) con cientos de claves ordenadas, no una sola. Así el árbol es muy bajo: con 3 o 4 niveles alcanza para millones de filas, y cada nivel es una lectura de disco. Las hojas están enlazadas entre sí, de modo que para un rango se baja una vez hasta el primer valor y luego se avanza por las hojas.
 
 ```
                  [   30   |   60   ]
@@ -96,7 +96,7 @@ ERROR:  access method "hash" does not support unique indexes
  idx_sesiones_token_btree | 5792 kB
 ```
 
-> En este repositorio, `HashTable` (`containers/hashtable.h`) tiene interfaz de mapa pero por dentro es un AVL, así que en realidad se comporta como un B-tree: O(log n) y recorrido ordenado. Un índice hash de verdad es O(1) en promedio, pero pierde el orden.
+> En este repositorio, `HashTable` (`containers/hashing/hashtable.h`) tiene interfaz de mapa pero por dentro es un AVL, así que en realidad se comporta como un B-tree: O(log n) y recorrido ordenado. Un índice hash de verdad es O(1) en promedio, pero pierde el orden.
 
 ## GiST
 

@@ -1,7 +1,7 @@
 #ifndef LISTITERATOR_H
 #define LISTITERATOR_H
 
-#include "GeneralIterator.h"
+#include "../core/GeneralIterator.h"
 
 /**
  * Iterador de listas enlazadas.

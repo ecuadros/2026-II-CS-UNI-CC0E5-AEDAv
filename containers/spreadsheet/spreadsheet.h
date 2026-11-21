@@ -2,9 +2,9 @@
 #define CONTAINERS_SPREADSHEET_H
 
 #include "exprtree.h"
-#include "hashtable.h"
-#include "traversalops.h"
-#include "visualization.h"
+#include "../hashing/hashtable.h"
+#include "../core/traversalops.h"
+#include "../core/visualization.h"
 #include <algorithm>
 #include <cctype>
 #include <cstddef>

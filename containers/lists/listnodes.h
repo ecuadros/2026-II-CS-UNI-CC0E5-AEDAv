@@ -1,7 +1,7 @@
 #ifndef __LIST_NODES_H__
 #define __LIST_NODES_H__
 
-#include "GeneralNode.h"
+#include "../core/GeneralNode.h"
 #include "listiterator.h"
 
 /** Enlace al nodo siguiente. */

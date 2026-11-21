@@ -7,10 +7,10 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-#include "GeneralIterator.h"
-#include "traversalops.h"
-#include "traits.h"
-#include "../types.h" // Ref
+#include "../core/GeneralIterator.h"
+#include "../core/traversalops.h"
+#include "../core/traits.h"
+#include "../../types.h" // Ref
 
 /**
  * Iterador de Vector sobre memoria contigua.

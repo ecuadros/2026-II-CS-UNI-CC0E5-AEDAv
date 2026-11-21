@@ -1,9 +1,9 @@
 #ifndef __BINARYTREE_H__
 #define __BINARYTREE_H__
 
-#include "GeneralNode.h"
-#include "traits.h"
-#include "traversalops.h"
+#include "../core/GeneralNode.h"
+#include "../core/traits.h"
+#include "../core/traversalops.h"
 #include <algorithm>
 #include <cstddef>
 #include <initializer_list>

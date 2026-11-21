@@ -16,8 +16,8 @@
 #include <string_view>
 #include <iomanip>
 #include "containers/aliases.h"
-#include "containers/hashtable.h"
-#include "containers/sha256.h"
+#include "containers/hashing/hashtable.h"
+#include "containers/hashing/sha256.h"
 #include "Demos.h"
 
 /** Lista de pares (valor, ref) para llenar un contenedor. */

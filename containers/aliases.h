@@ -1,16 +1,16 @@
 #ifndef CONTAINERS_ALIASES_H
 #define CONTAINERS_ALIASES_H
 
-#include "binarytree.h"
-#include "avl.h"
-#include "hashtable.h"
-#include "Heap.h"
-#include "vector.h"
-#include "traits.h"
-#include "linkedlist.h"
-#include "merkletree.h"
-#include "exprtree.h"
-#include "spreadsheet.h"
+#include "trees/binarytree.h"
+#include "trees/avl.h"
+#include "hashing/hashtable.h"
+#include "trees/Heap.h"
+#include "lists/vector.h"
+#include "core/traits.h"
+#include "lists/linkedlist.h"
+#include "trees/merkletree.h"
+#include "spreadsheet/exprtree.h"
+#include "spreadsheet/spreadsheet.h"
 #include <functional>
 
 /** Vector de elementos de tipo @p T. */

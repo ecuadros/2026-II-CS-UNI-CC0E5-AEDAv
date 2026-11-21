@@ -2,9 +2,9 @@
 #define __MERKLETREE_H__
 
 #include "binarytree.h"
-#include "traits.h"
-#include "traversalops.h"
-#include "vector.h"
+#include "../core/traits.h"
+#include "../core/traversalops.h"
+#include "../lists/vector.h"
 #include <algorithm>
 #include <cstddef>
 #include <functional>

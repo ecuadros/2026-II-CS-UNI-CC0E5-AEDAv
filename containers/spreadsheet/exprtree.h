@@ -1,10 +1,10 @@
 #ifndef CONTAINERS_EXPRTREE_H
 #define CONTAINERS_EXPRTREE_H
 
-#include "binarytree.h"
+#include "../trees/binarytree.h"
 #include "exprvalue.h"
-#include "hashtable.h"
-#include "traits.h"
+#include "../hashing/hashtable.h"
+#include "../core/traits.h"
 #include <algorithm>
 #include <cctype>
 #include <cstddef>

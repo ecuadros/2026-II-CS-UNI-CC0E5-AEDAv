@@ -1,7 +1,7 @@
 #ifndef CONTAINERS_BINARYTREEITERATOR_H
 #define CONTAINERS_BINARYTREEITERATOR_H
 
-#include "GeneralIterator.h"
+#include "../core/GeneralIterator.h"
 #include <memory>
 
 /** Órdenes de recorrido de un árbol binario. */

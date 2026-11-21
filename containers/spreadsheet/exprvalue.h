@@ -1,8 +1,8 @@
 #ifndef CONTAINERS_EXPRVALUE_H
 #define CONTAINERS_EXPRVALUE_H
 
-#include "hashtable.h"
-#include "traits.h"
+#include "../hashing/hashtable.h"
+#include "../core/traits.h"
 #include <algorithm>
 #include <cctype>
 #include <charconv>

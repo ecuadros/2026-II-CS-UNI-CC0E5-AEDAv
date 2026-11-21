@@ -1,7 +1,7 @@
 #ifndef __HASHTABLE_H__
 #define __HASHTABLE_H__
 
-#include "visualization.h"
+#include "../core/visualization.h"
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>

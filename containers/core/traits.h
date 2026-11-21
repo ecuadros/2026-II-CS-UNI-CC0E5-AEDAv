@@ -1,9 +1,9 @@
 #ifndef __CONTAINERS_TRAITS_H__
 #define __CONTAINERS_TRAITS_H__
 
-#include "listnodes.h"
+#include "../lists/listnodes.h"
 #include "GeneralNode.h"
-#include "binarytreeiterator.h"
+#include "../trees/binarytreeiterator.h"
 #include "traversalops.h"
 #include <functional>
 #include <string>

@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 #include <type_traits>
-#include "../types.h" // Ref
+#include "../../types.h" // Ref
 
 /** Delimitadores del formato de texto `[(valor,ref),...]` con el que se leen y escriben los contenedores. */
 struct StreamDelimiters {

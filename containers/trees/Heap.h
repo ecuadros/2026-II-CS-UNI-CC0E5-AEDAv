@@ -1,8 +1,8 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
 
-#include "traversalops.h"
-#include "../types.h"
+#include "../core/traversalops.h"
+#include "../../types.h"
 #include <cstddef>
 #include <initializer_list>
 #include <mutex>
