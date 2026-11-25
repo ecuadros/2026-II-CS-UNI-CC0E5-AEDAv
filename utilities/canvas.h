@@ -2,6 +2,7 @@
 #define __CANVAS_H__
 #include <sstream>
 #include <string>
+#include "utf8.h"
 #include "../containers/vector.h"
 
 class Canvas {
@@ -16,9 +17,11 @@ public:
         while (m_lines.size() <= y)
             m_lines.push_back("", 0);
         std::string& line = m_lines[y].value();
-        if (line.size() < x + text.size())
-            line.resize(x + text.size(), ' ');
-        line.replace(x, text.size(), text);
+        size_t end = x + Utf8Width(text), length = Utf8Width(line);
+        if (length < end)
+            line.append(end - length, ' ');
+        size_t from = Utf8Offset(line, x);
+        line.replace(from, Utf8Offset(line, end) - from, text);
     }
 
     friend std::ostream& operator<<(std::ostream& os, const Canvas& canvas) {

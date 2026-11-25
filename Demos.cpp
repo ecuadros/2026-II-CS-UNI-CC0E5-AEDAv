@@ -20,6 +20,7 @@
 #include "containers/avl.h"
 #include "containers/hash.h"
 #include "containers/merkletree.h"
+#include "containers/sheet.h"
 #include "utilities/canvas.h"
 #include "utilities/printcolored.h"
 #include "utilities/sha256.h"
@@ -572,4 +573,58 @@ void DemoMerkleTree() {
     in.close();
     cout << "Arbol leido desde archivo: " << read << endl;
     cout << "Raiz del arbol leido igual a la original: " << (read.root() == tree.root() ? "si" : "no") << endl;
+}
+
+void FillSheet(Sheet &sheet, const vector<pair<string, string>> &cells) {
+    for (const auto &[name, content] : cells)
+        sheet[name] = content;
+}
+
+void DemoExcel() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas para Excel", Color::Yellow);
+    Sheet sheet(8, 4);
+    FillSheet(sheet, {{"A1", "Producto"}, {"B1", "Precio"},           {"C1", "Cantidad"},     {"D1", "Subtotal"},
+                      {"A2", "Lapiz"},    {"B2", "1.5"},              {"C2", "10"},           {"D2", "=B2*C2"},
+                      {"A3", "Cuaderno"}, {"B3", "4.2"},              {"C3", "5"},            {"D3", "=B3*C3"},
+                      {"A4", "Mochila"},  {"B4", "35"},               {"C4", "1"},            {"D4", "=B4*C4"},
+                      {"A5", "Total"},                                {"C5", "=SUMA(C2:C4)"}, {"D5", "=SUMA(D2:D4)"},
+                      {"A6", "Promedio"}, {"B6", "=PROMEDIO(B2:B4)"},                         {"D6", "=PROMEDIO(D2:D4)"},
+                      {"A7", "Min/Max"},  {"B7", "=MIN(B2:B4)"},      {"C7", "=MAX(C2:C4)"},
+                      {"A8", "Con IGV"},                                                      {"D8", "=D5*(1+18/100)"}});
+    cout << "Contenido: " << sheet << endl;
+    sheet.print(cout);
+    cout << "D5 = " << sheet.value("D5") << ", D8 = " << sheet.value("D8") << endl;
+
+    sheet["C2"] = "20";
+    cout << "Tras C2 = 20:" << endl;
+    sheet.print(cout);
+
+    Sheet precedence(2, 5);
+    FillSheet(precedence, {{"A1", "=2+3*4"}, {"B1", "=(2+3)*4"}, {"C1", "=-(2+3)*-(1+1)"}, {"D1", "=((1+2)*(3+4))/7"}, {"E1", "=MAX(1, SUMA(2,3)*2, (4))"},
+                           {"A2", "=a1+1"},  {"B2", "=suma(A1:B1)/(A1-B1)"}, {"C2", "= 10 / 4"}, {"D2", "=.5*2e1"}, {"E2", "=SUMA(A1:E1,A2:D2)"}});
+    cout << "Contenido: " << precedence << endl;
+    precedence.print(cout);
+
+    Sheet errors(2, 6);
+    FillSheet(errors, {{"A1", "=1/0"}, {"B1", "=(1+2"}, {"C1", "=Z9"}, {"D1", "=RAIZ(4)"}, {"E1", "hola"}, {"F1", "=E1*2"},
+                       {"A2", "=A1+1"}, {"B2", "=2*"}, {"C2", "=SUMA(A9:B1)"}, {"D2", "=PROMEDIO(E2:F2)"}, {"E2", "=F2"}, {"F2", "=E2+1"}});
+    cout << "Contenido: " << errors << endl;
+    errors.print(cout);
+    try {
+        errors.value("A1");
+    } catch (const runtime_error &error) {
+        cout << "errors.value(\"A1\") lanza " << error.what() << endl;
+    }
+
+    ofstream out("excel.txt");
+    out << sheet << endl;
+    out.close();
+    Sheet read;
+    ifstream in("excel.txt");
+    in >> read;
+    in.close();
+    cout << "Hoja leida desde archivo:" << endl;
+    read.print(cout);
+    cout << "D8 de la hoja leida = " << read.value("D8") << endl;
 }

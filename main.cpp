@@ -16,5 +16,6 @@ int main() {
     DemoHash();
     DemoCanvas();
     DemoMerkleTree();
+    DemoExcel();
     return 0;
 }

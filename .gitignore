@@ -69,6 +69,7 @@ vcpkg_installed/
 Testing/
 .cache/
 main
+/excel
 
 # Archivos de texto generados
 *.txt

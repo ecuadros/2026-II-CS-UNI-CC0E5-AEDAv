@@ -13,5 +13,6 @@ void DemoAVL();
 void DemoHash();
 void DemoCanvas();
 void DemoMerkleTree();
+void DemoExcel();
 
 #endif // __DEMOS_H__
