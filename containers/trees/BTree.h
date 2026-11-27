@@ -5,7 +5,6 @@
 #include "../core/traits.h"
 #include "../core/traversalops.h"
 #include "binarytreeiterator.h"
-#include <cstddef>
 #include <initializer_list>
 #include <mutex>
 #include <optional>
@@ -15,7 +14,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 /**
  * Árbol B* en memoria: las páginas se mantienen llenas al menos en 2/3 y, al desbordarse, dos páginas se dividen en tres.
@@ -45,7 +43,7 @@ public:
 
 private:
     Page m_root;
-    std::size_t m_size = 0;
+    Count m_size = 0;
 
     /** Inserta sin tomar el mutex; si la raíz se desborda, el árbol crece un nivel. */
     Bool internal_insert(const value_type& value, const ref_type& ref, Bool unique) {
@@ -165,7 +163,7 @@ public:
     }
 
     /** Cantidad de elementos. */
-    [[nodiscard]] std::size_t size() const {
+    [[nodiscard]] Count size() const {
         std::lock_guard lock(this->m_mutex);
         return m_size;
     }
@@ -173,9 +171,9 @@ public:
     [[nodiscard]] Bool empty() const { return size() == 0; }
 
     /** Cantidad de niveles; 0 si está vacío. */
-    [[nodiscard]] std::size_t height() const {
+    [[nodiscard]] Count height() const {
         std::lock_guard lock(this->m_mutex);
-        return m_size ? static_cast<std::size_t>(m_root.height()) : 0;
+        return m_size ? static_cast<Count>(m_root.height()) : 0;
     }
 
     /** Máximo de claves de las páginas que no son la raíz. */
@@ -210,9 +208,9 @@ public:
      * con el mutex tomado.
      * @return Cantidad de elementos visitados.
      */
-    template <typename Func> std::size_t range(const value_type& low, const value_type& high, Func&& func) const {
+    template <typename Func> Count range(const value_type& low, const value_type& high, Func&& func) const {
         std::lock_guard lock(this->m_mutex);
-        std::size_t visited = 0;
+        Count visited = 0;
         const ConstForwardIterator last = upper_bound(high);
         for (auto it = lower_bound(low); it != last && it != end(); ++it, ++visited)
             func(*it);
@@ -229,8 +227,8 @@ public:
         /** Página raíz. */
         Handle root() const { return &tree->m_root; }
         /** Subpáginas de @p page de izquierda a derecha; en las hojas son todas nulas. */
-        std::vector<Handle> children(Handle page) const {
-            std::vector<Handle> kids;
+        typename Traits::template Storage<Handle> children(Handle page) const {
+            typename Traits::template Storage<Handle> kids;
             for (Index i = 0; i <= page->size(); ++i)
                 kids.push_back(page->child(i, false));
             return kids;

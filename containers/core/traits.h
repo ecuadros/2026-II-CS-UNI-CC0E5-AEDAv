@@ -148,6 +148,18 @@ concept SheetTraitsConcept = requires {
     typename Traits::Cache;
 };
 
+/** Rasgos válidos para Array: valor e iteradores, sin nodo. */
+template <typename Traits>
+concept ArrayTraitsConcept = requires {
+    typename Traits::value_type;
+    typename Traits::ForwardIterator;
+    typename Traits::ConstForwardIterator;
+};
+
+template <typename T> class ArrayIterator;
+template <typename Traits>
+    requires ArrayTraitsConcept<Traits>
+class Array;
 template <typename T, Bool Reverse> class VectorIterator;
 template <typename Traits, typename Ops = FullTraversalOps>
     requires BidirectionalContainerTraits<Traits>
@@ -164,6 +176,16 @@ template <typename Traits, typename Ops = ExprTraversalOps>
     requires ExprTreeTraitsConcept<Traits>
 class ExprTree;
 template <typename Number> struct ExprItem;
+
+/**
+ * Tipos que configuran un Array: valor e iteradores.
+ * @tparam T Tipo del valor.
+ */
+template <typename T> struct ArrayTraits {
+    using value_type = T;
+    using ForwardIterator = ArrayIterator<T>;
+    using ConstForwardIterator = ArrayIterator<const T>;
+};
 
 /**
  * Tipos que configuran un Vector: valor, nodo e iteradores.
@@ -277,7 +299,7 @@ template <typename Page, TreeOrder Order, Bool Reverse> class BTreeIterator;
  * @tparam Order Máximo de claves por página (la raíz admite `2 * Order + 1`); al menos 3.
  * @tparam R Tipo de la referencia guardada junto a cada clave.
  */
-template <typename T, typename Comparator = std::less<T>, std::size_t Order = 3, typename R = Ref>
+template <typename T, typename Comparator = std::less<T>, Count Order = 3, typename R = Ref>
     requires ComparatorFor<Comparator, T> && (Order >= 3)
 struct BTreeTraits {
     using value_type = T;
@@ -285,7 +307,9 @@ struct BTreeTraits {
     using Compare = Comparator;
     using Node = GeneralNode<T, R>;
     /** Posiciones y cantidades dentro de una página; con signo porque se recorren vecinas a izquierda y derecha. */
-    using Index = std::ptrdiff_t;
+    using Index = Offset;
+    /** Arreglo en que las páginas guardan claves y subpáginas. */
+    template <typename E> using Storage = Array<ArrayTraits<E>>;
     using Page = BTreePage<BTreeTraits>;
     /** Iterador sobre @p P (constante o no) con el orden de recorrido indicado. */
     template <typename P, TreeOrder O = TreeOrder::InOrder, Bool Reverse = false>

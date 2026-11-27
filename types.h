@@ -1,6 +1,8 @@
 #ifndef __TYPES_H__
 #define __TYPES_H__
 
+#include <cstddef>
+
 /** Alias propios de los tipos nativos. */
 using Bool = bool;
 using Int = int;
@@ -9,6 +11,10 @@ using Real = double;
 using Char = char;
 using Byte = unsigned char;
 using SByte = signed char;
+/** Cantidades y tamaños (sin signo). */
+using Count = std::size_t;
+/** Posiciones y desplazamientos con signo. */
+using Offset = std::ptrdiff_t;
 
 /** Tipo de clave usado en las demos. */
 using TX = int;

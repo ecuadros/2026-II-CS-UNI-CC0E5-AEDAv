@@ -2,6 +2,7 @@
 #define CONTAINERS_BTREEPAGE_H
 
 #include "../core/GeneralIterator.h"
+#include "../lists/array.h"
 #include "binarytreeiterator.h"
 #include <algorithm>
 #include <cassert>
@@ -9,7 +10,6 @@
 #include <memory>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 /** Resultado de una operación sobre una página, que la página padre usa para reorganizarse. */
 enum class BTreeStatus { ok, overflow, underflow, duplicate, notfound };
@@ -53,8 +53,8 @@ public:
     using PagePtr = BTreePage*;
     using ConstPagePtr = const BTreePage*;
     using OwnedPage = std::unique_ptr<BTreePage>;
-    using Keys = std::vector<Node>;
-    using Pages = std::vector<OwnedPage>;
+    using Keys = typename Traits::template Storage<Node>;
+    using Pages = typename Traits::template Storage<OwnedPage>;
     /** Puntero a página con la misma constancia que @p Self. */
     template <typename Self>
     using PtrFor = std::conditional_t<std::is_const_v<Self>, ConstPagePtr, PagePtr>;
@@ -121,12 +121,12 @@ private:
         return pos < m_count && equivalent(key, m_keys[pos].getValue());
     }
 
-    template <typename V, typename X> static void insert_at(std::vector<V>& v, X&& x, Index pos) {
+    template <typename A, typename X> static void insert_at(A& v, X&& x, Index pos) {
         std::move_backward(v.begin() + pos, v.end() - 1, v.end());
         v[pos] = std::forward<X>(x);
     }
 
-    template <typename V> static void remove_at(std::vector<V>& v, Index pos) {
+    template <typename A> static void remove_at(A& v, Index pos) {
         std::move(v.begin() + pos + 1, v.end(), v.begin() + pos);
     }
 
@@ -153,7 +153,8 @@ private:
 
     /** Pasa las claves y subpáginas de @p page al final de @p run, y la deja vacía. */
     static void move_page(PagePtr page, Run& run) {
-        run.keys.insert(run.keys.end(), page->m_keys.begin(), page->m_keys.begin() + page->m_count);
+        for (Index i = 0; i < page->m_count; ++i)
+            run.keys.push_back(page->m_keys[i]);
         for (Index i = 0; i <= page->m_count; ++i)
             run.pages.push_back(std::move(page->m_pages[i]));
         page->m_count = 0;

@@ -7,6 +7,7 @@
 #include "hashing/hashtable.h"
 #include "trees/Heap.h"
 #include "lists/vector.h"
+#include "lists/array.h"
 #include "core/traits.h"
 #include "lists/linkedlist.h"
 #include "trees/merkletree.h"
@@ -21,6 +22,10 @@
 /** Vector de elementos de tipo @p T. */
 template <typename T>
 using VectorOf = Vector<VectorTraits<T>>;
+
+/** Arreglo dinámico de elementos de tipo @p T, sin nodo ni mutex. */
+template <typename T>
+using ArrayOf = Array<ArrayTraits<T>>;
 
 /** Lista simplemente enlazada ordenada según @p Compare. */
 template <typename T, typename Compare = std::less<T>>
