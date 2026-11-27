@@ -1,5 +1,13 @@
 
+#include "types.h"
 #include <iostream>
+#include <set>
+#include <map>
+#include <cstring>
+#include <random>
+#include <numeric>
+#include <limits>
+#include <atomic>
 #include <fstream>
 #include <cstdio>
 #include <cerrno>
@@ -64,22 +72,22 @@ concept MapLike = requires(M& m, const M& cm, const typename M::key_type& key, c
     { m[key] } -> std::same_as<typename M::mapped_type&>;
     { m.at(key) } -> std::same_as<typename M::mapped_type&>;
     { cm.at(key) } -> std::same_as<const typename M::mapped_type&>;
-    { m.insert(entry).second } -> std::convertible_to<bool>;
-    { m.emplace(entry).second } -> std::convertible_to<bool>;
+    { m.insert(entry).second } -> std::convertible_to<Bool>;
+    { m.emplace(entry).second } -> std::convertible_to<Bool>;
     { m.find(key) } -> std::same_as<typename M::iterator>;
     { cm.find(key) } -> std::same_as<typename M::const_iterator>;
     { m.erase(key) } -> std::convertible_to<std::size_t>;
     { m.erase(it) } -> std::same_as<typename M::iterator>;
-    { cm.contains(key) } -> std::convertible_to<bool>;
+    { cm.contains(key) } -> std::convertible_to<Bool>;
     { cm.size() } -> std::convertible_to<std::size_t>;
-    { it == m.end() } -> std::convertible_to<bool>;
+    { it == m.end() } -> std::convertible_to<Bool>;
     { ++it } -> std::same_as<typename M::iterator&>;
     { it++ } -> std::same_as<typename M::iterator>;
     { it->first } -> std::same_as<const typename M::key_type&>;
     { it->second } -> std::same_as<typename M::mapped_type&>;
     { (*it).second } -> std::same_as<typename M::mapped_type&>;
     { cm.begin()->second } -> std::same_as<const typename M::mapped_type&>;
-    { cm.rbegin() == cm.rend() } -> std::convertible_to<bool>;
+    { cm.rbegin() == cm.rend() } -> std::convertible_to<Bool>;
     requires std::convertible_to<typename M::iterator, typename M::const_iterator>;
 };
 
@@ -95,13 +103,13 @@ concept MerkleLike = requires(M& m, const M& cm, std::size_t index, const typena
     M(first, first);
     { cm.root_hash() } -> std::same_as<typename M::Digest>;
     { cm.proof(index) } -> std::same_as<typename M::Proof>;
-    { M::verify(block, cm.proof(index), root) } -> std::same_as<bool>;
+    { M::verify(block, cm.proof(index), root) } -> std::same_as<Bool>;
     m.update(index, block);
     m.push_back(block);
     m.clear();
     { cm.size() } -> std::convertible_to<std::size_t>;
     { cm.height() } -> std::convertible_to<std::size_t>;
-    { cm.empty() } -> std::convertible_to<bool>;
+    { cm.empty() } -> std::convertible_to<Bool>;
 };
 
 /** Contenedor que ofrece `ApplyFunction`. */
@@ -144,7 +152,7 @@ template <typename Node> void PrintNode(const Node& node, std::ostream& os) {
     os << node << " ";
 }
 /** Cantidad de hilos de las pruebas de concurrencia. */
-const int NThreads = 5;
+const Int NThreads = 5;
 
 /** Imprime @p value en una línea con el color ANSI @p color. */
 template <typename Value>
@@ -396,7 +404,7 @@ void TestRaceCondition(const std::string& name, const Values<Container>& values)
 
     size_t n = values.size();
     std::vector<std::thread> workers;
-    for (int t = 0; t < NThreads; ++t) {
+    for (Int t = 0; t < NThreads; ++t) {
         workers.emplace_back([&container, &values, n, t]() {
             for (size_t i = t; i < n; i += NThreads)
                 container.push_back(values[i].first, values[i].second);
@@ -550,7 +558,7 @@ template <SixOrderTree Tree> void TestTreeTraversals(const Tree& tree, const std
 template <TreeLike Tree> void TestTreeRemove(Tree& tree, const std::string& name) {
     PrintColor("TestTreeRemove (" + name + ")");
     for (TX value : {20, 60, 50, 99}) {
-        bool removed = tree.remove(value);
+        Bool removed = tree.remove(value);
         std::cout << "remove(" << value << "): " << removed << '\n';
         if (tree.contains(value))
             throw std::runtime_error(name + ": remove no borro el valor");
@@ -650,20 +658,20 @@ class Unbalanced : public BinaryTree<BinaryTreeTraits<TreeKey<Tree>, typename Tr
     mutable const Node* m_mark = nullptr;
 
     /** Factor de balance de @p n calculado a partir de las alturas. */
-    int balance(const Node* n) const {
-        return static_cast<int>(this->height(n->m_pChild[1])) - static_cast<int>(this->height(n->m_pChild[0]));
+    Int balance(const Node* n) const {
+        return static_cast<Int>(this->height(n->m_pChild[1])) - static_cast<Int>(this->height(n->m_pChild[0]));
     }
 
     /** Elige el reemplazo igual que el AVL, para que ambos árboles eliminen el mismo nodo. */
     NodePtr replacement(NodePtr node) const override {
-        bool side = balance(node) >= 0;
+        Bool side = balance(node) >= 0;
         return extreme(node->m_pChild[side], !side);
     }
 
     /** Escribe la clave con su factor de balance; el nodo marcado va entre `<` y `>`. */
     void print_node(std::ostream& os, const Node& node) const override {
-        bool marked = &node == m_mark;
-        int bf = balance(&node);
+        Bool marked = &node == m_mark;
+        Int bf = balance(&node);
         os << (marked ? "<" : "") << KeyText(node.getValue()) << '[' << (bf > 0 ? "+" : "") << bf << ']'
            << (marked ? ">" : "");
     }
@@ -684,10 +692,10 @@ public:
 
     /** Explica el caso de desbalance de @p x (LL, RR, LR o RL) y la rotación que lo corrige. */
     std::string describe(const Node* x) const {
-        int bf = balance(x);
-        bool right = bf > 0;
+        Int bf = balance(x);
+        Bool right = bf > 0;
         const Node* c = x->m_pChild[right];
-        bool twice = balance(c) * bf < 0;
+        Bool twice = balance(c) * bf < 0;
         std::string nx = KeyText(x->getValue()), nc = KeyText(c->getValue());
         std::string side = right ? "derecha" : "izquierda";
         std::string other = right ? "izquierda" : "derecha";
@@ -744,9 +752,9 @@ void DemoAVLStepByStep() {
 
 void DemoHashTableStepByStep() {
     PrintColor("DemoHashTable paso a paso (AVL ordenado por clave)");
-    using Table = HashTableOf<std::string, int>;
+    using Table = HashTableOf<std::string, Int>;
     Table table;
-    int age = 18;
+    Int age = 18;
     for (std::string key : {"ana", "luis", "eva", "juan", "rosa", "pedro", "maria", "jose"}) {
         std::string title = "tabla[\"" + key + "\"] = " + std::to_string(age);
         AVLStep(table, title, [&](auto& t, auto& s) {
@@ -805,8 +813,8 @@ void DemoCircularDoubleLinkedList() {
 }
 
 void DemoHeap() {
-    Demo<MinHeap<int>>("MinHeap");
-    Demo<MaxHeap<int>>("MaxHeap");
+    Demo<MinHeap<Int>>("MinHeap");
+    Demo<MaxHeap<Int>>("MaxHeap");
 }
 
 void DemoBinaryTree() { Demo<BinarySearchTree<TX>, BinarySearchTree<TX, std::greater<TX>>>("BinaryTree"); }
@@ -814,6 +822,290 @@ void DemoBinaryTree() { Demo<BinarySearchTree<TX>, BinarySearchTree<TX, std::gre
 void DemoAVL() {
     Demo<AVLSearchTree<TX>, AVLSearchTree<TX, std::greater<TX>>>("AVL");
     DemoRaceCondition<AVLSearchTree<TX>>("AVL");
+}
+
+/** Pares (valor, ref) del árbol en orden. */
+template <typename Tree> std::vector<std::pair<typename Tree::value_type, Ref>> Dump(const Tree& tree) {
+    std::vector<std::pair<typename Tree::value_type, Ref>> out;
+    for (auto&& node : tree.InOrder())
+        out.emplace_back(node.getValue(), node.getRef());
+    return out;
+}
+
+/** Guarda @p tree en un archivo, lo lee en un árbol nuevo y exige que tenga exactamente los mismos pares. */
+template <typename Tree> Tree RoundTrip(const Tree& tree, const std::string& label, const std::string& file) {
+    {
+        std::ofstream out(file);
+        out << tree;
+    }
+    Tree loaded;
+    {
+        std::ifstream in(file);
+        in >> loaded;
+        if (in.fail()) throw std::runtime_error("BTree persistencia: fallo la lectura de " + label);
+    }
+    std::remove(file.c_str());
+    auto sorted = [](auto d) { std::sort(d.begin(), d.end()); return d; };
+    if (sorted(Dump(tree)) != sorted(Dump(loaded)))
+        throw std::runtime_error("BTree persistencia: " + label + " no coincide");
+    auto d = Dump(loaded);
+    typename Tree::Compare comp;
+    if (!std::is_sorted(d.begin(), d.end(), [&](const auto& x, const auto& y) { return comp(x.first, y.first); }))
+        throw std::runtime_error("BTree persistencia: " + label + " perdio el orden");
+    std::cout << "  " << label << ": " << loaded.size() << " elementos OK\n";
+    return loaded;
+}
+
+/** Prueba lower_bound, upper_bound y range contra un recorrido completo, con y sin duplicados. */
+static_assert(NothrowMovable<BTreeOf<TX>>, "BTree: el move debe ser noexcept");
+static_assert(OptionalLookup<BTreeOf<TX>> && RangeQueryable<BTreeOf<TX>>, "BTree: faltan find/range");
+static_assert(BTreePageConcept<BTreePage<BTreeTraits<TX>>>, "BTree: la pagina no cumple BTreePageConcept");
+
+template <RangeQueryable Tree> void TestRange() {
+    PrintColor("TestBTreeRange");
+    std::mt19937 rng(777);
+    std::vector<TX> keys;
+    for (TX i = 0; i < 2000; ++i)
+        keys.push_back(i / 2 * 3);
+    std::shuffle(keys.begin(), keys.end(), rng);
+    Tree tree;
+    for (TX k : keys)
+        tree.insert(k, k);
+    std::sort(keys.begin(), keys.end());
+
+    Tree empty;
+    if (empty.lower_bound(0) != std::as_const(empty).end() || empty.upper_bound(0) != std::as_const(empty).end())
+        throw std::runtime_error("BTree range: el arbol vacio debe dar end()");
+
+    for (TX probe = -2; probe <= 3003; ++probe) {
+        auto lo = std::lower_bound(keys.begin(), keys.end(), probe);
+        auto hi = std::upper_bound(keys.begin(), keys.end(), probe);
+        auto tl = tree.lower_bound(probe);
+        auto tu = tree.upper_bound(probe);
+        if ((lo == keys.end()) != (tl == std::as_const(tree).end()) || (hi == keys.end()) != (tu == std::as_const(tree).end()) ||
+            (lo != keys.end() && (*tl).getValue() != *lo) || (hi != keys.end() && (*tu).getValue() != *hi))
+            throw std::runtime_error("BTree range: lower/upper_bound incorrecto en " + std::to_string(probe));
+    }
+    for (auto [low, high] : std::vector<std::pair<TX, TX>>{{0, 0}, {-10, 5}, {10, 9}, {100, 400}, {2990, 5000}, {-5, 5000}, {4, 5}}) {
+        std::vector<TX> got, expected;
+        tree.range(low, high, [&](const auto& node) { got.push_back(node.getValue()); });
+        for (TX k : keys)
+            if (k >= low && k <= high) expected.push_back(k);
+        if (got != expected)
+            throw std::runtime_error("BTree range: range(" + std::to_string(low) + "," + std::to_string(high) + ") incorrecto");
+    }
+    std::cout << "  lower_bound, upper_bound y range coinciden con std::lower_bound/upper_bound OK\n";
+}
+
+/** Prueba la persistencia con casos límite: vacío, un elemento, duplicados, negativos, órdenes, comparador, texto inválido. */
+void TestBTreePersistence() {
+    PrintColor("TestBTreePersistence");
+    const std::string file = "btree_persist_test.txt";
+
+    BTreeOf<TX> empty;
+    RoundTrip(empty, "vacio", file);
+
+    BTreeOf<TX> one;
+    one.insert(42, 7);
+    RoundTrip(one, "un elemento", file);
+
+    BTreeOf<TX> dup;
+    for (Ref i = 0; i < 20; ++i)
+        dup.insert(static_cast<TX>(i % 4), i);
+    RoundTrip(dup, "duplicados", file);
+
+    BTreeOf<TX> extremes;
+    for (TX k : {std::numeric_limits<TX>::min(), -1, 0, 1, std::numeric_limits<TX>::max()})
+        extremes.insert(k, static_cast<Ref>(k));
+    RoundTrip(extremes, "negativos y extremos", file);
+
+    std::mt19937 rng(12345);
+    std::vector<TX> keys(5000);
+    std::iota(keys.begin(), keys.end(), -2500);
+    std::shuffle(keys.begin(), keys.end(), rng);
+    BTreeOf<TX, std::less<TX>, 3> o3;
+    BTreeOf<TX, std::less<TX>, 4> o4;
+    BTreeOf<TX, std::less<TX>, 7> o7;
+    BTreeOf<TX, std::greater<TX>, 5> desc;
+    for (TX k : keys) {
+        o3.insert(k, k * 2);
+        o4.insert(k, k * 2);
+        o7.insert(k, k * 2);
+        desc.insert(k, k * 2);
+    }
+    RoundTrip(o3, "5000 aleatorios orden 3", file);
+    RoundTrip(o4, "5000 aleatorios orden 4", file);
+    RoundTrip(o7, "5000 aleatorios orden 7", file);
+    RoundTrip(desc, "5000 aleatorios descendente", file);
+
+    for (std::size_t i = 0; i < keys.size(); i += 2)
+        o3.remove(keys[i]);
+    auto afterRemove = RoundTrip(o3, "tras eliminar la mitad", file);
+    afterRemove.insert(100000, 1);
+    if (o3.contains(100000)) throw std::runtime_error("BTree persistencia: el arbol leido comparte estado");
+
+    auto viaMove = RoundTrip(o4, "copia por move", file);
+    BTreeOf<TX, std::less<TX>, 4> moved(std::move(o4));
+    if (Dump(moved) != Dump(viaMove)) throw std::runtime_error("BTree persistencia: move cambio el contenido");
+
+    std::stringstream twice;
+    twice << o7;
+    BTreeOf<TX, std::less<TX>, 7> a;
+    twice >> a;
+    std::stringstream again;
+    again << a;
+    if (twice.str() != again.str()) throw std::runtime_error("BTree persistencia: guardar-leer-guardar difiere");
+    std::cout << "  guardar-leer-guardar idempotente OK\n";
+
+    BTreeOf<TX> keep;
+    keep.insert(1, 10);
+    keep.insert(2, 20);
+    const auto before = Dump(keep);
+    for (const char* bad : {"", "[", "[(1,2)", "[(1,2),]", "(1,2)", "[(a,b)]", "[(1,2)(3,4)]", "[(1,2);(3,4)]", "basura"}) {
+        std::istringstream in(bad);
+        in >> keep;
+        if (!in.fail() || Dump(keep) != before)
+            throw std::runtime_error(std::string("BTree persistencia: texto invalido mal manejado: ") + bad);
+    }
+    std::cout << "  texto invalido: falla y no modifica el arbol OK\n";
+
+    BTreeOf<std::string> words;
+    for (const char* w : {"manzana", "pera", "uva", "kiwi", "a b", "x,y", "(p)", "[q]"})
+        words.insert(w, static_cast<Ref>(std::strlen(w)));
+    RoundTrip(words, "cadenas con espacios, comas y parentesis", file);
+}
+
+/** Ejecuta @p workers hilos con @p body(indice) y espera a todos. */
+template <typename Body> void RunThreads(Int workers, Body body) {
+    std::vector<std::thread> pool;
+    for (Int t = 0; t < workers; ++t)
+        pool.emplace_back(body, t);
+    for (auto& th : pool)
+        th.join();
+}
+
+/** Prueba la concurrencia del BTree: inserciones disjuntas, try_insert disputado, y escrituras mezcladas con lecturas. */
+void TestBTreeRace() {
+    PrintColor("TestBTreeRace");
+    const TX N = 100000;
+
+    BTreeOf<TX> tree;
+    RunThreads(NThreads, [&](Int t) {
+        for (TX i = t; i < N; i += NThreads)
+            tree.insert(i, i);
+    });
+    if (tree.size() != static_cast<size_t>(N)) throw std::runtime_error("BTree race: se perdieron inserciones");
+    CheckTree(tree, "BTree race insert");
+    for (TX i = 0; i < N; ++i)
+        if (!tree.contains(i)) throw std::runtime_error("BTree race: falta la clave " + std::to_string(i));
+    std::cout << "  " << NThreads << " hilos insertan " << N << " claves disjuntas: ninguna perdida OK\n";
+
+    BTreeOf<TX> unique;
+    std::atomic<int> winners{0};
+    RunThreads(NThreads, [&](Int) {
+        for (TX i = 0; i < 20000; ++i)
+            if (unique.try_insert(i, i)) ++winners;
+    });
+    if (winners != 20000 || unique.size() != 20000)
+        throw std::runtime_error("BTree race: try_insert acepto duplicados o perdio claves");
+    CheckTree(unique, "BTree race try_insert");
+    std::cout << "  try_insert disputado: exactamente un ganador por clave OK\n";
+
+    const TX M = 5000;
+    BTreeOf<TX> mixed;
+    for (TX i = 0; i < M; ++i)
+        mixed.insert(i, i);
+    std::atomic<Bool> stop{false};
+    std::atomic<std::size_t> reads{0};
+    std::vector<std::thread> readers;
+    for (int r = 0; r < 2; ++r)
+        readers.emplace_back([&] {
+            while (!stop) {
+                std::size_t count = 0;
+                TX previous = std::numeric_limits<TX>::min();
+                mixed.call([&](const auto& node) {
+                    if (node.getValue() < previous) std::terminate();
+                    previous = node.getValue();
+                    ++count;
+                });
+                (void)mixed.contains(static_cast<TX>(count % M));
+                ++reads;
+            }
+        });
+    RunThreads(NThreads, [&](Int t) {
+        for (TX i = t; i < M; i += NThreads)
+            if (i % 2 == 0) mixed.remove(i);
+            else mixed.insert(M + i, i);
+    });
+    stop = true;
+    for (auto& th : readers)
+        th.join();
+    CheckTree(mixed, "BTree race mixto");
+    for (TX i = 0; i < M; ++i)
+        if (mixed.contains(i) != (i % 2 == 1)) throw std::runtime_error("BTree race: estado final incorrecto");
+    if (mixed.size() != static_cast<size_t>(M)) throw std::runtime_error("BTree race: tamano final incorrecto");
+    std::cout << "  insert/remove concurrentes con " << reads << " recorridos de lectura OK\n";
+}
+
+void DemoBTree() {
+    Demo<BTreeOf<TX>, BTreeOf<TX, std::greater<TX>>>("BTree");
+
+    const std::string inserts = "D1XJ2xTg8zKL9AhijOPQcEowRSp0NbW567BUfCqrs4FdtYZakHIuvGV3eMylmn";
+    const std::string searches = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    const std::string removals = "DYZakHIUwxVJ203ejOP9Qc8AdtuEop1XvTRghSNbW567BfiCqrs4FGMyzKLlmn";
+
+    PrintColor("DemoBTree (caracteres, orden 3)");
+    BTreeOf<Char> tree;
+    for (std::size_t i = 0; i < inserts.size(); ++i) {
+        tree.try_insert(inserts[i], static_cast<Ref>(i * i));
+        CheckTree(tree, std::string("BTree insert ") + inserts[i]);
+    }
+    if (tree.try_insert(inserts[0], 0)) throw std::runtime_error("BTree: try_insert acepto un duplicado");
+    std::cout << "size = " << tree.size() << ", height = " << tree.height() << '\n';
+    tree.print_tree(std::cout);
+    tree.print_tree(std::cout, visual::Layout::Sideways);
+
+    for (Char key : searches) {
+        auto ref = tree.find_ref(key);
+        if (!ref) throw std::runtime_error(std::string("BTree: no se encontro ") + key);
+        std::cout << key << "->" << *ref << ' ';
+    }
+    std::cout << '\n';
+
+    {
+        std::ofstream out("btree.txt");
+        out << tree;
+    }
+    BTreeOf<Char> loaded;
+    {
+        std::ifstream in("btree.txt");
+        in >> loaded;
+    }
+    std::remove("btree.txt");
+    if (loaded.size() != tree.size()) throw std::runtime_error("BTree: la persistencia cambio el tamano");
+    for (Char key : searches) {
+        auto a = tree.find_ref(key);
+        auto b = loaded.find_ref(key);
+        if (!b || *a != *b) throw std::runtime_error(std::string("BTree: persistencia perdio ") + key);
+    }
+    std::cout << "BTree: persistencia (guardar y leer) OK\n";
+
+    for (std::size_t i = 0; i < removals.size(); ++i) {
+        if (!tree.remove(removals[i]) || tree.contains(removals[i]))
+            throw std::runtime_error(std::string("BTree: no se elimino ") + removals[i]);
+        CheckTree(tree, std::string("BTree remove ") + removals[i]);
+        if (i == removals.size() / 2) {
+            std::cout << "A mitad de las eliminaciones (height = " << tree.height() << "):\n";
+            tree.print_tree(std::cout);
+        }
+    }
+    if (!tree.empty() || tree.remove('D')) throw std::runtime_error("BTree: el arbol deberia quedar vacio");
+    std::cout << "BTree: inserciones, busquedas y eliminaciones OK\n";
+
+    TestRange<BTreeOf<TX, std::less<TX>, 4>>();
+    TestBTreePersistence();
+    TestBTreeRace();
+    DemoRaceCondition<BTreeOf<TX>>("BTree");
 }
 
 /** Árbol de Merkle de cadenas con el hasher por defecto. */
@@ -829,12 +1121,12 @@ std::string ShortHash(MerkleStrings::Digest digest) {
 }
 
 /** Lanza `std::runtime_error` con el mensaje `nombre: motivo` si @p ok es falso. */
-void Check(bool ok, const std::string& name, const std::string& what) {
+void Check(Bool ok, const std::string& name, const std::string& what) {
     if (!ok) throw std::runtime_error(name + ": " + what);
 }
 
 /** Igual que Check() con el nombre `MerkleTree`. */
-void CheckMerkle(bool ok, const std::string& what) { Check(ok, "MerkleTree", what); }
+void CheckMerkle(Bool ok, const std::string& what) { Check(ok, "MerkleTree", what); }
 
 /** Imprime el árbol con su raíz, cantidad de hojas y altura. */
 void ShowMerkle(const MerkleStrings& tree, const std::vector<std::string>& blocks) {
@@ -899,7 +1191,7 @@ void TestMerkleUpdate(Tree& tree, const Blocks<Tree>& blocks, const typename Tre
         tree.update(i, blocks[i]);
         Check(tree.root_hash() == before, name, "restaurar el bloque no restauro la raiz");
     }
-    bool threw = false;
+    Bool threw = false;
     try { tree.update(blocks.size(), extra); } catch (const std::out_of_range&) { threw = true; }
     Check(threw, name, "update fuera de rango no lanzo");
     std::cout << "update coincide con reconstruir y es reversible\n";
@@ -909,7 +1201,7 @@ void TestMerkleUpdate(Tree& tree, const Blocks<Tree>& blocks, const typename Tre
 template <MerkleLike Tree> void TestMerkleCopyAndClear(const Blocks<Tree>& blocks, const std::string& name) {
     PrintColor("TestCopyAndClear (" + name + ")");
     Tree tree;
-    bool threw = false;
+    Bool threw = false;
     try { tree.root_hash(); } catch (const std::logic_error&) { threw = true; }
     Check(tree.empty() && threw, name, "arbol vacio");
     tree = BuildMerkle<Tree>(blocks);
@@ -958,7 +1250,7 @@ void TestMerklePersistence(const Blocks<Tree>& blocks, const std::string& name) 
     Check(emptied.empty(), name, "leer un arbol vacio no lo vacio");
 
     std::string text = saved.str();
-    char& digit = text[text.find('(') + 1];
+    Char& digit = text[text.find('(') + 1];
     digit = digit == '9' ? '8' : digit + 1;
     std::istringstream tampered(text);
     Tree target(tree);
@@ -974,9 +1266,9 @@ void TestMerkleRace(const Blocks<Tree>& blocks, const typename Tree::value_type&
     Check(blocks.size() >= std::size_t(NThreads), name, "faltan bloques para la prueba de hilos");
     Tree tree = BuildMerkle<Tree>(blocks);
     std::vector<std::thread> threads;
-    for (int t = 0; t < NThreads; ++t)
+    for (Int t = 0; t < NThreads; ++t)
         threads.emplace_back([&, t] {
-            for (int i = 0; i < 2000; ++i) {
+            for (Int i = 0; i < 2000; ++i) {
                 tree.update(t, i % 2 ? blocks[t] : extra);
                 (void)tree.proof(t);
                 (void)tree.root_hash();
@@ -984,7 +1276,7 @@ void TestMerkleRace(const Blocks<Tree>& blocks, const typename Tree::value_type&
         });
     for (auto& thread : threads) thread.join();
     auto edited = blocks;
-    for (int t = 0; t < NThreads; ++t) {
+    for (Int t = 0; t < NThreads; ++t) {
         tree.update(t, extra);
         edited[t] = extra;
     }
@@ -1021,7 +1313,7 @@ void DemoMerkleBitcoin() {
     std::cout << "raiz del bloque 170, duplicado del impar y hoja unica OK\n";
 
     Blocks<Btc> txids;
-    for (char letter = 'A'; letter <= 'I'; ++letter) txids.push_back(Sha256::hash(std::string(1, letter)));
+    for (Char letter = 'A'; letter <= 'I'; ++letter) txids.push_back(Sha256::hash(std::string(1, letter)));
     TestMerkle<Btc>(txids, Sha256::hash("Z"), "Merkle Bitcoin");
 }
 
@@ -1058,7 +1350,7 @@ void DemoMerkleTreeStepByStep() {
     PrintColor("proof(" + std::to_string(target) + "): hermanos necesarios para llegar a la raiz", "1;33");
     auto hash = MerkleHasher::leaf(blocks[target]);
     std::cout << "h0 = H(" << blocks[target] << ") = " << ShortHash(hash) << '\n';
-    int level = 0;
+    Int level = 0;
     for (auto&& step : tree.proof(target)) {
         const auto& s = step.getValue();
         hash = s.sibling_is_right ? MerkleHasher::combine(hash, s.sibling) : MerkleHasher::combine(s.sibling, hash);
@@ -1067,7 +1359,7 @@ void DemoMerkleTreeStepByStep() {
                   << (s.sibling_is_right ? prev + " || " + ShortHash(s.sibling) : ShortHash(s.sibling) + " || " + prev)
                   << ") = " << ShortHash(hash) << '\n';
     }
-    bool ok = hash == tree.root_hash();
+    Bool ok = hash == tree.root_hash();
     PrintColor("h" + std::to_string(level) + " == raiz (" + ShortHash(tree.root_hash()) + "): " +
                    (ok ? "verifica" : "NO verifica"),
                ok ? "1;32" : "1;31");
@@ -1078,7 +1370,7 @@ void DemoMerkleTreeStepByStep() {
 
 /** Prueba la interfaz de mapa: acceso, búsqueda, inserción, borrado, recorrido, lectura y escritura. */
 template <MapLike Map> void TestMap(const std::string& name) {
-    auto check = [&](bool ok, const std::string& what) { Check(ok, name, what); };
+    auto check = [&](Bool ok, const std::string& what) { Check(ok, name, what); };
     Map edades;
     edades["ana"] = 21;
     edades["luis"] = 25;
@@ -1104,7 +1396,7 @@ template <MapLike Map> void TestMap(const std::string& name) {
     }
     check(claves == "ana beto eva luis rosa " && edades["rosa"] == 41, "recorrido [clave, valor] fallo");
     const auto& lectura = edades;
-    int suma = 0;
+    Int suma = 0;
     for (const auto& [clave, edad] : lectura) suma += edad;
     for (auto it = lectura.rbegin(); it != lectura.rend(); ++it) suma -= it->second;
     check(suma == 0 && lectura.find("ana")->second == 22 && (*edades.begin()).first == "ana", "recorrido const fallo");
@@ -1112,7 +1404,7 @@ template <MapLike Map> void TestMap(const std::string& name) {
     typename Map::const_iterator fijo = edades.find("beto");
     check(fijo++->first == "beto" && fijo->first == "eva" && lectura.at("eva") == 32, "it++/const_iterator/at fallo");
     edades.at("eva") = 33;
-    bool lanzo = false;
+    Bool lanzo = false;
     try {
         edades.at("pepe");
     } catch (const std::out_of_range&) {
@@ -1153,7 +1445,7 @@ template <MapLike Map> void TestMap(const std::string& name) {
 
 void DemoHashTable() {
     PrintColor("DemoHashTable (interfaz de mapa, clave string)");
-    TestMap<HashTableOf<std::string, int>>("HashTable");
+    TestMap<HashTableOf<std::string, Int>>("HashTable");
     TestTree<HashTableOf<TX, Ref>::Tree>("HashTable (AVL interno)");
 }
 
@@ -1167,6 +1459,8 @@ void DemoCanvas() {
     canvas.glyph(15, 6, "●", visual::style::end);
     canvas.print(std::cout, visual::Painter(std::cout));
 }
+
+void PrintSerializedSheet(const std::string& serialized, std::ostream& os);
 
 void DemoSheet() {
     PrintColor("DemoSheet (hoja de calculo de texto)");
@@ -1212,7 +1506,7 @@ void DemoSheet() {
               sheet.formula("C1").empty(),
           name, "AST de funciones o potencias");
     for (std::string bad : {"(1+2", "1 2", "SUMA(A1:)", "A1:A3", "1+#"}) {
-        bool threw = false;
+        Bool threw = false;
         try {
             Formula tree(bad);
         } catch (const SheetError& error) {
@@ -1220,8 +1514,10 @@ void DemoSheet() {
         }
         Check(threw, name, "\"" + bad + "\" debio dar #SYNTAX");
     }
+    PrintColor("[1] Tabla evaluada (aritmetica, funciones, SI/CONCAT/LARGO y errores)", "1;33");
     sheet.print(std::cout);
 
+    PrintColor("[2] Persistencia en archivo (SaveTo / LoadFrom -> demo_sheet.txt)", "1;33");
     WithDemoFile("demo_sheet.txt", [&] {
         SaveTo("demo_sheet.txt", sheet);
         SheetOf<> loaded;
@@ -1231,18 +1527,22 @@ void DemoSheet() {
         b << loaded;
         Check(a.str() == b.str() && loaded.value("B2") == 54 && loaded.text("C1") == "Total", name,
               "el archivo leido no coincide");
-        std::cout << a.str() << '\n';
+        PrintSerializedSheet(a.str(), std::cout);
     });
+
+    PrintColor("[3] Validacion ante entrada invalida (no corrompe la hoja)", "1;33");
     std::istringstream invalid("[(A1,5),(nada,1)]");
     SheetOf<> target;
     target.set("A1", "7");
     invalid >> target;
     Check(invalid.fail() && target.value("A1") == 7, name, "un texto invalido debio rechazarse");
+    std::cout << "  Entrada \"[(A1,5),(nada,1)]\" rechazada -> A1 conserva " << target.text("A1") << '\n';
 
+    PrintColor("[4] Concurrencia: 4 hilos escribiendo 200 celdas c/u + lectura simultanea", "1;33");
     std::vector<std::thread> threads;
-    for (int t = 0; t < 4; ++t)
+    for (Int t = 0; t < 4; ++t)
         threads.emplace_back([&, t] {
-            for (int i = 1; i <= 200; ++i) {
+            for (Int i = 1; i <= 200; ++i) {
                 sheet.set("E" + std::to_string(t * 200 + i), "1");
                 sheet.value("B3");
             }
@@ -1250,7 +1550,8 @@ void DemoSheet() {
     for (auto& thread : threads) thread.join();
     sheet.set("F1", "=SUMA(E1:E800)");
     Check(sheet.value("F1") == 800, name, "escrituras concurrentes perdidas");
-    std::cout << name << ": formulas, archivo y 4 hilos OK\n";
+    std::cout << "  F1 = SUMA(E1:E800) -> " << sheet.text("F1") << '\n';
+    PrintColor(name + ": formulas, archivo y 4 hilos OK", "1;32");
 }
 
 /** Imprime el texto serializado `[(celda,texto),...]` agrupado por columna y con color. */
@@ -1261,12 +1562,12 @@ void PrintSerializedSheet(const std::string& serialized, std::ostream& os = std:
     }
 
     std::vector<std::string> entries;
-    bool in_quotes = false;
-    bool escaped = false;
-    int depth = 0;
+    Bool in_quotes = false;
+    Bool escaped = false;
+    Int depth = 0;
     std::size_t start = 1;
     for (std::size_t i = 1; i + 1 < serialized.size(); ++i) {
-        char ch = serialized[i];
+        Char ch = serialized[i];
         if (escaped) {
             escaped = false;
             continue;
@@ -1289,13 +1590,13 @@ void PrintSerializedSheet(const std::string& serialized, std::ostream& os = std:
 
     auto col_of = [](const std::string& entry) {
         std::string col;
-        for (std::size_t i = 1; i < entry.size() && std::isalpha(static_cast<unsigned char>(entry[i])); ++i)
+        for (std::size_t i = 1; i < entry.size() && std::isalpha(static_cast<Byte>(entry[i])); ++i)
             col += entry[i];
         return col;
     };
 
     visual::Painter paint(os);
-    auto print_entry = [&](const std::string& entry, bool trailing_comma) {
+    auto print_entry = [&](const std::string& entry, Bool trailing_comma) {
         std::size_t comma = entry.find(',');
         if (comma == std::string::npos || entry.front() != '(' || entry.back() != ')') {
             os << entry << (trailing_comma ? "," : "");
@@ -1303,7 +1604,7 @@ void PrintSerializedSheet(const std::string& serialized, std::ostream& os = std:
         }
         std::string cell = entry.substr(1, comma - 1);
         std::string val = entry.substr(comma + 1, entry.size() - comma - 2);
-        bool is_formula = (!val.empty() && val.front() == '=') || (val.size() >= 2 && val[0] == '"' && val[1] == '=');
+        Bool is_formula = (!val.empty() && val.front() == '=') || (val.size() >= 2 && val[0] == '"' && val[1] == '=');
         os << paint("2", "(") << paint("1;36", cell) << paint("2", ",")
            << (is_formula ? paint("0;32", val) : val) << paint("2", trailing_comma ? ")," : ")");
     };
@@ -1459,4 +1760,705 @@ void DemoSheetStepByStep() {
     PrintColor("operator>>: se lee en otra hoja y se recalcula igual", "1;33");
     loaded.print(std::cout);
     Check(saved && loaded.text("E2") == grades.text("E2") && loaded.text("G2") == "#CICLO", name, "lectura");
+}
+
+void DemoRegresiones() {
+    PrintColor("DemoRegresiones");
+    VectorOf<TX> empty;
+    Check(empty.rbegin() == empty.rend(), "Regresiones", "un Vector vacio debe tener rbegin() == rend()");
+
+    VectorOf<TX> v;
+    v.push_back(1, 0);
+    v.push_back(2, 1);
+    std::size_t seen = 0;
+    v.call([&](const auto&) { seen += v.size(); });
+    Check(seen == 4, "Regresiones", "call debe poder consultar el mismo Vector");
+
+    VectorOf<std::string> words;
+    words.push_back(std::string(100, 'x'), 0);
+    words.pop_back();
+    words.push_back("a", 1);
+    Check(words.at(0).getValue() == "a" && words.size() == 1, "Regresiones", "pop_back y push_back fallaron");
+    std::cout << "Regresiones: OK\n";
+}
+
+/** Comprueba una condición de los demos nuevos. @throws std::runtime_error con @p what si falla. */
+static void Expect(Bool condition, const std::string& what) {
+    if (!condition) throw std::runtime_error(what);
+}
+
+/** Pares (valor, ref) del contenedor ordenados, para comparar contenidos sin depender del orden interno. */
+template <typename Container> std::vector<std::pair<typename Container::value_type, Ref>> Sorted(const Container& c) {
+    std::vector<std::pair<typename Container::value_type, Ref>> items;
+    c.call([&](const auto& node) { items.emplace_back(node.getValue(), node.getRef()); });
+    std::sort(items.begin(), items.end());
+    return items;
+}
+
+/** Prueba `lower_bound`, `upper_bound` y `range` del B+ contra un recorrido completo y sigue las hojas enlazadas. */
+void TestBPlusRange() {
+    PrintColor("TestBPlusRange");
+    BPlusTreeOf<TX, std::less<TX>, 4> tree;
+    std::mt19937 rng(99);
+    std::vector<TX> keys(1500);
+    std::iota(keys.begin(), keys.end(), 0);
+    std::shuffle(keys.begin(), keys.end(), rng);
+    for (TX k : keys)
+        tree.insert(k * 3, k);
+    Expect(tree.validate(), "B+: arbol invalido tras insertar");
+    for (TX probe = -2; probe <= 4505; ++probe) {
+        auto lo = tree.lower_bound(probe), hi = tree.upper_bound(probe);
+        TX expectLo = probe <= 0 ? 0 : (probe + 2) / 3 * 3, expectHi = probe < 0 ? 0 : (probe / 3 + 1) * 3;
+        Expect((expectLo > 4497) == (lo == std::as_const(tree).end()) && (expectLo > 4497 || (*lo).getValue() == expectLo),
+               "B+: lower_bound incorrecto en " + std::to_string(probe));
+        Expect((expectHi > 4497) == (hi == std::as_const(tree).end()) && (expectHi > 4497 || (*hi).getValue() == expectHi),
+               "B+: upper_bound incorrecto en " + std::to_string(probe));
+    }
+    std::vector<TX> got;
+    std::size_t visited = tree.range(100, 130, [&](const auto& node) { got.push_back(node.getValue()); });
+    Expect(visited == 10 && got.front() == 102 && got.back() == 129 && std::is_sorted(got.begin(), got.end()),
+           "B+: range(100,130) incorrecto");
+    Expect(tree.range(5000, 6000, [](const auto&) {}) == 0 && tree.range(130, 100, [](const auto&) {}) == 0,
+           "B+: range vacio incorrecto");
+    std::cout << "  " << tree.leaf_count() << " hojas enlazadas, altura " << tree.height()
+              << ", range(100,130) visito " << visited << " claves OK\n";
+}
+
+/** Inserta y elimina al azar comparando con un std::map y validando las invariantes cada cierto tiempo. */
+template <std::size_t Order> void TestBPlusRandom() {
+    BPlusTreeOf<TX, std::less<TX>, Order> tree;
+    std::map<TX, Ref> model;
+    std::mt19937 rng(Order);
+    for (int i = 0; i < 20000; ++i) {
+        TX key = rng() % 1500;
+        if (rng() % 3) Expect(tree.insert(key, key * 2) == model.emplace(key, key * 2).second, "B+: insert difiere del modelo");
+        else Expect(tree.remove(key) == (model.erase(key) > 0), "B+: remove difiere del modelo");
+        if (i % 400 == 0) Expect(tree.validate(), "B+: invariantes rotas");
+    }
+    Expect(tree.validate() && tree.size() == model.size(), "B+: tamano difiere del modelo");
+    auto expected = model.begin();
+    for (auto&& node : tree) {
+        Expect(node.getValue() == expected->first && node.getRef() == expected->second, "B+: recorrido difiere del modelo");
+        ++expected;
+    }
+    auto reverse = model.rbegin();
+    for (auto it = tree.rbegin(); it != tree.rend(); ++it, ++reverse)
+        Expect((*it).getValue() == reverse->first, "B+: recorrido inverso difiere del modelo");
+    for (auto& [key, ref] : model)
+        Expect(tree.remove(key), "B+: no se pudo vaciar");
+    Expect(tree.empty() && tree.validate() && tree.begin() == tree.end(), "B+: deberia quedar vacio");
+    std::cout << "  orden " << Order << ": 20000 operaciones aleatorias contra std::map OK\n";
+}
+
+/** Persistencia del B+: texto, archivo, registros `id valor`, copia, move y texto inválido. */
+void TestBPlusPersistence() {
+    PrintColor("TestBPlusPersistence");
+    BPlusTreeOf<TX> empty;
+    BPlusTreeOf<TX, std::less<TX>, 3> small;
+    BPlusTreeOf<TX, std::less<TX>, 5> big;
+    for (TX k : {42}) small.insert(k, 7);
+    std::mt19937 rng(5);
+    for (int i = 0; i < 3000; ++i)
+        big.insert(static_cast<TX>(rng() % 100000) - 50000, i);
+    auto roundTrip = [](const auto& tree, const std::string& label) {
+        std::stringstream text;
+        text << tree;
+        std::remove_cvref_t<decltype(tree)> loaded;
+        text >> loaded;
+        Expect(!text.fail() && Sorted(tree) == Sorted(loaded) && loaded.validate(), "B+ persistencia: " + label);
+        tree.save("bplus_persist.txt");
+        std::remove_cvref_t<decltype(tree)> fromFile;
+        fromFile.load("bplus_persist.txt");
+        tree.save_records("bplus_records.txt");
+        std::remove_cvref_t<decltype(tree)> fromRecords;
+        fromRecords.load_records("bplus_records.txt");
+        std::remove("bplus_persist.txt");
+        std::remove("bplus_records.txt");
+        Expect(Sorted(tree) == Sorted(fromFile) && Sorted(tree) == Sorted(fromRecords) && fromFile.validate(),
+               "B+ persistencia por archivo: " + label);
+        std::cout << "  " << label << ": " << tree.size() << " elementos (texto, archivo y registros) OK\n";
+    };
+    roundTrip(empty, "vacio");
+    roundTrip(small, "un elemento");
+    roundTrip(big, "3000 aleatorios, orden 5");
+
+    BPlusTreeOf<TX, std::less<TX>, 5> copy(big), moved(std::move(copy));
+    Expect(Sorted(moved) == Sorted(big) && copy.empty() && moved.validate(), "B+: copia o move incorrectos");
+    static_assert(NothrowMovable<BPlusTreeOf<TX>> && OptionalLookup<BPlusTreeOf<TX>> && RangeQueryable<BPlusTreeOf<TX>>);
+
+    BPlusTreeOf<TX> keep{{1, 10}, {2, 20}};
+    const auto before = Sorted(keep);
+    for (const char* bad : {"", "[", "[(1,2)", "[(1,2),]", "(1,2)", "[(a,b)]", "basura"}) {
+        std::istringstream in(bad);
+        in >> keep;
+        Expect(in.fail() && Sorted(keep) == before, std::string("B+: texto invalido mal manejado: ") + bad);
+    }
+    std::cout << "  texto invalido: falla y no modifica el arbol OK\n";
+}
+
+/** Concurrencia del B+: inserciones disjuntas, inserción disputada y escritores con lectores que recorren. */
+void TestBPlusRace() {
+    PrintColor("TestBPlusRace");
+    const TX N = 50000;
+    BPlusTreeOf<TX> tree;
+    RunThreads(NThreads, [&](Int t) {
+        for (TX i = t; i < N; i += NThreads)
+            tree.insert(i, i);
+    });
+    Expect(tree.size() == static_cast<std::size_t>(N) && tree.validate(), "B+ race: se perdieron inserciones");
+    std::cout << "  " << NThreads << " hilos insertan " << N << " claves disjuntas: ninguna perdida OK\n";
+
+    BPlusTreeOf<TX> unique;
+    std::atomic<int> winners{0};
+    RunThreads(NThreads, [&](Int) {
+        for (TX i = 0; i < 10000; ++i)
+            if (unique.insert(i, i)) ++winners;
+    });
+    Expect(winners == 10000 && unique.size() == 10000 && unique.validate(), "B+ race: insert acepto duplicados");
+    std::cout << "  insert disputado: exactamente un ganador por clave OK\n";
+
+    const TX M = 4000;
+    BPlusTreeOf<TX> mixed;
+    for (TX i = 0; i < M; ++i)
+        mixed.insert(i, i);
+    std::atomic<Bool> stop{false};
+    std::atomic<std::size_t> reads{0};
+    std::vector<std::thread> readers;
+    for (int r = 0; r < 2; ++r)
+        readers.emplace_back([&] {
+            while (!stop) {
+                TX previous = std::numeric_limits<TX>::min();
+                mixed.call([&](const auto& node) {
+                    if (node.getValue() <= previous) std::terminate();
+                    previous = node.getValue();
+                });
+                (void)mixed.range(100, 200, [](const auto&) {});
+                ++reads;
+            }
+        });
+    RunThreads(NThreads, [&](Int t) {
+        for (TX i = t; i < M; i += NThreads)
+            if (i % 2 == 0) mixed.remove(i);
+            else mixed.insert(M + i, i);
+    });
+    stop = true;
+    for (auto& th : readers)
+        th.join();
+    Expect(mixed.validate() && mixed.size() == static_cast<std::size_t>(M), "B+ race: estado final incorrecto");
+    for (TX i = 0; i < M; ++i)
+        Expect(mixed.contains(i) == (i % 2 == 1), "B+ race: contenido final incorrecto");
+    std::cout << "  insert/remove concurrentes con " << reads << " recorridos de lectura OK\n";
+}
+
+void DemoBPlusTree() {
+    PrintColor("DemoBPlusTree");
+    BPlusTreeOf<TX> container;
+    TestContainer(container, Values<BPlusTreeOf<TX>>{{5, 50}, {1, 10}, {4, 40}, {2, 20}, {7, 70}, {3, 30}, {9, 90}, {8, 80}},
+                  "BPlusTree.txt");
+    TestTraversal(container, "BPlusTree");
+    TestVisualize(container, "BPlusTree");
+    container.clear();
+    TestGenericContainer(container, "BPlusTree_persist.txt");
+    TestInvalidRead(container, "BPlusTree");
+    BPlusTreeOf<TX> copyAndClear;
+    TestCopyAndClear(copyAndClear, "BPlusTree");
+    TestApplyFunction(container);
+
+    PrintColor("DemoBPlusTree (enteros, orden 3)");
+    BPlusTreeOf<TX, std::less<TX>, 3> tree;
+    for (TX k = 1; k <= 20; ++k) {
+        Expect(tree.insert(k, k * k), "B+: insert fallo");
+        Expect(tree.validate(), "B+: invariantes rotas al insertar " + std::to_string(k));
+    }
+    Expect(!tree.insert(5, 0), "B+: acepto un duplicado");
+    std::cout << "size = " << tree.size() << ", height = " << tree.height() << ", hojas = " << tree.leaf_count() << '\n';
+    tree.print_tree(std::cout);
+    for (TX k : {1, 2, 3, 20, 19, 10, 11, 12})
+        Expect(tree.remove(k) && tree.validate(), "B+: remove fallo en " + std::to_string(k));
+    std::cout << "Tras eliminar 8 claves:\n";
+    tree.print_tree(std::cout);
+    PrintColor(tree);
+
+    TestBPlusRange();
+    PrintColor("TestBPlusRandom");
+    TestBPlusRandom<3>();
+    TestBPlusRandom<4>();
+    TestBPlusRandom<7>();
+    TestBPlusPersistence();
+    TestBPlusRace();
+    DemoRaceCondition<BPlusTreeOf<TX>>("BPlusTree");
+    std::cout << "BPlusTree: OK\n";
+}
+
+/** Rejilla de @p side x @p side vértices con aristas entre vecinos y un muro con una sola abertura. */
+GraphOf<std::string> MakeGridGraph(int side) {
+    GraphOf<std::string> graph;
+    auto name = [&](int x, int y) { return std::to_string(y * side + x); };
+    for (int y = 0; y < side; ++y)
+        for (int x = 0; x < side; ++x)
+            graph.add_vertex(name(x, y), x, y);
+    for (int y = 0; y < side; ++y)
+        for (int x = 0; x < side; ++x) {
+            if (x + 1 < side) graph.add_edge(name(x, y), name(x + 1, y));
+            if (y + 1 < side) graph.add_edge(name(x, y), name(x, y + 1));
+        }
+    for (int y = 0; y < side; ++y)
+        if (y != side - 2) graph.remove_edge(name(side / 2, y), name(side / 2 + 1, y));
+    return graph;
+}
+
+/** Imprime el camino como `a -> b -> c` con su costo. */
+template <typename Path> void PrintPath(const std::string& label, const Path& path) {
+    std::cout << label << ": ";
+    if (!path.found) {
+        std::cout << "sin camino (expandio " << path.expanded << ")\n";
+        return;
+    }
+    for (std::size_t i = 0; i < path.vertices.size(); ++i)
+        std::cout << (i ? " -> " : "") << path.vertices[i].getValue();
+    std::cout << "  [costo " << path.cost << ", expandidos " << path.expanded << "]\n";
+}
+
+/** Búsqueda en anchura y profundidad en un grafo pequeño, con el orden de visita esperado. */
+void TestGraphTraversals() {
+    PrintColor("TestGraphTraversals");
+    GraphOf<std::string> graph;
+    for (const char* name : {"A", "B", "C", "D", "E", "F"})
+        graph.add_vertex(name);
+    for (auto [a, b] : {std::pair{"A", "B"}, {"A", "C"}, {"B", "D"}, {"C", "D"}, {"D", "E"}})
+        graph.add_edge(a, b);
+    graph.visualize(std::cout);
+    std::string bfs, dfs;
+    std::size_t reached = graph.bfs("A", [&](const std::string& key) { bfs += key; });
+    graph.dfs("A", [&](const std::string& key) { dfs += key; });
+    std::cout << "BFS desde A: " << bfs << ", DFS desde A: " << dfs << ", F no se alcanza\n";
+    Expect(bfs == "ABCDE" && dfs == "ABDCE" && reached == 5, "Graph: recorridos incorrectos");
+    Expect(graph.degree("D") == 3 && graph.degree("F") == 0 && !graph.has_edge("A", "D") && graph.has_edge("D", "E"),
+           "Graph: grados o aristas incorrectos");
+    Expect(graph.weight("A", "B") == 1 && !graph.weight("A", "E"), "Graph: peso incorrecto");
+    Expect(graph.remove_edge("A", "B") && !graph.has_edge("B", "A") && !graph.remove_edge("A", "B"), "Graph: remove_edge");
+    try {
+        graph.add_edge("A", "Z");
+        Expect(false, "Graph: acepto un vertice inexistente");
+    } catch (const std::out_of_range&) {
+    }
+    try {
+        graph.add_edge("A", "B", -1);
+        Expect(false, "Graph: acepto un peso negativo");
+    } catch (const std::invalid_argument&) {
+    }
+}
+
+/** A* contra Dijkstra y contra una búsqueda de fuerza bruta (Bellman-Ford) en un grafo aleatorio con pesos. */
+void TestGraphAStar() {
+    PrintColor("TestGraphAStar");
+    GraphOf<std::string> grid = MakeGridGraph(15);
+    auto astar = grid.shortest_path("0", "224"), dijkstra = grid.dijkstra("0", "224");
+    PrintPath("A*      ", astar);
+    PrintPath("Dijkstra", dijkstra);
+    Expect(astar.found && astar.cost == dijkstra.cost && astar.expanded <= dijkstra.expanded,
+           "Graph: A* debe dar el mismo costo expandiendo menos");
+
+    std::mt19937 rng(2024);
+    const int n = 60;
+    GraphOf<int, Real> graph;
+    std::vector<std::vector<Real>> dist(n, std::vector<Real>(n, std::numeric_limits<Real>::infinity()));
+    for (int i = 0; i < n; ++i) {
+        graph.add_vertex(i, rng() % 100, rng() % 100);
+        dist[i][i] = 0;
+    }
+    for (int i = 0; i < 200; ++i) {
+        int a = rng() % n, b = rng() % n;
+        if (a == b) continue;
+        Real w = 1 + rng() % 50;
+        graph.add_edge(a, b, w, true);
+        dist[a][b] = w;
+    }
+    for (int k = 0; k < n; ++k)
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                dist[i][j] = std::min(dist[i][j], dist[i][k] + dist[k][j]);
+    int checked = 0;
+    for (int a = 0; a < n; ++a)
+        for (int b = 0; b < n; ++b) {
+            auto path = graph.dijkstra(a, b);
+            Expect(path.found == (dist[a][b] < std::numeric_limits<Real>::infinity()), "Graph: alcance incorrecto");
+            if (path.found) {
+                Expect(path.cost == dist[a][b], "Graph: Dijkstra difiere de Floyd-Warshall");
+                ++checked;
+            }
+        }
+    std::cout << "  " << checked << " caminos comparados con Floyd-Warshall OK\n";
+
+    GraphOf<std::string> isolated;
+    isolated.add_vertex("a");
+    isolated.add_vertex("b");
+    Expect(!isolated.shortest_path("a", "b").found && isolated.shortest_path("a", "a").cost == 0, "Graph: sin camino");
+}
+
+/** Persistencia del grafo: texto, archivo, claves con caracteres especiales, texto inválido y copia. */
+void TestGraphPersistence() {
+    PrintColor("TestGraphPersistence");
+    GraphOf<std::string> graph = MakeGridGraph(8);
+    graph.add_vertex("a, (b)", 2.5, -1, 3);
+    graph.add_edge("a, (b)", "0", 4.5);
+    graph.add_edge("0", "63", 2, true);
+    std::stringstream text;
+    text << graph;
+    GraphOf<std::string> loaded;
+    text >> loaded;
+    Expect(!text.fail() && loaded.vertex_count() == graph.vertex_count() && loaded.edge_count() == graph.edge_count(),
+           "Graph persistencia: tamanos");
+    Expect(loaded.weight("a, (b)", "0") == 4.5 && loaded.weight("0", "63") == 2 && !loaded.weight("63", "0"),
+           "Graph persistencia: pesos o direccion");
+    Expect(loaded.dijkstra("0", "63").cost == graph.dijkstra("0", "63").cost, "Graph persistencia: caminos");
+    graph.save("graph_persist.txt");
+    GraphOf<std::string> fromFile;
+    fromFile.load("graph_persist.txt");
+    std::remove("graph_persist.txt");
+    std::stringstream again;
+    again << fromFile;
+    Expect(again.str() == text.str() || fromFile.edge_count() == graph.edge_count(), "Graph persistencia: archivo");
+    std::cout << "  " << loaded.vertex_count() << " vertices y " << loaded.edge_count() << " aristas OK\n";
+
+    GraphOf<std::string> keep;
+    keep.add_vertex("x");
+    for (const char* bad : {"", "GRAPH", "GRAPH 1", "GRAPH 1 0\n", "GRAPH 1 0\n(a,0) 0 0", "GRAPH 2 1\n(a,0) 0 0 0\n(b,1) 1 1 1\n0 5 1",
+                            "GRAPH 2 0\n(a,0) 0 0 0\n(a,1) 1 1 1", "GRAPH 1 1\n(a,0) 0 0 0\n0 0 -3", "basura"}) {
+        std::istringstream in(bad);
+        in >> keep;
+        Expect(in.fail() && keep.vertex_count() == 1 && keep.has_vertex("x"),
+               std::string("Graph: texto invalido mal manejado: ") + bad);
+    }
+    std::cout << "  texto invalido: falla y no modifica el grafo OK\n";
+    Bool rejected = false;
+    try {
+        keep.load("no_existe.txt");
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    Expect(rejected, "Graph: abrio un archivo inexistente");
+}
+
+/** Concurrencia del grafo: escritores agregan vértices y aristas mientras otros hilos buscan caminos y recorren. */
+void TestGraphRace() {
+    PrintColor("TestGraphRace");
+    GraphOf<int> graph;
+    const int perThread = 400;
+    for (int i = 0; i < NThreads * perThread; ++i)
+        graph.add_vertex(i, i % 50, i / 50);
+    std::atomic<Bool> stop{false};
+    std::atomic<std::size_t> searches{0};
+    std::vector<std::thread> readers;
+    for (int r = 0; r < 2; ++r)
+        readers.emplace_back([&] {
+            while (!stop) {
+                (void)graph.shortest_path(0, NThreads * perThread - 1);
+                graph.bfs(0, [](int) {});
+                ++searches;
+            }
+        });
+    RunThreads(NThreads, [&](Int t) {
+        for (int i = t * perThread; i + 1 < (t + 1) * perThread; ++i)
+            graph.add_edge(i, i + 1);
+    });
+    for (int t = 0; t + 1 < NThreads; ++t)
+        graph.add_edge((t + 1) * perThread - 1, (t + 1) * perThread);
+    stop = true;
+    for (auto& th : readers)
+        th.join();
+    const int total = NThreads * perThread;
+    Expect(graph.edge_count() == static_cast<std::size_t>(2 * (total - 1)), "Graph race: se perdieron aristas");
+    auto path = graph.dijkstra(0, total - 1);
+    Expect(path.found && path.cost == total - 1, "Graph race: camino final incorrecto");
+    std::cout << "  " << NThreads << " hilos agregan " << graph.edge_count() << " aristas dirigidas mientras otros hacen "
+              << searches << " busquedas OK\n";
+}
+
+void DemoGraph() {
+    PrintColor("DemoGraph");
+    TestGraphTraversals();
+    TestGraphAStar();
+    TestGraphPersistence();
+    TestGraphRace();
+
+    PrintColor("DemoGraph (visualizacion VTK)");
+    GraphOf<std::string> grid = MakeGridGraph(15);
+    auto path = grid.shortest_path("0", "224");
+    grid.save_vtk("graph.vtk", &path);
+    std::ifstream vtk("graph.vtk");
+    std::string header;
+    std::getline(vtk, header);
+    Expect(header.rfind("# vtk DataFile", 0) == 0, "Graph: VTK sin encabezado");
+    std::cout << "Escribio graph.vtk (" << grid.vertex_count() << " puntos, camino de " << path.vertices.size()
+              << " vertices en `on_path`); abrirlo con ParaView\n";
+    std::cout << "Graph: OK\n";
+}
+
+/** Rectángulo aleatorio dentro de un área de 1000x1000. */
+Rect<Real> RandomRect(std::mt19937& rng) {
+    Real x = rng() % 1000, y = rng() % 1000;
+    return {x, y, x + rng() % 30, y + rng() % 30};
+}
+
+/** Busca ventanas y el vecino más cercano en el árbol R y lo compara con una búsqueda lineal. */
+template <typename Tree> void CheckRTreeQueries(const Tree& tree, const std::vector<std::pair<Rect<Real>, Ref>>& all,
+                                                std::mt19937& rng, const std::string& label) {
+    for (int q = 0; q < 150; ++q) {
+        Rect<Real> window = RandomRect(rng);
+        window.maxx += 80, window.maxy += 80;
+        std::set<Ref> got, expected;
+        std::size_t found = tree.search(window, [&](const auto&, Ref ref) { got.insert(ref); });
+        for (auto& [rect, ref] : all)
+            if (rect.intersects(window)) expected.insert(ref);
+        Expect(got == expected && found == expected.size(), "RTree: ventana incorrecta (" + label + ")");
+        Real x = rng() % 1000, y = rng() % 1000, best = std::numeric_limits<Real>::infinity();
+        for (auto& [rect, ref] : all)
+            best = std::min(best, rect.distance2(x, y));
+        auto nearest = tree.nearest(x, y);
+        Expect(all.empty() ? !nearest : nearest && nearest->getValue().distance2(x, y) == best,
+               "RTree: vecino mas cercano incorrecto (" + label + ")");
+    }
+}
+
+/** Inserción, eliminación y consultas del árbol R contra una búsqueda lineal. */
+template <std::size_t Order> void TestRTreeRandom() {
+    RTreeOf<Real, Order> tree;
+    std::vector<std::pair<Rect<Real>, Ref>> all;
+    std::mt19937 rng(Order);
+    for (Ref i = 0; i < 2000; ++i) {
+        all.emplace_back(RandomRect(rng), i);
+        tree.insert(all.back().first, i);
+        if (i % 250 == 0) Expect(tree.validate(), "RTree: invariantes rotas al insertar");
+    }
+    Expect(tree.validate() && tree.size() == 2000, "RTree: tamano tras insertar");
+    CheckRTreeQueries(tree, all, rng, "orden " + std::to_string(Order));
+    std::shuffle(all.begin(), all.end(), rng);
+    for (std::size_t i = 0; i < 1500; ++i) {
+        Expect(tree.remove(all.back().first, all.back().second), "RTree: no se pudo eliminar");
+        all.pop_back();
+        if (i % 150 == 0) Expect(tree.validate() && tree.size() == all.size(), "RTree: invariantes rotas al eliminar");
+    }
+    Expect(!tree.remove({-5, -5, -4, -4}, 0), "RTree: elimino algo inexistente");
+    CheckRTreeQueries(tree, all, rng, "tras eliminar");
+    for (auto& [rect, ref] : all)
+        Expect(tree.remove(rect, ref), "RTree: no se pudo vaciar");
+    Expect(tree.empty() && tree.validate() && !tree.nearest(0, 0) && tree.count({0, 0, 1000, 1000}) == 0,
+           "RTree: deberia quedar vacio");
+    std::cout << "  orden " << Order << ": 2000 inserciones, 2000 eliminaciones y consultas contra busqueda lineal OK\n";
+}
+
+/** Persistencia del árbol R: texto, archivo, vacío, copia, move y texto inválido. */
+void TestRTreePersistence() {
+    PrintColor("TestRTreePersistence");
+    RTreeOf<Real, 4> tree;
+    std::mt19937 rng(8);
+    for (Ref i = 0; i < 500; ++i)
+        tree.insert(RandomRect(rng), i);
+    tree.insert_point(0.5, -2.25, 999);
+    auto entries = [](const auto& t) {
+        std::vector<std::pair<std::string, Ref>> items;
+        t.search({-1e9, -1e9, 1e9, 1e9}, [&](const auto& r, Ref f) {
+            std::ostringstream os;
+            os << r;
+            items.emplace_back(os.str(), f);
+        });
+        std::sort(items.begin(), items.end());
+        return items;
+    };
+    std::stringstream text;
+    text << tree;
+    RTreeOf<Real, 4> loaded;
+    text >> loaded;
+    Expect(!text.fail() && entries(loaded) == entries(tree) && loaded.validate(), "RTree persistencia: texto");
+    tree.save("rtree_persist.txt");
+    RTreeOf<Real, 4> fromFile;
+    fromFile.load("rtree_persist.txt");
+    std::remove("rtree_persist.txt");
+    Expect(entries(fromFile) == entries(tree), "RTree persistencia: archivo");
+    RTreeOf<Real, 4> empty, emptyLoaded;
+    std::stringstream emptyText;
+    emptyText << empty;
+    emptyText >> emptyLoaded;
+    Expect(!emptyText.fail() && emptyLoaded.empty(), "RTree persistencia: vacio");
+    RTreeOf<Real, 4> copy(tree), moved(std::move(copy));
+    Expect(entries(moved) == entries(tree) && copy.empty() && moved.validate(), "RTree: copia o move");
+    std::cout << "  " << tree.size() << " rectangulos (texto y archivo), vacio, copia y move OK\n";
+
+    RTreeOf<Real, 4> keep{{{0, 0, 1, 1}, 1}};
+    for (const char* bad : {"", "RTREE", "RTREE 1", "RTREE 1\n(0 0 1 1,", "RTREE 1\n(5 5 1 1,3)", "RTREE 2\n(0 0 1 1,1)",
+                            "TREE 0", "basura"}) {
+        std::istringstream in(bad);
+        in >> keep;
+        Expect(in.fail() && keep.size() == 1 && keep.contains({0, 0, 1, 1}, 1),
+               std::string("RTree: texto invalido mal manejado: ") + bad);
+    }
+    std::cout << "  texto invalido: falla y no modifica el arbol OK\n";
+}
+
+/** Concurrencia del árbol R: inserciones disjuntas, eliminaciones y lectores que buscan ventanas a la vez. */
+void TestRTreeRace() {
+    PrintColor("TestRTreeRace");
+    const Ref N = 10000;
+    RTreeOf<Real, 6> tree;
+    RunThreads(NThreads, [&](Int t) {
+        std::mt19937 rng(t);
+        for (Ref i = t; i < N; i += NThreads)
+            tree.insert(RandomRect(rng), i);
+    });
+    Expect(tree.size() == static_cast<std::size_t>(N) && tree.validate(), "RTree race: se perdieron inserciones");
+    Expect(tree.count({-1, -1, 2000, 2000}) == static_cast<std::size_t>(N), "RTree race: busqueda incompleta");
+    std::cout << "  " << NThreads << " hilos insertan " << N << " rectangulos: ninguno perdido OK\n";
+
+    std::atomic<Bool> stop{false};
+    std::atomic<std::size_t> searches{0};
+    std::vector<std::thread> readers;
+    for (int r = 0; r < 2; ++r)
+        readers.emplace_back([&, r] {
+            std::mt19937 rng(100 + r);
+            while (!stop) {
+                (void)tree.count({Real(rng() % 900), Real(rng() % 900), Real(rng() % 900 + 100), Real(rng() % 900 + 100)});
+                (void)tree.nearest(rng() % 1000, rng() % 1000);
+                ++searches;
+            }
+        });
+    RunThreads(NThreads, [&](Int t) {
+        std::mt19937 rng(t + 50);
+        for (Ref i = 0; i < 400; ++i)
+            tree.insert(RandomRect(rng), N + t * 400 + i);
+    });
+    stop = true;
+    for (auto& th : readers)
+        th.join();
+    Expect(tree.size() == static_cast<std::size_t>(N + NThreads * 400) && tree.validate(), "RTree race: estado final");
+    std::cout << "  inserciones concurrentes con " << searches << " busquedas de lectura OK\n";
+}
+
+void DemoRTree() {
+    PrintColor("DemoRTree");
+    RTreeOf<Real, 4> tree;
+    std::vector<std::pair<Rect<Real>, Ref>> all;
+    const Rect<Real> shapes[] = {{0, 0, 2, 2},   {1, 1, 3, 3},   {5, 5, 6, 6},   {7, 1, 9, 3},   {2, 6, 4, 8},
+                                 {8, 8, 10, 10}, {4, 0, 5, 1},   {6, 3, 7, 4},   {0, 8, 1, 9},   {9, 5, 10, 6},
+                                 {3, 3, 4, 4},   {5, 8, 6, 9}};
+    for (Ref i = 0; i < static_cast<Ref>(std::size(shapes)); ++i) {
+        tree.insert(shapes[i], i);
+        all.emplace_back(shapes[i], i);
+        Expect(tree.validate(), "RTree: invariantes rotas al insertar " + std::to_string(i));
+    }
+    std::cout << "size = " << tree.size() << ", height = " << tree.height() << ", bounds = [" << tree.bounds() << "]\n";
+    tree.print_tree(std::cout);
+    std::cout << "Entradas que tocan [0,0,3,3]: ";
+    tree.search({0, 0, 3, 3}, [](const auto& rect, Ref ref) { std::cout << ref << "=(" << rect << ") "; });
+    std::cout << "\nMas cercano a (5.4, 4.8): " << *tree.nearest(5.4, 4.8) << '\n';
+    Expect(tree.count({0, 0, 3, 3}) == 3 && tree.nearest(5.4, 4.8)->getRef() == 2, "RTree: consultas del ejemplo");
+
+    TestRTreeRandom<4>();
+    TestRTreeRandom<5>();
+    TestRTreeRandom<9>();
+    TestRTreePersistence();
+    TestRTreeRace();
+
+    PrintColor("DemoRTree (visualizacion VTK)");
+    RTreeOf<Real, 5> big;
+    std::mt19937 rng(11);
+    for (Ref i = 0; i < 400; ++i)
+        big.insert(RandomRect(rng), i);
+    big.save_vtk("rtree.vtk", 5);
+    std::ifstream vtk("rtree.vtk");
+    std::string header;
+    std::getline(vtk, header);
+    Expect(header.rfind("# vtk DataFile", 0) == 0, "RTree: VTK sin encabezado");
+    std::cout << "Escribio rtree.vtk (" << big.size() << " rectangulos, " << big.height()
+              << " niveles apilados en z); abrirlo con ParaView\n";
+    std::cout << "RTree: OK\n";
+}
+
+/** Guarda y lee @p container con los dos formatos de archivo y comprueba que el contenido no cambia. */
+template <typename Container> void TestFileRoundTrip(const std::string& name, const Values<Container>& values) {
+    Container original;
+    for (const auto& [value, ref] : values)
+        original.push_back(value, ref);
+    const std::string bracket = "files_" + name + ".txt", records = "files_" + name + ".rec";
+    original.save(bracket);
+    original.save_records(records);
+    Container fromBracket, fromRecords;
+    fromBracket.load(bracket);
+    std::size_t count = fromRecords.load_records(records);
+    std::remove(bracket.c_str());
+    std::remove(records.c_str());
+    Expect(Sorted(original) == Sorted(fromBracket), name + ": save/load cambio el contenido");
+    Expect(Sorted(original) == Sorted(fromRecords) && count == values.size(), name + ": save_records/load_records cambio el contenido");
+    std::cout << "  " << name << ": " << count << " elementos por save/load y save_records/load_records OK\n";
+}
+
+/** Escribe @p text en @p path. */
+static void WriteText(const std::string& path, const std::string& text) {
+    std::ofstream(path, std::ios::trunc) << text;
+}
+
+void DemoFiles() {
+    PrintColor("DemoFiles");
+    const Values<VectorOf<TX>> numbers{{5, 50}, {1, 10}, {4, 40}, {2, 20}, {7, 70}};
+    TestFileRoundTrip<VectorOf<TX>>("Vector", numbers);
+    TestFileRoundTrip<SortedLinkedList<TX>>("LinkedList", numbers);
+    TestFileRoundTrip<SortedCircularLinkedList<TX>>("CircularLinkedList", numbers);
+    TestFileRoundTrip<SortedDoubleLinkedList<TX>>("DoubleLinkedList", numbers);
+    TestFileRoundTrip<SortedCircularDoubleLinkedList<TX>>("CircularDoubleLinkedList", numbers);
+    TestFileRoundTrip<MinHeap<TX>>("Heap", numbers);
+    TestFileRoundTrip<BinarySearchTree<TX>>("BinaryTree", numbers);
+    TestFileRoundTrip<AVLSearchTree<TX>>("AVL", numbers);
+    TestFileRoundTrip<BTreeOf<TX>>("BTree", numbers);
+    TestFileRoundTrip<BPlusTreeOf<TX>>("BPlusTree", numbers);
+    TestFileRoundTrip<VectorOf<std::string>>("VectorStrings", {{"hola mundo", 1}, {"a,(b)", 2}, {"[x]", 3}, {"", 4}});
+
+    PrintColor("DemoFiles (archivo escrito a mano con identificadores)");
+    const std::string path = "files_manual.txt";
+    WriteText(path, "# id valor\n101 hola mundo\n\n102 segunda linea\r\n  103   con espacios\n");
+    VectorOf<std::string> words;
+    Expect(words.load_records(path) == 3, "Files: cantidad de registros");
+    for (std::size_t i = 0; i < words.size(); ++i)
+        std::cout << "  id " << words[i].getRef() << " -> \"" << words[i].getValue() << "\"\n";
+    Expect(words[0].getRef() == 101 && words[0].getValue() == "hola mundo" && words[1].getValue() == "segunda linea" &&
+               words[2].getRef() == 103 && words[2].getValue() == "con espacios",
+           "Files: registros mal leidos");
+
+    AVLSearchTree<TX> tree;
+    WriteText(path, "30 3\n10 1\n20 2\n");
+    tree.load_records(path);
+    Expect(Sorted(tree) == std::vector<std::pair<TX, Ref>>{{1, 10}, {2, 20}, {3, 30}}, "Files: arbol desde registros");
+    BPlusTreeOf<TX> index;
+    index.load_records(path);
+    Expect(index.find_ref(1) == std::optional<Ref>(10) && index.find_ref(2) == std::optional<Ref>(20),
+           "Files: B+ desde registros");
+
+    const auto before = Sorted(tree);
+    for (const char* bad : {"30 3\nxx 5\n", "30\n", "30 abc\n", "30 3 extra\n40\n"}) {
+        WriteText(path, bad);
+        Bool rejected = false;
+        try {
+            tree.load_records(path);
+        } catch (const std::runtime_error& error) {
+            rejected = true;
+            std::cout << "  rechazado: " << error.what() << '\n';
+        }
+        Expect(rejected && Sorted(tree) == before, std::string("Files: registro invalido mal manejado: ") + bad);
+    }
+    Bool rejected = false;
+    try {
+        tree.load_records("no_existe.rec");
+    } catch (const std::runtime_error& error) {
+        rejected = true;
+        std::cout << "  rechazado: " << error.what() << '\n';
+    }
+    Expect(rejected, "Files: abrio un archivo inexistente");
+    rejected = false;
+    try {
+        tree.load("no_existe.txt");
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    Expect(rejected, "Files: load abrio un archivo inexistente");
+    std::remove(path.c_str());
+    std::cout << "Files: OK\n";
 }

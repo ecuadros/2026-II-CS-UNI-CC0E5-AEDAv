@@ -3,6 +3,7 @@
 
 #include "../core/GeneralNode.h"
 #include "listiterator.h"
+#include <utility>
 
 /** Enlace al nodo siguiente. */
 template <class Node>
@@ -32,6 +33,10 @@ public:
     LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref) {
         this->m_pNext = pNext;
     }
+    /** Crea un nodo moviendo su valor, con referencia y nodo siguiente. */
+    LinkedListNode(T&& value, Ref ref, Node* pNext) : GeneralNode<T>(std::move(value), ref) {
+        this->m_pNext = pNext;
+    }
 };
 
 /**
@@ -50,6 +55,11 @@ public:
   /** Crea un nodo con su valor, referencia y enlaces siguiente y anterior. */
   DoubleLinkedNode(const T &value, Ref ref, Node *pNext, Node *pPrev = nullptr)
       : Parent(value, ref, pNext) {
+    this->m_pPrev = pPrev;
+  }
+  /** Crea un nodo moviendo su valor, con referencia y enlaces siguiente y anterior. */
+  DoubleLinkedNode(T &&value, Ref ref, Node *pNext, Node *pPrev = nullptr)
+      : Parent(std::move(value), ref, pNext) {
     this->m_pPrev = pPrev;
   }
 };

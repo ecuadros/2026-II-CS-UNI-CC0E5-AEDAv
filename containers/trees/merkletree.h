@@ -1,6 +1,7 @@
 #ifndef __MERKLETREE_H__
 #define __MERKLETREE_H__
 
+#include "../../types.h"
 #include "binarytree.h"
 #include "../core/traits.h"
 #include "../core/traversalops.h"
@@ -48,7 +49,7 @@ public:
 
 /** Operaciones del MerkleTree: recorridos, impresión y dibujo; la lectura la define MerkleTree::operator>>. */
 using MerkleTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
-                                        RFirstThatOp, PrintableOp, VisualOp>;
+                                        RFirstThatOp, PrintableOp, VisualOp, FileOp>;
 
 /**
  * Árbol de Merkle: las hojas guardan el hash de cada bloque y cada nodo interno el hash de sus dos hijos, de modo que la raíz resume todos los datos.
@@ -56,6 +57,7 @@ using MerkleTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
  * @tparam Ops Mixins de recorrido e impresión.
  */
 template <typename Traits, typename Ops = MerkleTraversalOps>
+    requires MerkleTraitsConcept<Traits>
 class MerkleTree : public BinaryTreeBase<Traits, Ops> {
 public:
   using Base = BinaryTreeBase<Traits, Ops>;
@@ -68,7 +70,7 @@ public:
   /** Paso de una prueba de inclusión: el hash hermano y de qué lado va al combinar. */
   struct ProofStep {
     Digest sibling{};
-    bool sibling_is_right = false;
+    Bool sibling_is_right = false;
   };
   /** Prueba de inclusión: los pasos desde la hoja hasta la raíz. */
   using Proof = Vector<VectorTraits<ProofStep>>;
@@ -76,7 +78,7 @@ public:
 private:
   using Level = Vector<VectorTraits<NodePtr>>;
 
-  static constexpr bool dup_odd = requires { requires Hasher::duplicate_odd; };
+  static constexpr Bool dup_odd = requires { requires Hasher::duplicate_odd; };
 
   /** Hojas en el orden de los bloques. */
   Level m_leaves;
@@ -88,8 +90,8 @@ private:
   }
 
   /** Crea un nodo interno con hijos @p left y @p right sin tocar los padres de los hijos. Si @p right es nulo, combina @p left consigo mismo. */
-  static NodePtr make_parent(NodePtr left, NodePtr right) {
-    NodePtr parent = new Node(
+  static std::unique_ptr<Node> make_parent(NodePtr left, NodePtr right) {
+    auto parent = std::make_unique<Node>(
         Hasher::combine(left->getValue(),
                         right ? right->getValue() : left->getValue()),
         Ref(-1));
@@ -100,17 +102,12 @@ private:
 
   /** Crea el padre de @p left y @p right y lo añade al nivel @p next. Si @p right es nulo, combina @p left consigo mismo. */
   static void join(Level &next, NodePtr left, NodePtr right) {
-    NodePtr parent = make_parent(left, right);
-    try {
-      next.push_back(parent, Ref(next.size()));
-    } catch (...) {
-      parent->m_pChild[0] = parent->m_pChild[1] = nullptr;
-      delete parent;
-      throw;
-    }
-    left->m_pParent = parent;
+    auto parent = make_parent(left, right);
+    next.push_back(parent.get(), Ref(next.size()));
+    left->m_pParent = parent.get();
     if (right)
-      right->m_pParent = parent;
+      right->m_pParent = parent.get();
+    parent.release();
   }
 
   /** Hijo por el que continúa la columna derecha: el derecho, o el izquierdo si el nodo duplicó al impar. */
@@ -121,10 +118,9 @@ private:
   /** Libera los nodos internos desde @p top bajando por la columna derecha hasta @p stop (sin incluirlo). Los hijos no se liberan. */
   static void release_spine(NodePtr top, const Node *stop) {
     while (top != stop) {
-      NodePtr next = spine_child(top);
-      top->m_pChild[0] = top->m_pChild[1] = nullptr;
-      delete top;
-      top = next;
+      std::unique_ptr<Node> owned(top);
+      top = spine_child(top);
+      owned->m_pChild[0] = owned->m_pChild[1] = nullptr;
     }
   }
 
@@ -202,7 +198,7 @@ private:
     try {
       for (; first != last; ++first) {
         Ref index = Ref(m_leaves.size());
-        std::unique_ptr<Node> node(new Node(digest_of(*first), index));
+        auto node = std::make_unique<Node>(digest_of(*first), index);
         m_leaves.push_back(node.get(), index);
         node.release();
       }
@@ -296,7 +292,7 @@ public:
     constexpr std::size_t MaxPeaks = sizeof(std::size_t) * 8;
     const std::size_t n = m_leaves.size();
     Ref index = Ref(n);
-    std::unique_ptr<Node> leaf(new Node(Hasher::leaf(block), index));
+    auto leaf = std::make_unique<Node>(Hasher::leaf(block), index);
 
     NodePtr peak[MaxPeaks];
     std::size_t height[MaxPeaks];
@@ -317,8 +313,8 @@ public:
       for (std::size_t i = peaks; i-- > 0;) {
         if constexpr (dup_odd)
           for (; top_height < height[i]; ++top_height)
-            top = make_parent(top, nullptr);
-        top = make_parent(peak[i], top);
+            top = make_parent(top, nullptr).release();
+        top = make_parent(peak[i], top).release();
         top_height = height[i] + 1;
       }
       m_leaves.push_back(leaf.get(), index);
@@ -356,7 +352,7 @@ public:
     Proof steps;
     const Node *node = m_leaves.at(index).getValue();
     for (; node->m_pParent; node = node->m_pParent) {
-      bool side = side_of(node);
+      Bool side = side_of(node);
       const Node *sibling = node->m_pParent->m_pChild[!side];
       steps.push_back({(sibling ? sibling : node)->getValue(), !side},
                       Ref(steps.size()));
@@ -365,7 +361,7 @@ public:
   }
 
   /** Comprueba que @p block pertenece al árbol cuyo hash raíz es @p root, usando solo la prueba @p steps. */
-  static bool verify(const value_type &block, const Proof &steps,
+  static Bool verify(const value_type &block, const Proof &steps,
                      const Digest &root) {
     Digest hash = Hasher::leaf(block);
     for (const auto &step : steps) {

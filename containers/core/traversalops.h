@@ -1,10 +1,16 @@
 #ifndef TRAVERSALOPS_H
 #define TRAVERSALOPS_H
 
+#include "../../types.h"
 #include "container_stream.h"
 #include "traversal_algorithms.h"
-#include "visualization.h"
+#include "../visual/visualization.h"
+#include <fstream>
 #include <istream>
+#include <iterator>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <mutex>
 #include <utility>
 
@@ -27,13 +33,13 @@ concept ReverseTraversable = requires(Container& container) {
     container.rend();
 };
 
-/** Mixin que aporta el mutex con el que los contenedores protegen sus operaciones. Al copiar o asignar, el mutex no se copia: cada objeto conserva el suyo. */
+/** Mixin que aporta el mutex recursivo con el que los contenedores protegen sus operaciones, de modo que una función pasada a `call` puede usar el mismo contenedor. Al copiar o asignar, el mutex no se copia: cada objeto conserva el suyo. */
 class LockableOp {
     friend struct LockedTraversal;
 
 protected:
     /** Mutex del contenedor. */
-    mutable std::mutex m_mutex;
+    mutable std::recursive_mutex m_mutex;
 
 public:
     /** Crea el mixin con su propio mutex. */
@@ -48,12 +54,12 @@ public:
 struct LockedTraversal {
     /** Toma el mutex de @p c mientras viva el objeto devuelto. */
     template <class Self>
-    static std::lock_guard<std::mutex> guard(Self& c) {
-        return std::lock_guard<std::mutex>(c.m_mutex);
+    static std::lock_guard<std::recursive_mutex> guard(Self& c) {
+        return std::lock_guard<std::recursive_mutex>(c.m_mutex);
     }
 
     /** Ejecuta @p algorithm sobre todo el contenedor con el mutex tomado. Si @p Reverse es `true`, recorre de `rbegin()` a `rend()`. */
-    template <bool Reverse, class Self, class Algorithm, class... Args>
+    template <Bool Reverse, class Self, class Algorithm, class... Args>
     static decltype(auto) run(Self& c, Algorithm algorithm, Args&&... args) {
         std::lock_guard lock(c.m_mutex);
         if constexpr (Reverse)
@@ -190,6 +196,85 @@ public:
 };
 
 /**
+ * Mixin que guarda y lee el contenedor en archivos de texto, de dos maneras:
+ * `save`/`load` con el formato `[(valor,ref),...]` y `save_records`/`load_records` con una línea `id valor` por elemento.
+ * Todos los métodos lanzan `std::runtime_error` si el archivo no se puede abrir o tiene un formato inválido.
+ */
+class FileOp {
+    /** Quita el retorno de carro final de una línea leída en un archivo de Windows. */
+    static void trim_line(std::string& line) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+    }
+
+public:
+    /** Escribe el contenedor en @p path con el formato `[(valor,ref),...]`, reemplazando el archivo. */
+    template <class Self>
+        requires container_stream::PrintableContainer<Self> || container_stream::StreamWritable<Self>
+    void save(this const Self& self, const std::string& path) {
+        std::ofstream file(path, std::ios::trunc);
+        if (!file) throw std::runtime_error("No se pudo crear " + path);
+        container_stream::write(file, self);
+        file << '\n';
+        if (!file) throw std::runtime_error("No se pudo escribir " + path);
+    }
+
+    /** Reemplaza el contenido por el que hay en @p path en el formato de `save`; si el texto es inválido no cambia. */
+    template <class Self>
+        requires container_stream::ReadableContainer<Self> || container_stream::StreamReadable<Self>
+    void load(this Self& self, const std::string& path) {
+        std::ifstream file(path);
+        if (!file) throw std::runtime_error("No se pudo abrir " + path);
+        container_stream::read(file, self);
+        if (file.fail()) throw std::runtime_error("Formato invalido en " + path);
+    }
+
+    /** Escribe en @p path una línea `id valor` por elemento, donde el id es la referencia del nodo. */
+    template <class Self>
+        requires container_stream::PrintableContainer<Self>
+    void save_records(this const Self& self, const std::string& path) {
+        std::ofstream file(path, std::ios::trunc);
+        if (!file) throw std::runtime_error("No se pudo crear " + path);
+        self.call([&](const auto& node) { file << node.getRef() << ' ' << node.getValue() << '\n'; });
+        if (!file) throw std::runtime_error("No se pudo escribir " + path);
+    }
+
+    /**
+     * Reemplaza el contenido por las líneas `id valor` de @p path; ignora las vacías y las que empiezan con `#`.
+     * Para cadenas, el valor es el resto de la línea. Si alguna línea es inválida, el contenedor no cambia.
+     * @return Cantidad de registros leídos.
+     */
+    template <class Self>
+        requires container_stream::ReadableContainer<Self>
+    std::size_t load_records(this Self& self, const std::string& path) {
+        using Value = typename Self::value_type;
+        std::ifstream file(path);
+        if (!file) throw std::runtime_error("No se pudo abrir " + path);
+        Self loaded;
+        std::size_t count = 0, number = 0;
+        for (std::string line; std::getline(file, line);) {
+            ++number;
+            trim_line(line);
+            if (line.empty() || line[0] == '#') continue;
+            std::istringstream in(line);
+            container_stream::ref_of_t<Self> ref;
+            Value value;
+            Bool ok = static_cast<Bool>(in >> ref);
+            if constexpr (std::is_same_v<Value, std::string>) {
+                in >> std::ws;
+                value.assign(std::istreambuf_iterator<Char>(in), std::istreambuf_iterator<Char>());
+            } else {
+                ok = ok && static_cast<Bool>(in >> value);
+            }
+            if (!ok) throw std::runtime_error(path + ":" + std::to_string(number) + ": registro invalido");
+            loaded.push_back(value, ref);
+            ++count;
+        }
+        self = std::move(loaded);
+        return count;
+    }
+};
+
+/**
  * Combina los mixins indicados en una sola base y añade siempre LockableOp.
  * @tparam Ops Mixins de operaciones que heredará el contenedor.
  */
@@ -198,24 +283,26 @@ class TraversalOps : public LockableOp, public Ops... {};
 
 /** Operaciones para contenedores que solo se recorren hacia adelante, con `ApplyFunction`. */
 using ForwardTraversalOps = TraversalOps<CallOp, FirstThatOp, ApplyFunctionOp,
-                                         PrintableOp, ReadableOp, VisualOp>;
+                                         PrintableOp, ReadableOp, VisualOp, FileOp>;
 
 /** Operaciones para contenedores con recorrido en ambos sentidos, con `ApplyFunction`. */
 using FullTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThatOp,
-                                      ApplyFunctionOp, PrintableOp, ReadableOp, VisualOp>;
+                                      ApplyFunctionOp, PrintableOp, ReadableOp, VisualOp, FileOp>;
 
 /** Operaciones para contenedores que solo se recorren hacia adelante, sin `ApplyFunction`. */
 using ForwardSearchTraversalOps = TraversalOps<CallOp, FirstThatOp, PrintableOp,
-                                               ReadableOp, VisualOp>;
+                                               ReadableOp, VisualOp, FileOp>;
 
 /** Operaciones para contenedores con recorrido en ambos sentidos, sin `ApplyFunction`. */
 using SearchTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThatOp,
-                                        PrintableOp, ReadableOp, VisualOp>;
+                                        PrintableOp, ReadableOp, VisualOp, FileOp>;
 
 /** Operaciones del árbol de una fórmula (ExprTree): recorridos, impresión y dibujo; no se lee desde un stream. */
-using ExprTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThatOp, PrintableOp, VisualOp>;
+using ExprTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp, RFirstThatOp, PrintableOp, VisualOp, FileOp>;
 
+/** Operaciones de los contenedores que se serializan con `write_stream`/`read_stream` y se dibujan: grafos y árboles espaciales. */
+using SerializableTraversalOps = TraversalOps<PrintableOp, ReadableOp, VisualOp, FileOp>;
 /** Operaciones de la hoja de cálculo (Sheet): bloqueo, serialización (`<<`/`>>`) y visualización. */
-using SheetTraversalOps = TraversalOps<PrintableOp, ReadableOp, VisualOp>;
+using SheetTraversalOps = TraversalOps<PrintableOp, ReadableOp, VisualOp, FileOp>;
 
 #endif // TRAVERSALOPS_H

@@ -1,6 +1,15 @@
 #ifndef __TYPES_H__
 #define __TYPES_H__
 
+/** Alias propios de los tipos nativos. */
+using Bool = bool;
+using Int = int;
+using UInt = unsigned;
+using Real = double;
+using Char = char;
+using Byte = unsigned char;
+using SByte = signed char;
+
 /** Tipo de clave usado en las demos. */
 using TX = int;
 /** Tipo entero ancho alternativo para las demos. */

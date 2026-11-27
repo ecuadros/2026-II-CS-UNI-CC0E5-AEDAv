@@ -1,6 +1,7 @@
 #ifndef CONTAINERS_EXPRTREE_H
 #define CONTAINERS_EXPRTREE_H
 
+#include "../../types.h"
 #include "../trees/binarytree.h"
 #include "exprvalue.h"
 #include "../hashing/hashtable.h"
@@ -22,7 +23,9 @@
  * @tparam Traits Tipos de número, valor, nodo, secuencia e iteradores.
  * @tparam Ops Mixins de recorrido, impresión y dibujo.
  */
-template <typename Traits, typename Ops> class ExprTree : public BinaryTreeBase<Traits, Ops> {
+template <typename Traits, typename Ops>
+    requires ExprTreeTraitsConcept<Traits>
+class ExprTree : public BinaryTreeBase<Traits, Ops> {
 public:
     using Base = BinaryTreeBase<Traits, Ops>;
     using Number = typename Traits::number_type;
@@ -44,11 +47,10 @@ private:
         Sequence<NodePtr> stack;
         stack.push_back(root, 0);
         while (!stack.empty()) {
-            NodePtr cur = stack.at(stack.size() - 1).getValue();
+            std::unique_ptr<Node> cur(stack.at(stack.size() - 1).getValue());
             stack.pop_back();
             if (cur->m_pChild[0]) stack.push_back(cur->m_pChild[0], 0);
             if (cur->m_pChild[1]) stack.push_back(cur->m_pChild[1], 0);
-            delete cur;
         }
     }
 
@@ -59,10 +61,10 @@ private:
     using Owned = std::unique_ptr<Node, Free>;
 
     enum class Tok { Number, String, Ref, Ident, Op, LParen, RParen, Comma, Colon, End };
-    friend std::ostream& operator<<(std::ostream& os, Tok t) { return os << static_cast<int>(t); }
+    friend std::ostream& operator<<(std::ostream& os, Tok t) { return os << static_cast<Int>(t); }
 
     enum class TaskOp { Eval, Negate, Binary, SiBranch, ExpandRange, Call };
-    friend std::ostream& operator<<(std::ostream& os, TaskOp t) { return os << static_cast<int>(t); }
+    friend std::ostream& operator<<(std::ostream& os, TaskOp t) { return os << static_cast<Int>(t); }
 
     /** Unidad léxica de una fórmula. */
     struct Token {
@@ -73,13 +75,13 @@ private:
 
     /** Mayúsculas de un identificador o referencia. */
     static std::string upper(std::string text) {
-        std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::toupper(c); });
+        std::transform(text.begin(), text.end(), text.begin(), [](Byte c) { return std::toupper(c); });
         return text;
     }
 
     /** Tabla de signos de puntuación reconocidos por el lexer. */
-    static const HashTable<HashTableTraits<char, Tok>>& punctuation() {
-        static const HashTable<HashTableTraits<char, Tok>> table{
+    static const HashTable<HashTableTraits<Char, Tok>>& punctuation() {
+        static const HashTable<HashTableTraits<Char, Tok>> table{
             {'(', Tok::LParen},
             {')', Tok::RParen},
             {',', Tok::Comma},
@@ -93,7 +95,7 @@ private:
         Sequence<Token> tokens;
         std::size_t i = 0;
         while (i < s.size()) {
-            unsigned char c = s[i];
+            Byte c = s[i];
             Token token;
             if (std::isspace(c)) {
                 ++i;
@@ -102,7 +104,7 @@ private:
             if (c == '"') {
                 std::string text;
                 std::size_t j = i + 1;
-                bool closed = false;
+                Bool closed = false;
                 while (j < s.size()) {
                     if (s[j] == '\\' && j + 1 < s.size() && (s[j + 1] == '"' || s[j + 1] == '\\')) {
                         text.push_back(s[j + 1]);
@@ -127,9 +129,9 @@ private:
                 i += used;
             } else if (std::isalpha(c)) {
                 std::size_t j = i;
-                while (j < s.size() && std::isalpha(static_cast<unsigned char>(s[j]))) ++j;
+                while (j < s.size() && std::isalpha(static_cast<Byte>(s[j]))) ++j;
                 std::size_t k = j;
-                while (k < s.size() && std::isdigit(static_cast<unsigned char>(s[k]))) ++k;
+                while (k < s.size() && std::isdigit(static_cast<Byte>(s[k]))) ++k;
                 token.type = k > j ? Tok::Ref : Tok::Ident;
                 token.text = upper(s.substr(i, k - i));
                 i = k;
@@ -139,7 +141,7 @@ private:
                     token.text = s.substr(i, 2);
                     i += 2;
                 } else {
-                    char sym = s[i++];
+                    Char sym = s[i++];
                     token.text = std::string(1, sym);
                     if (EvalOps::binary_ops().contains(token.text)) {
                         token.type = Tok::Op;
@@ -163,15 +165,15 @@ private:
      * primary := número | cadena | celda | '(' compare ')' | función '(' argumentos ')'.
      */
     class Parser {
-        static constexpr int max_depth = static_cast<int>(expr_max_depth);
+        static constexpr Int max_depth = static_cast<Int>(expr_max_depth);
         ExprTree& m_tree;
         Sequence<Token> m_tokens;
         std::size_t m_pos = 0;
-        int m_depth = 0;
+        Int m_depth = 0;
 
         struct DepthGuard {
-            int& depth;
-            explicit DepthGuard(int& d) : depth(d) {
+            Int& depth;
+            explicit DepthGuard(Int& d) : depth(d) {
                 if (++depth > max_depth) throw ExprError(ExprError::Syntax);
             }
             ~DepthGuard() { --depth; }
@@ -188,7 +190,7 @@ private:
             return token;
         }
         /** Consume el token si es del tipo @p type. */
-        bool accept(Tok type) {
+        Bool accept(Tok type) {
             if (peek().type != type) return false;
             ++m_pos;
             return true;
@@ -198,13 +200,13 @@ private:
             if (!accept(type)) throw ExprError(ExprError::Syntax);
         }
         /** Indica si el token actual es el operador @p op. */
-        bool is_op(std::string_view op) const { return peek().type == Tok::Op && peek().text == op; }
+        Bool is_op(std::string_view op) const { return peek().type == Tok::Op && peek().text == op; }
 
         /** Crea un nodo con hijos @p left y @p right; si `new` falla, los hijos se liberan solos. */
         Owned make(value_type item, Owned left = nullptr, Owned right = nullptr) {
-            Owned node(new Node(std::move(item), Ref(-1)));
+            Owned node(std::make_unique<Node>(std::move(item), Ref(-1)).release());
             ++m_tree.m_size;
-            for (bool side : {false, true}) {
+            for (Bool side : {false, true}) {
                 Owned& child = side ? right : left;
                 if (child) child->m_pParent = node.get();
                 node->m_pChild[side] = child.release();
@@ -218,10 +220,10 @@ private:
         }
 
         /** Analiza una secuencia asociativa a la izquierda de operadores @p ops sobre el nivel @p next. */
-        template <typename Next> Owned left_assoc(Next&& next, std::initializer_list<const char*> ops) {
+        template <typename Next> Owned left_assoc(Next&& next, std::initializer_list<const Char*> ops) {
             Owned left = next();
             auto matches = [&] {
-                return std::any_of(ops.begin(), ops.end(), [&](const char* op) { return is_op(op); });
+                return std::any_of(ops.begin(), ops.end(), [&](const Char* op) { return is_op(op); });
             };
             while (matches()) {
                 std::string op = take().text;
@@ -328,7 +330,7 @@ public:
      * Convierte @p text en número usando `ExprOps::to_number`.
      * @return `false` si no empieza con un número válido o desborda `Number`.
      */
-    static bool to_number(const std::string& text, Number& out, std::size_t start = 0, std::size_t* used = nullptr) {
+    static Bool to_number(const std::string& text, Number& out, std::size_t start = 0, std::size_t* used = nullptr) {
         return EvalOps::to_number(text, out, start, used);
     }
 
@@ -346,7 +348,7 @@ public:
     /** Clona de forma iterativa el subárbol @p src con seguridad ante excepciones. */
     static Owned clone_subtree(const Node* src) {
         if (!src) return nullptr;
-        Owned root(new Node(src->getValue(), src->getRef()));
+        Owned root(std::make_unique<Node>(src->getValue(), src->getRef()).release());
         struct Frame {
             const Node* src = nullptr;
             NodePtr dst = nullptr;
@@ -356,9 +358,9 @@ public:
         while (!stack.empty()) {
             auto [s, d] = stack.at(stack.size() - 1).getValue();
             stack.pop_back();
-            for (bool side : {false, true}) {
+            for (Bool side : {false, true}) {
                 if (const Node* child = s->m_pChild[side]) {
-                    Owned copy(new Node(child->getValue(), child->getRef()));
+                    Owned copy(std::make_unique<Node>(child->getValue(), child->getRef()).release());
                     copy->m_pParent = d;
                     d->m_pChild[side] = copy.release();
                     stack.push_back({child, d->m_pChild[side]}, 0);
@@ -492,7 +494,7 @@ public:
                 ctx.values.at(ctx.values.size() - 1).value() = EvalOps::apply(task.node->getValue().text, left, right);
             }},
             {Task::Op::SiBranch, [](EvalCtx& ctx, const Task& task) {
-                bool cond = ctx.values.at(ctx.values.size() - 1).getValue().number() != 0;
+                Bool cond = ctx.values.at(ctx.values.size() - 1).getValue().number() != 0;
                 ctx.values.pop_back();
                 Sequence<NodePtr> arg_nodes;
                 EvalCtx::collect_arg_nodes(task.node->m_pChild[0], arg_nodes);

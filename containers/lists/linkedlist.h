@@ -1,7 +1,10 @@
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
+#include "../../types.h"
+#include "../core/traits.h"
 #include "../core/traversalops.h"
 #include <initializer_list>
+#include <memory>
 #include <mutex>
 #include <utility>
 
@@ -12,8 +15,9 @@
  * @tparam Circular Si es `true`, el último nodo enlaza con el primero.
  * @tparam Ops Mixins de recorrido, impresión y lectura.
  */
-template <typename Traits, bool Double = false, bool Circular = false,
+template <typename Traits, Bool Double = false, Bool Circular = false,
           typename Ops = FullTraversalOps>
+  requires OrderedTraits<Traits>
 class LinkedList : public Ops {
 public:
   using value_type = typename Traits::value_type;
@@ -21,13 +25,13 @@ public:
   using NodePtr = Node *;
   using ForwardIterator = typename Traits::ForwardIterator;
   using Compare = typename Traits::Compare;
-  static constexpr bool is_circular = Circular;
+  static constexpr Bool is_circular = Circular;
 
 protected:
   NodePtr m_pRoot = nullptr; // puntero al primer nodo de la lista enlazada
   NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
 
-  Compare m_comp; // comparador para ordenar los nodos de la lista
+  [[no_unique_address]] Compare m_comp; // comparador para ordenar los nodos de la lista
 
   /** Enlaza @p node detrás de @p prev, o al inicio si @p prev es nulo. Mantiene la cola y los enlaces dobles y circulares. */
   void link_after(NodePtr prev, NodePtr node) {
@@ -62,7 +66,7 @@ public:
     std::lock_guard lock(other.m_mutex);
     try {
       for (auto it = other.begin(); it != other.end(); ++it)
-        link_after(m_pTail, new Node(it->getValue(), it->getRef(), nullptr));
+        link_after(m_pTail, std::make_unique<Node>(it->getValue(), it->getRef(), nullptr).release());
     } catch (...) {
       clear();
       throw;
@@ -97,29 +101,44 @@ public:
       if (m_pTail)
         m_pTail->m_pNext = nullptr;
     }
-    for (NodePtr current = m_pRoot; current;)
-      delete std::exchange(current, current->m_pNext);
+    for (NodePtr current = m_pRoot; current;) {
+      std::unique_ptr<Node> owned(current);
+      current = current->m_pNext;
+    }
     m_pRoot = m_pTail = nullptr;
   }
 
   /** Añade un nodo al final, sin respetar el orden. */
   void push_back(const value_type &value, Ref ref) {
     std::lock_guard lock(this->m_mutex);
-    link_after(m_pTail, new Node(value, ref, nullptr));
+    link_after(m_pTail, std::make_unique<Node>(value, ref, nullptr).release());
+  }
+
+  /** Añade un nodo al final moviendo @p value, sin respetar el orden. */
+  void push_back(value_type &&value, Ref ref) {
+    std::lock_guard lock(this->m_mutex);
+    link_after(m_pTail, std::make_unique<Node>(std::move(value), ref, nullptr).release());
   }
 
   /** Inserta el valor en la posición que le corresponde según el comparador; entre equivalentes queda el último. */
-  void insert(const value_type &value, Ref ref) {
+  template <typename V>
+  void insert_impl(V &&value, Ref ref) {
     std::lock_guard lock(this->m_mutex);
     NodePtr prev = nullptr;
     for (NodePtr cur = m_pRoot;
          prev != m_pTail && !m_comp(value, cur->getValue()); cur = cur->m_pNext)
       prev = cur;
-    link_after(prev, new Node(value, ref, nullptr));
+    link_after(prev, std::make_unique<Node>(std::forward<V>(value), ref, nullptr).release());
   }
 
+  /** Inserta el valor en la posición que le corresponde según el comparador; entre equivalentes queda el último. */
+  void insert(const value_type &value, Ref ref) { insert_impl(value, ref); }
+
+  /** Inserta moviendo @p value en la posición que le corresponde según el comparador. */
+  void insert(value_type &&value, Ref ref) { insert_impl(std::move(value), ref); }
+
   /** Indica si la lista no tiene nodos. */
-  bool empty() const {
+  [[nodiscard]] Bool empty() const {
     std::lock_guard lock(this->m_mutex);
     return m_pRoot == nullptr;
   }

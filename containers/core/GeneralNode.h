@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include "../../types.h" // Ref
 
 /** Delimitadores del formato de texto `[(valor,ref),...]` con el que se leen y escriben los contenedores. */
@@ -19,7 +20,7 @@ struct StreamDelimiters {
      * Lee un carácter y comprueba que sea @p wanted. Si no coincide, marca `failbit` en el stream.
      * @return `true` si se leyó el delimitador esperado.
      */
-    static bool expect(std::istream& is, Delim wanted) {
+    static Bool expect(std::istream& is, Delim wanted) {
         Delim actual;
         if (!(is >> actual)) return false;
         if (actual == wanted) return true;
@@ -47,8 +48,8 @@ private:
     R m_ref{};
 
     /** Indica si la cadena @p text necesita comillas para no confundirse con los delimitadores. */
-    static bool needs_quotes(const std::string& text) {
-        return text.find_first_of("[](),\"\\") != std::string::npos || (!text.empty() && std::isspace(static_cast<unsigned char>(text[0])));
+    static Bool needs_quotes(const std::string& text) {
+        return text.find_first_of("[](),\"\\") != std::string::npos || (!text.empty() && std::isspace(static_cast<Byte>(text[0])));
     }
 
     /** Escribe un campo; las cadenas con delimitadores van entre comillas con `\"` y `\\` escapados. */
@@ -57,7 +58,7 @@ private:
         if constexpr (std::is_same_v<V, std::string>) {
             if (needs_quotes(field)) {
                 os << '"';
-                for (char c : field) {
+                for (Char c : field) {
                     if (c == '"' || c == '\\') os << '\\';
                     os << c;
                 }
@@ -70,11 +71,11 @@ private:
 
     /** Lee un campo del nodo desde el stream. Las cadenas entre comillas se leen con escapes; las demás, hasta el delimitador @p stop, sin consumirlo. El resto de tipos usa `operator>>`. */
     template <typename V>
-    static bool read_field(std::istream& is, V& field, StreamDelimiters::Delim stop) {
+    static Bool read_field(std::istream& is, V& field, StreamDelimiters::Delim stop) {
         if constexpr (std::is_same_v<V, std::string>) {
             field.clear();
             is >> std::ws;
-            char c;
+            Char c;
             if (is.peek() == '"') {
                 is.get();
                 while (is.get(c)) {
@@ -95,7 +96,7 @@ private:
             is.setstate(std::ios::failbit);
             return false;
         } else {
-            return static_cast<bool>(is >> field);
+            return static_cast<Bool>(is >> field);
         }
     }
 
@@ -103,15 +104,19 @@ public:
     /** Crea un nodo con valor y referencia por defecto. */
     GeneralNode() = default;
     /** Crea un nodo con el valor y la referencia dados. */
-    GeneralNode(const T& value, const R& ref) : m_value(value), m_ref(ref) {};
+    GeneralNode(const T& value, const R& ref) : m_value(value), m_ref(ref) {}
+    /** Crea un nodo moviendo el valor y la referencia dados. */
+    GeneralNode(T&& value, R&& ref) : m_value(std::move(value)), m_ref(std::move(ref)) {}
+    /** Crea un nodo moviendo el valor y copiando la referencia. */
+    GeneralNode(T&& value, const R& ref) : m_value(std::move(value)), m_ref(ref) {}
     /** Devuelve el valor en modo lectura. */
-    const T& getValue() const { return m_value; }
+    [[nodiscard]] const T& getValue() const noexcept { return m_value; }
     /** Devuelve la referencia en modo lectura. */
-    const R& getRef()   const { return m_ref;   }
+    [[nodiscard]] const R& getRef()   const noexcept { return m_ref;   }
     /** Devuelve el valor de forma modificable. */
-    T&   value()          { return m_value; } // acceso mutable para ApplyFunction
+    [[nodiscard]] T&   value()          noexcept { return m_value; } // acceso mutable para ApplyFunction
     /** Devuelve la referencia de forma modificable. */
-    R&   ref()            { return m_ref;   }
+    [[nodiscard]] R&   ref()            noexcept { return m_ref;   }
 
     using Delim = StreamDelimiters::Delim;
 

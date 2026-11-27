@@ -1,6 +1,7 @@
 #ifndef CONTAINERS_VISUALIZATION_H
 #define CONTAINERS_VISUALIZATION_H
 
+#include "../../types.h"
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
@@ -10,6 +11,7 @@
 #include <iostream>
 #include <limits>
 #include <ostream>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -23,12 +25,28 @@ namespace visual {
 
 /** Vista de árbol: da la raíz, los hijos de un nodo, si un nodo es válido y su etiqueta. */
 template <class V>
-concept TreeView = requires(const V& v, typename V::Handle h, std::ostream& os) {
+concept TreeViewBase = requires(const V& v, typename V::Handle h, std::ostream& os) {
     { v.root() } -> std::same_as<typename V::Handle>;
-    { v.child(h, true) } -> std::same_as<typename V::Handle>;
-    { v.valid(h) } -> std::convertible_to<bool>;
+    { v.valid(h) } -> std::convertible_to<Bool>;
     v.label(os, h);
 };
+
+/** Vista de árbol binario: `child(h, side)` da el hijo izquierdo (`false`) o derecho (`true`). */
+template <class V>
+concept BinaryTreeView = TreeViewBase<V> && requires(const V& v, typename V::Handle h) {
+    { v.child(h, true) } -> std::same_as<typename V::Handle>;
+};
+
+/** Vista de árbol de varios hijos (como un árbol B): `children(h)` da los hijos de izquierda a derecha. */
+template <class V>
+concept MultiwayTreeView = TreeViewBase<V> && requires(const V& v, typename V::Handle h) {
+    { v.children(h) } -> std::ranges::input_range;
+    requires std::convertible_to<std::ranges::range_value_t<decltype(v.children(h))>, typename V::Handle>;
+};
+
+/** Vista de árbol que se puede dibujar: binaria o de varios hijos. */
+template <class V>
+concept TreeView = BinaryTreeView<V> || MultiwayTreeView<V>;
 
 /** Contenedor que ofrece una vista de árbol con `tree_view()`. */
 template <class C>
@@ -52,9 +70,9 @@ concept PrintableView = requires(const C& c, std::ostream& os) {
 
 /** Vista de tabla: da las dimensiones, el encabezado de cada columna y el texto de cada celda. */
 template <class V>
-concept TableView = requires(const V& v, int row, int col) {
-    { v.rows() } -> std::convertible_to<int>;
-    { v.cols() } -> std::convertible_to<int>;
+concept TableView = requires(const V& v, Int row, Int col) {
+    { v.rows() } -> std::convertible_to<Int>;
+    { v.cols() } -> std::convertible_to<Int>;
     { v.col_header(col) } -> std::convertible_to<std::string>;
     { v.cell_text(row, col) } -> std::convertible_to<std::string>;
 };
@@ -91,13 +109,13 @@ inline ColorMode color_mode = ColorMode::Auto;
 
 /** Códigos de color ANSI de cada elemento del dibujo. */
 namespace style {
-inline constexpr std::string_view edge = "2;37";
+inline constexpr std::string_view edge = "38;5;103";
 inline constexpr std::string_view value = "1;36";
 inline constexpr std::string_view index = "2;33";
 inline constexpr std::string_view head = "1;32";
 inline constexpr std::string_view end = "1;31";
 inline constexpr std::string_view loop = "1;35";
-inline constexpr std::string_view levels[] = {"1;93", "1;96", "1;92", "1;95", "1;94", "1;91"};
+inline constexpr std::string_view levels[] = {"1;38;5;220", "1;38;5;87", "1;38;5;120", "1;38;5;177", "1;38;5;111", "1;38;5;210"};
 } // namespace style
 
 /** Envuelve texto en secuencias de color ANSI, solo si el color está activo para el stream. */
@@ -120,13 +138,13 @@ public:
 
 private:
     /** Determina si hay color: respeta `color_mode` y `NO_COLOR`, y en modo automático exige que @p os sea una terminal. */
-    static bool enabled(const std::ostream& os) {
+    static Bool enabled(const std::ostream& os) {
         if (color_mode != ColorMode::Auto) return color_mode == ColorMode::Always;
         if (std::getenv("NO_COLOR")) return false;
         return (&os == &std::cout && isatty(fileno(stdout))) || (&os == &std::cerr && isatty(fileno(stderr)));
     }
 
-    bool m_on;
+    Bool m_on;
 };
 
 /** Repite la cadena @p s @p n veces. */
@@ -154,15 +172,60 @@ template <TreeView V> std::string label(const V& v, typename V::Handle h) {
     return ss.str();
 }
 
-/** Dibuja recursivamente un subárbol tumbado: la rama derecha arriba y la izquierda abajo. @p dir indica de qué lado cuelga el nodo: 1 derecha, 0 izquierda, -1 sin rama. */
+/** Hijos de @p h de izquierda a derecha, incluidos los no válidos para conservar su posición. */
+template <TreeView V> std::vector<typename V::Handle> children(const V& v, typename V::Handle h) {
+    if constexpr (MultiwayTreeView<V>) {
+        auto&& kids = v.children(h);
+        return {std::ranges::begin(kids), std::ranges::end(kids)};
+    } else {
+        return {v.child(h, false), v.child(h, true)};
+    }
+}
+
+/** Indica si el hijo @p i de @p n se dibuja arriba del padre en el dibujo tumbado: la mitad derecha. */
+inline Bool upper_half(std::size_t i, std::size_t n) { return 2 * i >= n; }
+
+/** Cantidad de nodos del subárbol. */
+template <TreeView V> std::size_t count(const V& v, typename V::Handle h) {
+    if (!v.valid(h)) return 0;
+    std::size_t n = 1;
+    for (auto kid : children(v, h))
+        n += count(v, kid);
+    return n;
+}
+
+/**
+ * Dibuja recursivamente un subárbol tumbado: los hijos de la derecha arriba y los de la izquierda abajo.
+ * @p above, @p line y @p below son los prefijos de las filas sobre el nodo, de la fila del nodo y de las filas bajo él.
+ * Si @p balance, rellena con líneas para que el nodo quede a media altura entre sus dos mitades.
+ */
 template <TreeView V>
-void sideways(std::ostream& os, const Painter& paint, const V& v, typename V::Handle h, const std::string& prefix,
-              int dir, std::size_t depth) {
-    if (!v.valid(h)) return;
-    sideways(os, paint, v, v.child(h, true), prefix + (dir < 0 ? "" : dir == 0 ? "│     " : "      "), 1, depth + 1);
-    os << paint(style::edge, prefix + (dir < 0 ? "" : dir ? "┌──── " : "└──── "));
-    os << paint.level(depth, label(v, h)) << '\n';
-    sideways(os, paint, v, v.child(h, false), prefix + (dir < 0 ? "" : dir == 1 ? "│     " : "      "), 0, depth + 1);
+void sideways(std::ostream& os, const Painter& paint, const V& v, typename V::Handle h, const std::string& above,
+              const std::string& line, const std::string& below, std::size_t depth, Bool balance = false) {
+    std::vector<typename V::Handle> upper, lower;
+    auto kids = children(v, h);
+    for (std::size_t i = kids.size(); i-- > 0;)
+        if (v.valid(kids[i])) (upper_half(i, kids.size()) ? upper : lower).push_back(kids[i]);
+
+    std::size_t up = 0, down = 0;
+    for (std::size_t k = 0; k < upper.size(); ++k) {
+        Bool top = k == 0;
+        sideways(os, paint, v, upper[k], above + (top ? "      " : "│     "), above + (top ? "┌──── " : "├──── "),
+                 above + "│     ", depth + 1);
+        up += balance ? count(v, upper[k]) : 0;
+    }
+    for (auto kid : lower)
+        down += balance ? count(v, kid) : 0;
+    for (auto i = up; i < down; ++i)
+        os << paint(style::edge, above + (up ? "│" : "")) << '\n';
+    os << paint(style::edge, line) << paint.level(depth, label(v, h)) << '\n';
+    for (auto i = down; i < up; ++i)
+        os << paint(style::edge, below + (down ? "│" : "")) << '\n';
+    for (std::size_t k = 0; k < lower.size(); ++k) {
+        Bool bottom = k + 1 == lower.size();
+        sideways(os, paint, v, lower[k], below + "│     ", below + (bottom ? "└──── " : "├──── "),
+                 below + (bottom ? "      " : "│     "), depth + 1);
+    }
 }
 
 /** Lienzo de celdas de texto sobre el que se compone el dibujo antes de imprimirlo. */
@@ -173,7 +236,7 @@ public:
         std::string text = " ";
         std::string_view style;
         /** Indica si la celda está vacía. */
-        bool blank() const { return text == " "; }
+        Bool blank() const { return text == " "; }
     };
 
     /** Escribe @p text a partir de la celda (@p x, @p y). */
@@ -194,6 +257,9 @@ public:
         for (auto x = from; x <= to; ++x)
             glyph(x, y, g, style);
     }
+
+    /** Filas del lienzo, para copiarlo celda a celda a otra superficie. */
+    const std::vector<std::vector<Cell>>& rows() const { return m_rows; }
 
     /** Cantidad de filas. */
     std::size_t height() const { return m_rows.size(); }
@@ -239,7 +305,7 @@ private:
     }
 
     /** Imprime una fila sin los espacios finales. */
-    void print_row(std::ostream& os, const Painter& paint, std::size_t y, bool skip_leading = false) const {
+    void print_row(std::ostream& os, const Painter& paint, std::size_t y, Bool skip_leading = false) const {
         const auto& row = m_rows[y];
         auto last = std::find_if(row.rbegin(), row.rend(), [](const Cell& c) { return !c.blank(); }).base();
         for (auto it = skip_leading ? row.begin() + first_ink(row) : row.begin(); it < last; ++it)
@@ -254,65 +320,97 @@ struct Box {
     std::ptrdiff_t dx = 0, x = 0;
     std::vector<std::pair<std::ptrdiff_t, std::ptrdiff_t>> contour;
     std::vector<Box> kids;
-    /** Columna central de la etiqueta. */
-    std::ptrdiff_t center() const { return x + static_cast<std::ptrdiff_t>(text.size()) / 2; }
+    /** Ancho total de la caja del nodo (`│ ` + texto + ` │`). */
+    std::ptrdiff_t box_width() const { return static_cast<std::ptrdiff_t>(text.size()) + 4; }
+    /** Columna central de la caja. */
+    std::ptrdiff_t center() const { return x + box_width() / 2; }
 };
 
 /** Calcula la posición de cada nodo del subárbol, separando los subárboles hermanos lo justo para que no se solapen. */
 template <TreeView V> Box layout(const V& v, typename V::Handle h) {
-    Box box{label(v, h)};
-    bool only_right = false;
-    for (bool right : {false, true})
-        if (auto c = v.child(h, right); v.valid(c)) {
-            box.kids.push_back(layout(v, c));
-            only_right = right && box.kids.size() == 1;
+    Box box{label(v, h), 0, 0, {}, {}};
+    auto kids = children(v, h);
+    std::size_t only = 0;
+    for (std::size_t i = 0; i < kids.size(); ++i)
+        if (v.valid(kids[i])) {
+            box.kids.push_back(layout(v, kids[i]));
+            only = i;
         }
 
-    auto width = static_cast<std::ptrdiff_t>(box.text.size());
+    std::vector<std::pair<std::ptrdiff_t, std::ptrdiff_t>> below;
+    for (auto& k : box.kids) {
+        if (!below.empty()) {
+            auto shift = std::numeric_limits<std::ptrdiff_t>::min();
+            for (std::size_t i = 0; i < std::min(below.size(), k.contour.size()); ++i)
+                shift = std::max(shift, below[i].second + 2 - k.contour[i].first);
+            k.dx = shift;
+        }
+        for (std::size_t i = 0; i < k.contour.size(); ++i) {
+            std::pair range{k.contour[i].first + k.dx, k.contour[i].second + k.dx};
+            if (below.size() <= i)
+                below.push_back(range);
+            else
+                below[i] = {std::min(below[i].first, range.first), std::max(below[i].second, range.second)};
+        }
+    }
+
+    auto width = box.box_width();
     std::ptrdiff_t center = width / 2;
-    if (box.kids.size() == 2) {
-        auto &l = box.kids[0], &r = box.kids[1];
-        auto shift = std::numeric_limits<std::ptrdiff_t>::min();
-        for (std::size_t i = 0; i < std::min(l.contour.size(), r.contour.size()); ++i)
-            shift = std::max(shift, l.contour[i].second + 2 - r.contour[i].first);
-        r.dx = shift;
-        center = (l.center() + r.dx + r.center()) / 2;
+    if (box.kids.size() > 1) {
+        const auto &l = box.kids.front(), &r = box.kids.back();
+        center = (l.center() + l.dx + r.center() + r.dx) / 2;
     } else if (box.kids.size() == 1) {
-        center = box.kids[0].center() + (only_right ? -2 : 2);
+        auto side = 2 * static_cast<std::ptrdiff_t>(only) - static_cast<std::ptrdiff_t>(kids.size() - 1);
+        center = box.kids[0].center() + (side < 0 ? 2 : side > 0 ? -2 : 0);
     }
 
     box.x = center - width / 2;
     box.contour.push_back({box.x, box.x + width - 1});
-    for (const auto& k : box.kids)
-        for (std::size_t i = 0; i < k.contour.size(); ++i) {
-            std::pair range{k.contour[i].first + k.dx, k.contour[i].second + k.dx};
-            if (box.contour.size() <= i + 1)
-                box.contour.push_back(range);
-            else
-                box.contour[i + 1] = {std::min(box.contour[i + 1].first, range.first),
-                                      std::max(box.contour[i + 1].second, range.second)};
-        }
+    box.contour.insert(box.contour.end(), below.begin(), below.end());
     return box;
 }
 
-/** Pinta en el lienzo un subárbol ya medido y las líneas que lo unen con sus hijos. */
+/** Pinta en el lienzo un subárbol ya medido como cajas y las líneas que lo unen con sus hijos. */
 inline void paint_box(Canvas& canvas, const Box& b, std::ptrdiff_t ox, std::size_t depth) {
     ox += b.dx;
-    auto y = static_cast<std::ptrdiff_t>(2 * depth);
-    canvas.label(ox + b.x, y, b.text, Painter::level_code(depth));
+    auto y = static_cast<std::ptrdiff_t>(4 * depth);
+    auto x0 = ox + b.x;
+    auto w = b.box_width();
+    auto node_style = Painter::level_code(depth);
+    canvas.glyph(x0, y, "┌", node_style);
+    canvas.hline(x0 + 1, x0 + w - 2, y, "─", node_style);
+    canvas.glyph(x0 + w - 1, y, "┐", node_style);
+    canvas.glyph(x0, y + 1, "│", node_style);
+    canvas.label(x0 + 2, y + 1, b.text, node_style);
+    canvas.glyph(x0 + w - 1, y + 1, "│", node_style);
+    canvas.glyph(x0, y + 2, "└", node_style);
+    canvas.hline(x0 + 1, x0 + w - 2, y + 2, "─", node_style);
+    canvas.glyph(x0 + w - 1, y + 2, "┘", node_style);
     if (b.kids.empty()) return;
 
     auto c = ox + b.center(), lo = c, hi = c;
+    auto child_style = Painter::level_code(depth + 1);
+    std::vector<std::ptrdiff_t> tops;
     for (const auto& k : b.kids) {
         paint_box(canvas, k, ox, depth + 1);
-        lo = std::min(lo, ox + k.dx + k.center());
-        hi = std::max(hi, ox + k.dx + k.center());
+        tops.push_back(ox + k.dx + k.center());
+        canvas.glyph(tops.back(), y + 4, "┴", child_style);
+        lo = std::min(lo, tops.back());
+        hi = std::max(hi, tops.back());
     }
     constexpr auto edge = style::edge;
-    canvas.hline(lo, hi, y + 1, "─", edge);
-    if (lo < c) canvas.glyph(lo, y + 1, "┌", edge);
-    if (hi > c) canvas.glyph(hi, y + 1, "┐", edge);
-    canvas.glyph(c, y + 1, lo < c && hi > c ? "┴" : lo < c ? "┘" : "└", edge);
+    canvas.glyph(c, y + 2, "┬", node_style);
+    canvas.hline(lo, hi, y + 3, "─", edge);
+    Bool down = false;
+    for (auto x : tops) {
+        if (x == c) down = true;
+        else canvas.glyph(x, y + 3, x == lo ? "┌" : x == hi ? "┐" : "┬", edge);
+    }
+    const Char* joint = lo < c && hi > c ? (down ? "┼" : "┴")
+                        : lo < c         ? (down ? "┤" : "┘")
+                        : hi > c         ? (down ? "├" : "└")
+                                         : "│";
+    canvas.glyph(c, y + 3, joint, edge);
 }
 
 /** Compone el dibujo vertical completo de un árbol. */
@@ -326,30 +424,56 @@ template <TreeView V> Canvas draw(const V& v) {
 
 /** Ancho en columnas de la terminal asociada a @p os; 0 si no es una terminal. */
 inline std::size_t terminal_width(const std::ostream& os) {
-    int fd = &os == &std::cout ? STDOUT_FILENO : &os == &std::cerr ? STDERR_FILENO : -1;
+    Int fd = &os == &std::cout ? STDOUT_FILENO : &os == &std::cerr ? STDERR_FILENO : -1;
     winsize ws{};
     if (fd >= 0 && isatty(fd) && ioctl(fd, TIOCGWINSZ, &ws) == 0) return ws.ws_col;
     return 0;
 }
 
 /** Indica si el lienzo cabe en el ancho de la terminal. */
-inline bool fits(const std::ostream& os, const Canvas& canvas) {
+inline Bool fits(const std::ostream& os, const Canvas& canvas) {
     auto cols = terminal_width(os);
     return cols == 0 || canvas.width() <= cols;
 }
 
-/** Dibuja una lista enlazada como cadena `head -> ... -> null`. */
+/** Dibuja una lista enlazada como nodos en caja unidos por flechas. */
 template <LinearView C> void print_chain(std::ostream& os, const C& c) {
     Painter paint(os);
-    std::string arrow = paint(style::edge, DoubleLinkedView<C> ? " <-> " : " -> ");
-    os << paint(style::head, "head");
+    std::string_view raw_arrow = DoubleLinkedView<C> ? " <-> " : " -> ";
+    std::string arrow = paint(style::edge, raw_arrow);
+    std::vector<std::string> items;
     for (auto it = c.begin(); it != c.end(); ++it)
-        os << arrow << paint(style::value, to_text(*it));
+        items.push_back(to_text(*it));
+    if (items.empty()) {
+        os << paint(style::head, "head") << arrow;
+        if constexpr (CircularView<C>)
+            os << paint(style::loop, "(vuelve a head)");
+        else
+            os << paint(style::end, "null");
+        os << '\n';
+        return;
+    }
+
+    std::string pad_head(4 + raw_arrow.size(), ' ');
+    std::string pad_arrow(raw_arrow.size(), ' ');
+    std::string top = pad_head, mid = paint(style::head, "head") + arrow, bot = pad_head;
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        auto inner = static_cast<std::ptrdiff_t>(items[i].size()) + 2;
+        std::string h = repeat("─", inner);
+        top += paint(style::edge, "┌" + h + "┐");
+        mid += paint(style::edge, "│") + " " + paint(style::value, items[i]) + " " + paint(style::edge, "│");
+        bot += paint(style::edge, "└" + h + "┘");
+        if (i + 1 < items.size()) {
+            top += pad_arrow;
+            mid += arrow;
+            bot += pad_arrow;
+        }
+    }
     if constexpr (CircularView<C>)
-        os << arrow << paint(style::loop, "(vuelve a head)");
+        mid += arrow + paint(style::loop, "(vuelve a head)");
     else
-        os << arrow << paint(style::end, "null");
-    os << '\n';
+        mid += arrow + paint(style::end, "null");
+    os << top << '\n' << mid << '\n' << bot << '\n';
 }
 
 /** Dibuja una secuencia como celdas con su índice debajo. */
@@ -367,7 +491,7 @@ template <LinearView C> void print_cells(std::ostream& os, const C& c) {
     std::string top = "┌", middle = bar, bottom = "└", index = " ";
     for (std::size_t i = 0; i < cells.size(); ++i) {
         auto width = static_cast<std::ptrdiff_t>(cells[i].size()) + 2;
-        bool last = i + 1 == cells.size();
+        Bool last = i + 1 == cells.size();
         top += repeat("─", width) + (last ? "┐" : "┬");
         middle += " " + paint(style::value, cells[i]) + " " + bar;
         bottom += repeat("─", width) + (last ? "┘" : "┴");
@@ -382,23 +506,9 @@ template <LinearView C> void print_cells(std::ostream& os, const C& c) {
        << paint(style::index, index) << '\n';
 }
 
-/** Cantidad de nodos del subárbol. */
-template <TreeView V> std::size_t count(const V& v, typename V::Handle h) {
-    return v.valid(h) ? 1 + count(v, v.child(h, true)) + count(v, v.child(h, false)) : 0;
-}
-
 /** Dibuja el árbol tumbado, con la raíz a la izquierda. */
 template <TreeView V> void print_sideways(std::ostream& os, const V& v) {
-    Painter paint(os);
-    auto root = v.root();
-    auto up = count(v, v.child(root, true)), down = count(v, v.child(root, false));
-    sideways(os, paint, v, v.child(root, true), "", 1, 1);
-    for (auto i = up; i < down; ++i)
-        os << paint(style::edge, up ? "│" : "") << '\n';
-    os << paint.level(0, label(v, root)) << '\n';
-    for (auto i = down; i < up; ++i)
-        os << paint(style::edge, down ? "│" : "") << '\n';
-    sideways(os, paint, v, v.child(root, false), "", 0, 1);
+    sideways(os, Painter(os), v, v.root(), "", "", "", 0, true);
 }
 
 /** Dibuja el árbol en vertical; si no cabe en la terminal, lo dibuja tumbado. */
@@ -445,7 +555,7 @@ inline constexpr std::size_t max_table_cells = 100'000;
  * Comprueba que las dimensiones @p cols x @p rows no superen `max_table_cells`.
  * @throws std::length_error si las dimensiones superan el límite imprimible.
  */
-inline void check_table_bounds(int cols, int rows) {
+inline void check_table_bounds(Int cols, Int rows) {
     if (cols < 0 || rows < 0) return;
     if (static_cast<std::size_t>(cols) > max_table_cells ||
         static_cast<std::size_t>(rows) > max_table_cells ||
@@ -460,27 +570,27 @@ inline void check_table_bounds(int cols, int rows) {
  * @throws std::length_error si las dimensiones superan `max_table_cells` (`100'000` celdas).
  */
 template <TableView V> void print_table(std::ostream& os, const V& v) {
-    constexpr int row_num_width = 4;
+    constexpr Int row_num_width = 4;
     constexpr std::size_t min_col_width = 10;
-    int cols = v.cols(), rows = v.rows();
+    Int cols = v.cols(), rows = v.rows();
     if (cols < 0 || rows < 0) return;
     check_table_bounds(cols, rows);
     std::size_t width = min_col_width;
-    for (int col = 1; col <= cols; ++col) width = std::max(width, v.col_header(col).size());
-    for (int row = 1; row <= rows; ++row)
-        for (int col = 1; col <= cols; ++col) width = std::max(width, v.cell_text(row, col).size());
+    for (Int col = 1; col <= cols; ++col) width = std::max(width, v.col_header(col).size());
+    for (Int row = 1; row <= rows; ++row)
+        for (Int col = 1; col <= cols; ++col) width = std::max(width, v.cell_text(row, col).size());
 
-    int col_w = static_cast<int>(width);
+    Int col_w = static_cast<Int>(width);
     auto put_col = [&](const std::string& s) { os << std::setw(col_w) << s << " |"; };
     os << std::setw(row_num_width + 1) << "" << '|';
-    for (int col = 1; col <= cols; ++col) put_col(v.col_header(col));
+    for (Int col = 1; col <= cols; ++col) put_col(v.col_header(col));
     os << '\n' << std::string(row_num_width + 1, '-') << '+';
     std::string sep(width + 1, '-');
-    for (int col = 1; col <= cols; ++col) os << sep << '+';
+    for (Int col = 1; col <= cols; ++col) os << sep << '+';
     os << '\n';
-    for (int row = 1; row <= rows; ++row) {
+    for (Int row = 1; row <= rows; ++row) {
         os << std::setw(row_num_width) << row << " |";
-        for (int col = 1; col <= cols; ++col) put_col(v.cell_text(row, col));
+        for (Int col = 1; col <= cols; ++col) put_col(v.cell_text(row, col));
         os << '\n';
     }
 }

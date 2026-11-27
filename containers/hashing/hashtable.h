@@ -1,7 +1,9 @@
 #ifndef __HASHTABLE_H__
 #define __HASHTABLE_H__
 
-#include "../core/visualization.h"
+#include "../../types.h"
+#include "../core/traits.h"
+#include "../visual/visualization.h"
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>
@@ -15,7 +17,9 @@
  * Tabla clave-valor con interfaz de mapa. Guarda las entradas en un árbol ordenado por clave (un AVL por defecto), por lo que buscar, insertar y eliminar cuestan O(log n) y el recorrido sale ordenado.
  * @tparam Traits Tipos de la tabla: `key_type`, `mapped_type` y `Tree`, el árbol que guarda las entradas.
  */
-template <typename Traits> class HashTable {
+template <typename Traits>
+    requires HashTableTraitsConcept<Traits>
+class HashTable {
     using Key = typename Traits::key_type;
     using Value = typename Traits::mapped_type;
 
@@ -72,14 +76,14 @@ private:
             return *this;
         }
         /** Avanza a la siguiente entrada y devuelve el iterador previo. */
-        EntryIterator operator++(int) {
+        EntryIterator operator++(Int) {
             auto old = *this;
             ++m_it;
             return old;
         }
 
         /** Dos iteradores son iguales si apuntan a la misma entrada. */
-        friend bool operator==(const EntryIterator& a, const EntryIterator& b) { return a.m_it == b.m_it; }
+        friend Bool operator==(const EntryIterator& a, const EntryIterator& b) { return a.m_it == b.m_it; }
     };
 
     /** Envuelve un iterador del árbol en un EntryIterator, constante si la tabla lo es. */
@@ -112,6 +116,8 @@ public:
 
     /** Devuelve el valor de @p key, insertándolo con un valor por defecto si no existía. */
     Value& operator[](const Key& key) { return m_tree[key]; }
+    /** Devuelve el valor de @p key, moviendo la clave si no existía. */
+    Value& operator[](Key&& key) { return m_tree[std::move(key)]; }
 
     /**
      * Devuelve el valor de @p key.
@@ -132,6 +138,12 @@ public:
         return std::pair{wrap(*this, it), inserted};
     }
 
+    /** Inserta moviendo el valor asociado si la clave no existía. */
+    auto insert(value_type&& entry) {
+        auto [it, inserted] = m_tree.try_insert(entry.first, std::move(entry.second));
+        return std::pair{wrap(*this, it), inserted};
+    }
+
     /** Construye una entrada con @p args y la inserta como insert(). */
     template <typename... Args> auto emplace(Args&&... args) { return insert(value_type(std::forward<Args>(args)...)); }
 
@@ -139,17 +151,17 @@ public:
      * Busca @p key.
      * @return Iterador a la entrada, o `end()` si no existe.
      */
-    template <typename Self> auto find(this Self& self, const Key& key) {
+    template <typename Self> [[nodiscard]] auto find(this Self& self, const Key& key) {
         return wrap(self, self.m_tree.locate(key));
     }
 
     /** Indica si existe la clave. */
-    bool contains(const Key& key) const { return m_tree.contains(key); }
+    [[nodiscard]] Bool contains(const Key& key) const { return m_tree.contains(key); }
     /**
      * Elimina la entrada de @p key.
      * @return `false` si no existía.
      */
-    bool remove(const Key& key) { return m_tree.remove(key); }
+    Bool remove(const Key& key) { return m_tree.remove(key); }
 
     /**
      * Elimina la entrada de @p key.
@@ -167,9 +179,9 @@ public:
     }
 
     /** Indica si la tabla no tiene entradas. */
-    bool empty() const { return m_tree.empty(); }
+    [[nodiscard]] Bool empty() const { return m_tree.empty(); }
     /** Cantidad de entradas. */
-    std::size_t size() const { return m_tree.size(); }
+    [[nodiscard]] std::size_t size() const { return m_tree.size(); }
     /** Elimina todas las entradas. */
     void clear() { m_tree.clear(); }
 

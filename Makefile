@@ -1,16 +1,19 @@
 CXX      := g++
-CXXFLAGS := -std=c++23
+CXXFLAGS := -std=c++23 -Wall -Wextra
 TARGET   := main
-SRCS     := main.cpp Demos.cpp
+SRCS     := main.cpp Demos.cpp containers/visual/Tui.cpp
 
-.PHONY: all run clean doxygen
+.PHONY: all run test clean doxygen
 
 all: $(TARGET)
 
-$(TARGET): $(SRCS) $(wildcard *.h containers/*.h containers/*/*.h)
+$(TARGET): $(SRCS) $(shell find . -name "*.h")
 	$(CXX) $(CXXFLAGS) $(SRCS) -o $(TARGET)
 
 run: all
+	./$(TARGET)
+
+test: all
 	./$(TARGET)
 
 doxygen:

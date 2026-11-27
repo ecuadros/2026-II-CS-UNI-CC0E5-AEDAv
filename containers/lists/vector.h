@@ -17,7 +17,7 @@
  * @tparam T Tipo de elemento.
  * @tparam Reverse Si es `true`, avanza hacia posiciones menores.
  */
-template <typename T, bool Reverse>
+template <typename T, Bool Reverse>
 class VectorIterator : public GeneralIterator<VectorIterator<T, Reverse>, T> {
 public:
     using value_type        = T;
@@ -33,7 +33,7 @@ public:
         return *this;
     }
 
-    VectorIterator operator++(int) {
+    VectorIterator operator++(Int) {
         VectorIterator previous = *this;
         ++*this;
         return previous;
@@ -46,6 +46,7 @@ public:
  * @tparam Ops Mixins de recorrido, impresión y lectura.
  */
 template <typename Traits, typename Ops>
+    requires BidirectionalContainerTraits<Traits>
 class Vector : public Ops {
 public:
     using value_type        = Traits::value_type;
@@ -59,29 +60,41 @@ private:
     size_t       m_size     = 0,         // cantidad actual
                  m_capacity = 0;         // capacidad
 
-    template <typename Self, bool Reverse>
+    template <typename Self, Bool Reverse>
     using IteratorFor = VectorIterator<std::conditional_t<std::is_const_v<Self>, const Node, Node>, Reverse>;
 
-    /** Amplía la capacidad a @p new_cap copiando los elementos; no hace nada si ya es suficiente. */
+    /** Amplía la capacidad a @p new_cap moviendo los elementos; no hace nada si ya es suficiente. */
     void resize(size_t new_cap) {
         if (new_cap <= m_capacity) return;
-        std::unique_ptr<Node[]> new_data(new Node[new_cap]);
+        auto new_data = std::make_unique_for_overwrite<Node[]>(new_cap);
         for (size_t i = 0; i < m_size; ++i)
-            new_data[i] = m_data[i];
+            new_data[i] = std::move_if_noexcept(m_data[i]);
         delete[] m_data;
         m_data = new_data.release();
         m_capacity = new_cap;
     }
 
+    template <typename V>
+    void push_back_impl(V&& value, Ref ref) {
+        std::lock_guard lock(this->m_mutex);
+        Node node(std::forward<V>(value), ref);
+        if (m_size == m_capacity) {
+            size_t new_cap = (m_capacity == 0) ? 10 : m_capacity * 2;
+            resize(new_cap);
+        }
+        m_data[m_size] = std::move(node);
+        ++m_size;
+    }
+
 public:
     /** Crea un vector vacío. */
-    Vector() {}
+    Vector() = default;
 
     /** Crea un vector con los pares (valor, ref) dados. */
     Vector(std::initializer_list<std::pair<value_type, Ref>> values) { fill_from(*this, values); }
 
     /** Libera la memoria. */
-    virtual ~Vector() {
+    ~Vector() {
         clear();
     }
 
@@ -89,7 +102,7 @@ public:
     Vector(const Vector& other) {
         std::lock_guard lock(other.m_mutex);
         if (other.m_size == 0) return;
-        std::unique_ptr<Node[]> data(new Node[other.m_size]);
+        auto data = std::make_unique_for_overwrite<Node[]>(other.m_size);
         for (size_t i = 0; i < other.m_size; ++i)
             data[i] = other.m_data[i];
         m_data = data.release();
@@ -115,45 +128,45 @@ public:
         std::swap(m_capacity, other.m_capacity);
     }
 
-    /** Añade un elemento al final; si no hay espacio duplica la capacidad (10 la primera vez). */
-    void push_back(const value_type& value, Ref ref) {
+    /** Reserva capacidad para al menos @p new_cap elementos. */
+    void reserve(size_t new_cap) {
         std::lock_guard lock(this->m_mutex);
-        Node node(value, ref);
-        if (m_size == m_capacity) {
-            size_t new_cap = (m_capacity == 0) ? 10 : m_capacity * 2;
-            resize(new_cap);
-        }
-        m_data[m_size] = node;
-        ++m_size;
+        resize(new_cap);
     }
+
+    /** Añade un elemento al final; si no hay espacio duplica la capacidad (10 la primera vez). */
+    void push_back(const value_type& value, Ref ref) { push_back_impl(value, ref); }
+
+    /** Añade un elemento al final moviendo @p value. */
+    void push_back(value_type&& value, Ref ref) { push_back_impl(std::move(value), ref); }
 
     /** Quita el último elemento; no hace nada si está vacío. */
     void pop_back() {
         std::lock_guard lock(this->m_mutex);
         if (m_size > 0)
-            --m_size;
+            m_data[--m_size] = Node{};
     }
 
     /**
-     * Devuelve el nodo en la posición @p index.
+     * Devuelve el nodo en la posición @p index. No toma el mutex: la referencia queda inválida si otro hilo agrega elementos.
      * @throws std::out_of_range si @p index está fuera de rango.
      */
     template <typename Self>
-    auto& at(this Self& self, size_t index) {
+    [[nodiscard]] auto& at(this Self& self, size_t index) {
         if (index >= self.m_size) throw std::out_of_range("Indice fuera de rango");
         return self.m_data[index];
     }
 
     /** Equivale a at(): también comprueba el rango. */
     template <typename Self>
-    auto& operator[](this Self& self, size_t index) { return self.at(index); }
+    [[nodiscard]] auto& operator[](this Self& self, size_t index) { return self.at(index); }
 
     /** Cantidad de elementos. */
-    size_t size()     const { std::lock_guard lock(this->m_mutex); return m_size; }
+    [[nodiscard]] size_t size()     const { std::lock_guard lock(this->m_mutex); return m_size; }
     /** Cantidad de elementos que caben sin reservar más memoria. */
-    size_t capacity() const { std::lock_guard lock(this->m_mutex); return m_capacity; }
+    [[nodiscard]] size_t capacity() const { std::lock_guard lock(this->m_mutex); return m_capacity; }
     /** Indica si no hay elementos. */
-    bool   empty()    const { std::lock_guard lock(this->m_mutex); return m_size == 0; }
+    [[nodiscard]] Bool   empty()    const { std::lock_guard lock(this->m_mutex); return m_size == 0; }
 
     /** Elimina todos los elementos y libera la memoria. */
     void clear() {
@@ -174,11 +187,11 @@ public:
     }
     /** Iterador inverso al último elemento. */
     template <typename Self> auto rbegin(this Self& self) {
-        return IteratorFor<Self, true>(self.m_data + self.m_size - 1);
+        return IteratorFor<Self, true>(self.m_size ? self.m_data + self.m_size - 1 : nullptr);
     }
     /** Iterador inverso a la posición anterior al primer elemento. */
     template <typename Self> auto rend(this Self& self) {
-        return IteratorFor<Self, true>(self.m_data - 1);
+        return IteratorFor<Self, true>(self.m_size ? self.m_data - 1 : nullptr);
     }
 };
 

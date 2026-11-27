@@ -1,6 +1,7 @@
 #ifndef CONTAINERS_EXPRVALUE_H
 #define CONTAINERS_EXPRVALUE_H
 
+#include "../../types.h"
 #include "../hashing/hashtable.h"
 #include "../core/traits.h"
 #include <algorithm>
@@ -24,27 +25,27 @@ inline constexpr std::size_t expr_max_depth = 512;
 
 /** Error al leer o evaluar una fórmula; `what()` es el código que se muestra (`#DIV/0`, `#REF`, `#SYNTAX`, `#CICLO`, `#VALUE`, `#NAME`, `#NUM`, `#LIMITE`). */
 struct ExprError : std::runtime_error {
-    static constexpr const char* Syntax = "#SYNTAX";
-    static constexpr const char* DivZero = "#DIV/0";
-    static constexpr const char* Ref = "#REF";
-    static constexpr const char* Cycle = "#CICLO";
-    static constexpr const char* Value = "#VALUE";
-    static constexpr const char* Name = "#NAME";
-    static constexpr const char* Num = "#NUM";
-    static constexpr const char* Limit = "#LIMITE";
+    static constexpr const Char* Syntax = "#SYNTAX";
+    static constexpr const Char* DivZero = "#DIV/0";
+    static constexpr const Char* Ref = "#REF";
+    static constexpr const Char* Cycle = "#CICLO";
+    static constexpr const Char* Value = "#VALUE";
+    static constexpr const Char* Name = "#NAME";
+    static constexpr const Char* Num = "#NUM";
+    static constexpr const Char* Limit = "#LIMITE";
     using std::runtime_error::runtime_error;
 };
 
 /** Valor de evaluación de una fórmula: número (`N`) o cadena (`std::string`). */
 template <typename N> struct ExprValue {
-    static constexpr int display_precision = 10;
+    static constexpr Int display_precision = 10;
     std::variant<N, std::string> data;
 
     ExprValue() : data(N{}) {}
     ExprValue(N n) : data(n) {}
     ExprValue(std::string s) : data(std::move(s)) {}
 
-    bool is_number() const { return std::holds_alternative<N>(data); }
+    Bool is_number() const { return std::holds_alternative<N>(data); }
 
     /** Devuelve el número guardado o lanza `#VALUE` si es una cadena. */
     N number() const {
@@ -72,7 +73,7 @@ template <typename N> struct ExprItem {
     /** Clase de nodo. `List` une dos argumentos de una función; `Range` es una hoja con el texto `A1:B3`. */
     enum class Kind { Number, String, Ref, Range, Negate, Binary, List, Call };
 
-    friend std::ostream& operator<<(std::ostream& os, Kind k) { return os << static_cast<int>(k); }
+    friend std::ostream& operator<<(std::ostream& os, Kind k) { return os << static_cast<Int>(k); }
 
     Kind kind = Kind::Number;
     std::string text;
@@ -93,17 +94,17 @@ template <typename Number, template <typename> typename Sequence> struct ExprOps
      * Sin @p used exige que se consuma todo el texto; con @p used, lee desde @p start y guarda cuántos caracteres usó.
      * @return `false` si no empieza con un número válido o desborda `Number`.
      */
-    static bool to_number(const std::string& text, Number& out, std::size_t start = 0, std::size_t* used = nullptr) {
-        if (start >= text.size() || std::isspace(static_cast<unsigned char>(text[start]))) return false;
+    static Bool to_number(const std::string& text, Number& out, std::size_t start = 0, std::size_t* used = nullptr) {
+        if (start >= text.size() || std::isspace(static_cast<Byte>(text[start]))) return false;
         std::size_t pos = start;
         if (!used && text[pos] == '+') {
             ++pos;
-            if (pos >= text.size() || (!std::isdigit(static_cast<unsigned char>(text[pos])) && text[pos] != '.'))
+            if (pos >= text.size() || (!std::isdigit(static_cast<Byte>(text[pos])) && text[pos] != '.'))
                 return false;
         }
         Number parsed{};
-        const char* first = text.data() + pos;
-        const char* last = text.data() + text.size();
+        const Char* first = text.data() + pos;
+        const Char* last = text.data() + text.size();
         auto [ptr, ec] = std::from_chars(first, last, parsed);
         if (ec != std::errc{} || ptr == first) return false;
         if constexpr (std::is_floating_point_v<Number>) {
@@ -117,7 +118,7 @@ template <typename Number, template <typename> typename Sequence> struct ExprOps
 
     /** Verifica que el resultado aritmético sea finito; lanza `#NUM` en caso contrario. */
     static Number checked_number(Number val) {
-        if (!std::isfinite(static_cast<long double>(val))) throw ExprError(ExprError::Num);
+        if (!std::isfinite(static_cast<Real>(val))) throw ExprError(ExprError::Num);
         return val;
     }
 
@@ -178,7 +179,7 @@ template <typename Number, template <typename> typename Sequence> struct ExprOps
 
     /** Reduce @p args numéricos usando @p pick (ignora textos); devuelve 0 si no hay números. */
     template <typename Pick> static Number extremum_of(const Sequence<Value>& args, Pick pick) {
-        bool found = false;
+        Bool found = false;
         Number best = 0;
         for (auto&& arg : args) {
             if (!arg.getValue().is_number()) continue;

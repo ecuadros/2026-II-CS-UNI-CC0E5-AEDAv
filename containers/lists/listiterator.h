@@ -1,6 +1,7 @@
 #ifndef LISTITERATOR_H
 #define LISTITERATOR_H
 
+#include "../../types.h"
 #include "../core/GeneralIterator.h"
 
 /**
@@ -8,7 +9,7 @@
  * @tparam Node Tipo de nodo.
  * @tparam Reverse Si es `true`, avanza por `m_pPrev` en vez de `m_pNext`.
  */
-template <typename Node, bool Reverse = false>
+template <typename Node, Bool Reverse = false>
 class ListIterator : public GeneralIterator<ListIterator<Node, Reverse>, Node> {
   using Parent = GeneralIterator<ListIterator<Node, Reverse>, Node>;
 

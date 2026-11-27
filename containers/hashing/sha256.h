@@ -1,6 +1,7 @@
 #ifndef __SHA256_H__
 #define __SHA256_H__
 
+#include "../../types.h"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -20,7 +21,7 @@
 struct Sha256Digest {
   using Byte = std::uint8_t;
   using Count = std::size_t;
-  using HexValue = unsigned;
+  using HexValue = UInt;
 
   static constexpr Count Size = 32;
   static constexpr Count HexPerByte = 2;
@@ -28,7 +29,7 @@ struct Sha256Digest {
 
   std::array<Byte, Size> bytes{};
 
-  bool operator==(const Sha256Digest &) const = default;
+  Bool operator==(const Sha256Digest &) const = default;
 
   // Bitcoin muestra los hashes (txid, raiz) con los bytes invertidos
   /** Crea un digest a partir del hexadecimal que muestra Bitcoin, con los bytes
@@ -36,7 +37,7 @@ struct Sha256Digest {
   static Sha256Digest from_display_hex(std::string_view hex) {
     Sha256Digest d;
     for (Count i = 0; i < Size; ++i) {
-      const char *first = hex.data() + HexPerByte * i;
+      const Char *first = hex.data() + HexPerByte * i;
       HexValue value = 0;
       std::from_chars(first, first + HexPerByte, value, HexBase);
       d.bytes[Size - 1 - i] = Byte(value);
@@ -59,7 +60,7 @@ struct Sha256Digest {
     Sha256Digest read;
     is >> std::ws;
     for (auto &byte : read.bytes) {
-      char digits[HexPerByte];
+      Char digits[HexPerByte];
       HexValue value = 0;
       if (!is.read(digits, HexPerByte)) return is;
       auto end = digits + HexPerByte;
@@ -94,7 +95,7 @@ public:
   using Count = Digest::Count;
   using Word = std::uint32_t;
   using BitCount = std::uint64_t;
-  using Shift = unsigned;
+  using Shift = UInt;
 
   static constexpr Count BlockSize = 64;
   static constexpr Count LengthSize = 8;
@@ -292,7 +293,7 @@ template <typename T> struct Sha256MerkleHasher {
  * los nodos usan doble SHA-256 y el nodo impar se duplica. */
 struct BitcoinMerkleHasher {
   using Digest = Sha256::Digest;
-  static constexpr bool duplicate_odd = true;
+  static constexpr Bool duplicate_odd = true;
 
   /** Devuelve el txid sin modificar. */
   static Digest leaf(const Digest &txid) { return txid; }

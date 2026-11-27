@@ -1,6 +1,7 @@
 #ifndef CONTAINERS_CONTAINER_STREAM_H
 #define CONTAINERS_CONTAINER_STREAM_H
 
+#include "../../types.h"
 #include "GeneralNode.h"
 #include <concepts>
 #include <istream>
@@ -65,7 +66,7 @@ concept StreamReadable =
 template <PrintableContainer Container>
 std::ostream& write(std::ostream& os, const Container& container) {
     os << StreamDelimiters::container_open;
-    bool first = true;
+    Bool first = true;
     container.call([&](const auto& node) {
         if (!first) os << StreamDelimiters::separator;
         first = false;
@@ -86,7 +87,7 @@ std::ostream& write(std::ostream& os, const Target& target) {
  * @return `false` si el formato es inválido; el stream queda en fallo.
  */
 template <typename T, typename R, typename Nodes>
-bool read_nodes(std::istream& is, Nodes& nodes) {
+Bool read_nodes(std::istream& is, Nodes& nodes) {
     if (!StreamDelimiters::expect(is, StreamDelimiters::container_open)) return false;
     is >> std::ws;
     if (is.peek() == StreamDelimiters::container_close) {

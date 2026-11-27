@@ -1,6 +1,7 @@
 #ifndef __AVL_H__
 #define __AVL_H__
 
+#include "../../types.h"
 #include "binarytree.h"
 #include <algorithm>
 #include <cstdlib>
@@ -8,30 +9,30 @@
 
 /** Factor de balance de un nodo AVL: altura del subárbol derecho menos la del izquierdo. */
 class Balance {
-  signed char m_value = 0;
+  SByte m_value = 0;
 
 public:
   /** Registra que el subárbol del lado @p side creció un nivel. */
-  void lean(bool side) { m_value += side ? 1 : -1; }
+  constexpr void lean(Bool side) noexcept { m_value += side ? 1 : -1; }
   /** Registra que el subárbol del lado @p side perdió un nivel. */
-  void relax(bool side) { m_value -= side ? 1 : -1; }
+  constexpr void relax(Bool side) noexcept { m_value -= side ? 1 : -1; }
 
   /** Indica si ambos subárboles tienen la misma altura. */
-  bool balanced() const { return m_value == 0; }
+  [[nodiscard]] constexpr Bool balanced() const noexcept { return m_value == 0; }
   /** Indica si un subárbol es un nivel más alto que el otro. */
-  bool leaning() const { return m_value == 1 || m_value == -1; }
+  [[nodiscard]] constexpr Bool leaning() const noexcept { return m_value == 1 || m_value == -1; }
   /** Indica si la diferencia es de dos niveles, lo que obliga a rotar. */
-  bool overweight() const { return m_value == 2 || m_value == -2; }
+  [[nodiscard]] constexpr Bool overweight() const noexcept { return m_value == 2 || m_value == -2; }
   /** Indica si el subárbol derecho es el más alto. */
-  bool right_heavy() const { return m_value > 0; }
+  [[nodiscard]] constexpr Bool right_heavy() const noexcept { return m_value > 0; }
   /** Indica si este factor y @p other se inclinan hacia lados contrarios. */
-  bool opposes(Balance other) const { return m_value * other.m_value < 0; }
+  [[nodiscard]] constexpr Bool opposes(Balance other) const noexcept { return m_value * other.m_value < 0; }
 
   /** Recalcula los factores tras rotar @p x hacia @p dir, donde @p y es el hijo que subió a su lugar. */
-  static void rotated(Balance &x, Balance &y, bool dir) {
-    int s = dir ? -1 : 1;
-    int bx = s * x.m_value;
-    int by = s * y.m_value;
+  static constexpr void rotated(Balance &x, Balance &y, Bool dir) noexcept {
+    Int s = dir ? -1 : 1;
+    Int bx = s * x.m_value;
+    Int by = s * y.m_value;
     bx = bx - 1 - std::max(by, 0);
     by = by - 1 + std::min(bx, 0);
     x.m_value = s * bx;
@@ -40,7 +41,7 @@ public:
 
   /** Escribe el factor como entero. */
   friend std::ostream &operator<<(std::ostream &os, Balance b) {
-    return os << int(b.m_value);
+    return os << Int(b.m_value);
   }
 };
 
@@ -65,6 +66,7 @@ public:
  * @tparam Ops Mixins de recorrido, impresión y lectura.
  */
 template <typename Traits, typename Ops>
+    requires BinaryTreeTraitsConcept<Traits>
 class AVLTree : public BinaryTree<Traits, Ops> {
 public:
   using Parent = BinaryTree<Traits, Ops>;
@@ -98,7 +100,7 @@ protected:
   }
 
   /** Actualiza los factores desde el punto de eliminación hacia la raíz y rota donde haga falta. */
-  void after_remove(NodePtr parent, bool side) override {
+  void after_remove(NodePtr parent, Bool side) override {
     for (; parent; side = side_of(parent), parent = parent->m_pParent) {
       parent->m_balance.relax(side);
       if (parent->m_balance.leaning())
@@ -113,7 +115,7 @@ protected:
 
   /** Elige el reemplazo en el subárbol más alto (el derecho si están iguales): el sucesor o el predecesor en inorden. */
   NodePtr replacement(NodePtr node) const override {
-    bool side = node->m_balance.balanced() || node->m_balance.right_heavy();
+    Bool side = node->m_balance.balanced() || node->m_balance.right_heavy();
     return extreme(node->m_pChild[side], !side);
   }
 
@@ -137,7 +139,7 @@ protected:
 
 private:
   /** Rota como BinaryTree::rotate y además actualiza los factores de balance. */
-  NodePtr rotate(NodePtr x, bool dir) {
+  NodePtr rotate(NodePtr x, Bool dir) {
     NodePtr y = Parent::rotate(x, dir);
     Balance::rotated(x->m_balance, y->m_balance, dir);
     return y;
@@ -148,7 +150,7 @@ private:
    * @return La nueva raíz del subárbol.
    */
   NodePtr redistribute(NodePtr x) {
-    bool heavy = x->m_balance.right_heavy();
+    Bool heavy = x->m_balance.right_heavy();
     NodePtr child = x->m_pChild[heavy];
     if (child->m_balance.opposes(x->m_balance))
       rotate(child, heavy);

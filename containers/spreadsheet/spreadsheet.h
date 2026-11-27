@@ -1,10 +1,11 @@
 #ifndef CONTAINERS_SPREADSHEET_H
 #define CONTAINERS_SPREADSHEET_H
 
+#include "../../types.h"
 #include "exprtree.h"
 #include "../hashing/hashtable.h"
 #include "../core/traversalops.h"
-#include "../core/visualization.h"
+#include "../visual/visualization.h"
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
@@ -32,7 +33,9 @@ using SheetError = ExprError;
  * @tparam Traits Tipos de la hoja: `number_type`, `Cells`, `Formula` y `Sequence`.
  * @tparam Ops Mixins de operaciones (`SheetTraversalOps` por defecto).
  */
-template <typename Traits, typename Ops = SheetTraversalOps> class Sheet : public Ops {
+template <typename Traits, typename Ops = SheetTraversalOps>
+    requires SheetTraitsConcept<Traits>
+class Sheet : public Ops {
 public:
     using Number = typename Traits::number_type;
     using Formula = typename Traits::Formula;
@@ -45,13 +48,13 @@ private:
     Cells m_cells;
 
     /** Convierte @p text a número; falla si no es un número completo. */
-    static bool to_number(const std::string& text, Number& out) { return Formula::to_number(text, out); }
+    static Bool to_number(const std::string& text, Number& out) { return Formula::to_number(text, out); }
 
     /** Indica si el texto de la celda es una fórmula. */
-    static bool is_formula(const std::string& source) { return !source.empty() && source[0] == '='; }
+    static Bool is_formula(const std::string& source) { return !source.empty() && source[0] == '='; }
 
     /** Indica si la celda guarda texto que no es fórmula ni número. */
-    static bool is_text(const std::string& source) {
+    static Bool is_text(const std::string& source) {
         Number ignored;
         return !is_formula(source) && !to_number(source, ignored);
     }
@@ -63,24 +66,24 @@ private:
     }
 
     /** Acumula @p digit en @p acc en base @p base verificando desbordamiento de `int`. */
-    static void accumulate(int& acc, int digit, int base, const std::string& name) {
-        constexpr int max_int = std::numeric_limits<int>::max();
+    static void accumulate(Int& acc, Int digit, Int base, const std::string& name) {
+        constexpr Int max_int = std::numeric_limits<Int>::max();
         if (acc > (max_int - digit) / base) throw std::invalid_argument("Nombre de celda invalido: " + name);
         acc = acc * base + digit;
     }
 
     /** Separa `AB12` (en mayúsculas) en columna (base 26, desde 1) y fila (desde 1); lanza si es inválido o desborda `int`. */
-    static std::pair<int, int> split(const std::string& name) {
-        int col = 0;
+    static std::pair<Int, Int> split(const std::string& name) {
+        Int col = 0;
         std::size_t i = 0;
-        for (; i < name.size() && std::isalpha(static_cast<unsigned char>(name[i])); ++i) {
-            unsigned char ch = static_cast<unsigned char>(name[i]);
+        for (; i < name.size() && std::isalpha(static_cast<Byte>(name[i])); ++i) {
+            Byte ch = static_cast<Byte>(name[i]);
             if (!std::isupper(ch)) throw std::invalid_argument("Nombre de celda invalido: " + name);
             accumulate(col, ch - 'A' + 1, 26, name);
         }
-        int row = 0;
+        Int row = 0;
         for (; i < name.size(); ++i) {
-            if (!std::isdigit(static_cast<unsigned char>(name[i])))
+            if (!std::isdigit(static_cast<Byte>(name[i])))
                 throw std::invalid_argument("Nombre de celda invalido: " + name);
             accumulate(row, name[i] - '0', 10, name);
         }
@@ -90,20 +93,20 @@ private:
 
     /** Pasa el nombre a mayúsculas, valida su formato y lo devuelve en forma canónica (`A01` -> `A1`). */
     static std::string normalize(std::string name) {
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::toupper(c); });
+        std::transform(name.begin(), name.end(), name.begin(), [](Byte c) { return std::toupper(c); });
         auto [col, row] = split(name);
         return name_of(col, row);
     }
 
     /** Letras de la columna @p col (base 26, desde 1). */
-    static std::string letters_of(int col) {
+    static std::string letters_of(Int col) {
         std::string letters;
-        for (; col > 0; col = (col - 1) / 26) letters.insert(letters.begin(), static_cast<char>('A' + (col - 1) % 26));
+        for (; col > 0; col = (col - 1) / 26) letters.insert(letters.begin(), static_cast<Char>('A' + (col - 1) % 26));
         return letters;
     }
 
     /** Nombre de la celda en la columna @p col y la fila @p row. */
-    static std::string name_of(int col, int row) { return letters_of(col) + std::to_string(row); }
+    static std::string name_of(Int col, Int row) { return letters_of(col) + std::to_string(row); }
 
     using ActiveSet = std::unordered_set<std::string>;
 
@@ -128,21 +131,21 @@ private:
     template <typename List>
     void expand(const std::string& range, List& args, Cache& cache, ActiveSet& active) const {
         std::size_t colon = range.find(':');
-        int c1 = 0, r1 = 0, c2 = 0, r2 = 0;
+        Int c1 = 0, r1 = 0, c2 = 0, r2 = 0;
         try {
             std::tie(c1, r1) = split(range.substr(0, colon));
             std::tie(c2, r2) = split(range.substr(colon + 1));
         } catch (const std::invalid_argument&) {
             throw SheetError(SheetError::Ref);
         }
-        int min_col = std::min(c1, c2), max_col = std::max(c1, c2);
-        int min_row = std::min(r1, r2), max_row = std::max(r1, r2);
+        Int min_col = std::min(c1, c2), max_col = std::max(c1, c2);
+        Int min_row = std::min(r1, r2), max_row = std::max(r1, r2);
         std::size_t cols = static_cast<std::size_t>(max_col - min_col) + 1;
         std::size_t rows = static_cast<std::size_t>(max_row - min_row) + 1;
         if (cols > m_cells.size() / rows) {
             struct Match {
-                int col;
-                int row;
+                Int col;
+                Int row;
                 std::string name;
                 const std::string* source;
             };
@@ -158,8 +161,8 @@ private:
             for (const auto& match : matches) push_cell(match.name, *match.source, args, cache, active);
             return;
         }
-        for (int col = min_col;; ++col) {
-            for (int row = min_row;; ++row) {
+        for (Int col = min_col;; ++col) {
+            for (Int row = min_row;; ++row) {
                 std::string name = name_of(col, row);
                 if (auto it = m_cells.find(name); it != m_cells.end())
                     push_cell(name, it->second, args, cache, active);
@@ -268,7 +271,7 @@ public:
     }
 
     /** Borra la celda; devuelve `false` si no existía. */
-    bool remove(const std::string& name) {
+    Bool remove(const std::string& name) {
         std::string key = normalize(name);
         std::lock_guard lock(this->m_mutex);
         return m_cells.remove(key);
@@ -315,21 +318,21 @@ public:
     /** Vista de tabla autocontenida (snapshot disperso) para `visual::print_table`. */
     struct TableView {
         struct Entry {
-            int row;
-            int col;
+            Int row;
+            Int col;
             std::string text;
         };
 
         std::vector<Entry> m_entries;
-        int m_cols = 0;
-        int m_rows = 0;
+        Int m_cols = 0;
+        Int m_rows = 0;
 
-        int rows() const { return m_rows; }
-        int cols() const { return m_cols; }
-        std::string col_header(int col) const { return letters_of(col); }
-        std::string cell_text(int row, int col) const {
+        Int rows() const { return m_rows; }
+        Int cols() const { return m_cols; }
+        std::string col_header(Int col) const { return letters_of(col); }
+        std::string cell_text(Int row, Int col) const {
             auto it = std::lower_bound(m_entries.begin(), m_entries.end(), std::pair{row, col},
-                                       [](const Entry& e, const std::pair<int, int>& key) {
+                                       [](const Entry& e, const std::pair<Int, Int>& key) {
                                            return std::tie(e.row, e.col) < key;
                                        });
             if (it != m_entries.end() && it->row == row && it->col == col) return it->text;

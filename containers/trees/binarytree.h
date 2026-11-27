@@ -1,12 +1,14 @@
 #ifndef __BINARYTREE_H__
 #define __BINARYTREE_H__
 
+#include "../../types.h"
 #include "../core/GeneralNode.h"
 #include "../core/traits.h"
 #include "../core/traversalops.h"
 #include <algorithm>
 #include <cstddef>
 #include <initializer_list>
+#include <memory>
 #include <mutex>
 #include <ostream>
 #include <type_traits>
@@ -32,7 +34,7 @@ public:
     NodePtr m_pParent = nullptr;
 
     /** Indica si el nodo no tiene hijos. */
-    bool is_leaf() const { return !m_pChild[0] && !m_pChild[1]; }
+    Bool is_leaf() const { return !m_pChild[0] && !m_pChild[1]; }
 };
 
 /**
@@ -40,14 +42,16 @@ public:
  * @tparam Traits Tipos de nodo e iteradores.
  * @tparam Ops Mixins de recorrido, impresión y lectura.
  */
-template <typename Traits, typename Ops> class BinaryTreeBase : public Ops {
+template <typename Traits, typename Ops>
+    requires BidirectionalContainerTraits<Traits>
+class BinaryTreeBase : public Ops {
 public:
     using Node = typename Traits::Node;
     using NodePtr = Node*;
     using ForwardIterator = typename Traits::ForwardIterator;
     using BackwardIterator = typename Traits::BackwardIterator;
 
-    template <TreeOrder Order, bool Reverse>
+    template <TreeOrder Order, Bool Reverse>
     using Traversal = TreeTraversal<BinaryTreeIterator<const Node, Order, Reverse>>;
 
 protected:
@@ -66,7 +70,7 @@ protected:
     }
 
     /** Devuelve el rango de recorrido del árbol en el orden indicado. */
-    template <TreeOrder Order, bool Reverse> Traversal<Order, Reverse> traversal() const {
+    template <TreeOrder Order, Bool Reverse> Traversal<Order, Reverse> traversal() const {
         return Traversal<Order, Reverse>(m_root);
     }
 
@@ -89,7 +93,7 @@ public:
     /** Cantidad de elementos. */
     virtual std::size_t size() const = 0;
     /** Indica si el árbol no tiene elementos. */
-    bool empty() const { return size() == 0; }
+    Bool empty() const { return size() == 0; }
 
     /** Elimina todos los nodos. */
     void clear() {
@@ -111,9 +115,9 @@ public:
         /** Raíz del árbol. */
         Handle root() const { return tree->m_root; }
         /** Hijo izquierdo (@p side falso) o derecho (@p side verdadero) de @p node. */
-        Handle child(Handle node, bool side) const { return node->m_pChild[side]; }
+        Handle child(Handle node, Bool side) const { return node->m_pChild[side]; }
         /** Indica si el nodo existe. */
-        bool valid(Handle node) const { return node != nullptr; }
+        Bool valid(Handle node) const { return node != nullptr; }
         /** Escribe el texto del nodo. */
         void label(std::ostream& os, Handle node) const { tree->print_node(os, *node); }
         /** Altura del subárbol de @p node. */
@@ -152,6 +156,7 @@ public:
  * @tparam Ops Mixins de recorrido, impresión y lectura.
  */
 template <typename Traits, typename Ops = SearchTraversalOps>
+    requires BinaryTreeTraitsConcept<Traits>
 class BinaryTree : public BinaryTreeBase<Traits, Ops> {
 public:
     using Base = BinaryTreeBase<Traits, Ops>;
@@ -163,10 +168,10 @@ public:
 
 private:
     std::size_t m_size = 0;
-    Compare m_comp;
+    [[no_unique_address]] Compare m_comp;
 
     /** Indica si dos valores son equivalentes para el comparador: ninguno va antes que el otro. */
-    bool equivalent(const value_type& a, const value_type& b) const {
+    Bool equivalent(const value_type& a, const value_type& b) const {
         return !m_comp(a, b) && !m_comp(b, a);
     }
 
@@ -174,7 +179,8 @@ private:
      * Inserta el valor sin tomar el mutex. Si @p unique es `true` y ya hay un valor equivalente, no inserta.
      * @return El nodo insertado o el ya existente, y si hubo inserción.
      */
-    std::pair<NodePtr, bool> internal_insert(const value_type& value, const ref_type& ref, bool unique) {
+    template <typename V, typename R>
+    std::pair<NodePtr, Bool> internal_insert(V&& value, R&& ref, Bool unique) {
         NodePtr* slot = &this->m_root;
         NodePtr parent = nullptr;
         while (*slot) {
@@ -182,9 +188,11 @@ private:
             if (unique && equivalent(value, parent->getValue())) return {parent, false};
             slot = &parent->m_pChild[m_comp(parent->getValue(), value)];
         }
-        NodePtr node = new Node(value, ref);
+        auto owned = std::make_unique<Node>(std::forward<V>(value), std::forward<R>(ref));
+        NodePtr node = owned.get();
         node->m_pParent = parent;
         *slot = node;
+        owned.release();
         ++m_size;
         after_insert(node);
         return {node, true};
@@ -202,7 +210,7 @@ protected:
     /** Gancho que se llama tras enlazar un nodo nuevo. */
     virtual void after_insert(NodePtr) {}
     /** Gancho que se llama tras quitar un nodo, con el padre y el lado donde el subárbol perdió altura. */
-    virtual void after_remove(NodePtr, bool) {}
+    virtual void after_remove(NodePtr, Bool) {}
     /** Elige el nodo que ocupará el lugar de @p node cuando este tiene dos hijos; por defecto, su sucesor en inorden. */
     virtual NodePtr replacement(NodePtr node) const { return extreme(node->m_pChild[1], 0); }
 
@@ -231,16 +239,16 @@ protected:
      * Saca @p node del árbol sin liberarlo.
      * @return El padre y el lado desde donde se quitó físicamente un nodo, para rebalancear.
      */
-    std::pair<NodePtr, bool> unlink(NodePtr node) {
+    std::pair<NodePtr, Bool> unlink(NodePtr node) {
         if (!node->m_pChild[0] || !node->m_pChild[1]) {
-            std::pair<NodePtr, bool> origin{node->m_pParent, side_of(node)};
+            std::pair<NodePtr, Bool> origin{node->m_pParent, side_of(node)};
             detach(node);
             return origin;
         }
         NodePtr repl = replacement(node);
-        std::pair<NodePtr, bool> origin{repl->m_pParent == node ? repl : repl->m_pParent, side_of(repl)};
+        std::pair<NodePtr, Bool> origin{repl->m_pParent == node ? repl : repl->m_pParent, side_of(repl)};
         detach(repl);
-        for (bool s : {false, true}) {
+        for (Bool s : {false, true}) {
             repl->m_pChild[s] = node->m_pChild[s];
             if (repl->m_pChild[s]) repl->m_pChild[s]->m_pParent = repl;
         }
@@ -254,7 +262,7 @@ protected:
      * Rota el subárbol de @p x hacia el lado @p dir (`true` es a la derecha).
      * @return El nodo que queda como nueva raíz del subárbol.
      */
-    NodePtr rotate(NodePtr x, bool dir) {
+    NodePtr rotate(NodePtr x, Bool dir) {
         NodePtr y = x->m_pChild[!dir];
         x->m_pChild[!dir] = y->m_pChild[dir];
         if (y->m_pChild[dir]) y->m_pChild[dir]->m_pParent = x;
@@ -301,16 +309,23 @@ public:
         internal_insert(value, ref, false);
     }
 
+    /** Inserta moviendo el valor y la referencia; admite duplicados. */
+    void insert(value_type&& value, ref_type&& ref) {
+        std::lock_guard lock(this->m_mutex);
+        internal_insert(std::move(value), std::move(ref), false);
+    }
+
     /**
      * Elimina un nodo con valor equivalente a @p value.
      * @return `false` si no existía.
      */
-    bool remove(const value_type& value) {
+    Bool remove(const value_type& value) {
         std::lock_guard lock(this->m_mutex);
         NodePtr node = find_node(value);
         if (!node) return false;
         auto [parent, side] = unlink(node);
-        delete node;
+        std::unique_ptr<Node> owned(node);
+        owned.reset();
         --m_size;
         after_remove(parent, side);
         return true;
@@ -320,7 +335,7 @@ public:
      * Busca un valor.
      * @return Puntero al valor guardado, o `nullptr` si no existe.
      */
-    const value_type* find(const value_type& value) const {
+    [[nodiscard]] const value_type* find(const value_type& value) const {
         std::lock_guard lock(this->m_mutex);
         NodePtr node = find_node(value);
         return node ? &node->getValue() : nullptr;
@@ -332,11 +347,17 @@ public:
         return internal_insert(value, ref_type{}, true).first->ref();
     }
 
+    /** Devuelve la referencia asociada a @p value, moviéndolo si no existía. */
+    ref_type& operator[](value_type&& value) {
+        std::lock_guard lock(this->m_mutex);
+        return internal_insert(std::move(value), ref_type{}, true).first->ref();
+    }
+
     /**
      * Busca la referencia asociada a @p value.
      * @return Puntero a la referencia (constante si el árbol lo es), o `nullptr` si no existe.
      */
-    template <typename Self> auto find_ref(this Self& self, const value_type& value) {
+    template <typename Self> [[nodiscard]] auto find_ref(this Self& self, const value_type& value) {
         using Ptr = std::conditional_t<std::is_const_v<Self>, const ref_type*, ref_type*>;
         std::lock_guard lock(self.m_mutex);
         NodePtr node = self.find_node(value);
@@ -353,14 +374,21 @@ public:
      * Inserta el valor solo si no hay uno equivalente.
      * @return Iterador al nodo insertado o existente, y si hubo inserción.
      */
-    std::pair<typename Base::ForwardIterator, bool> try_insert(const value_type& value, const ref_type& ref) {
+    std::pair<typename Base::ForwardIterator, Bool> try_insert(const value_type& value, const ref_type& ref) {
         std::lock_guard lock(this->m_mutex);
         auto [node, inserted] = internal_insert(value, ref, true);
         return {Base::ForwardIterator::at(node), inserted};
     }
 
+    /** Inserta moviendo el valor y la referencia solo si no hay uno equivalente. */
+    std::pair<typename Base::ForwardIterator, Bool> try_insert(value_type&& value, ref_type&& ref) {
+        std::lock_guard lock(this->m_mutex);
+        auto [node, inserted] = internal_insert(std::move(value), std::move(ref), true);
+        return {Base::ForwardIterator::at(node), inserted};
+    }
+
     /** Indica si existe un valor equivalente a @p value. */
-    bool contains(const value_type& value) const {
+    [[nodiscard]] Bool contains(const value_type& value) const {
         std::lock_guard lock(this->m_mutex);
         return find_node(value) != nullptr;
     }
@@ -368,8 +396,11 @@ public:
     /** Equivale a insert(); existe para poder leer el árbol desde un stream. */
     void push_back(const value_type& value, const ref_type& ref) { insert(value, ref); }
 
+    /** Equivale a insert() moviendo @p value y @p ref. */
+    void push_back(value_type&& value, ref_type&& ref) { insert(std::move(value), std::move(ref)); }
+
     /** Cantidad de elementos. */
-    std::size_t size() const override {
+    [[nodiscard]] std::size_t size() const override {
         std::lock_guard lock(this->m_mutex);
         return m_size;
     }

@@ -1,6 +1,7 @@
 #ifndef __GENERAL_ITERATOR_H__
 #define __GENERAL_ITERATOR_H__
 
+#include "../../types.h"
 #include <cstddef>
 #include <iterator>
 
@@ -31,7 +32,7 @@ public:
     /** Accede a los miembros del elemento actual. */
     pointer operator->() const { return m_ptr; }
     /** Dos iteradores son iguales si apuntan al mismo elemento. */
-    friend bool operator==(const Derived& a, const Derived& b) { return a.m_ptr == b.m_ptr; }
+    friend Bool operator==(const Derived& a, const Derived& b) { return a.m_ptr == b.m_ptr; }
 };
 
 #endif // __GENERAL_ITERATOR_H__
