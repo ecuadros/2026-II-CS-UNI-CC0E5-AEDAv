@@ -10,6 +10,7 @@
  * - `horizontal_tree_layout.h`: `HorizontalTreeLayout<Formatter>`
  * - `circular_list_layout.h`: `CircularListLayout<Formatter>` y `CircularListRole`
  * - `merkle_tree_layout.h`: `MerkleTreeLayout<Formatter>` y `MerkleRole`
+ * - `btree_layout.h`: `BTreeLayout<Formatter>`, `BTreeRole` y resaltado de páginas (`highlight_pages`)
  */
 
 #ifndef __LAYOUTS_H__
@@ -21,5 +22,6 @@
 #include "layouts/horizontal_tree_layout.h"
 #include "layouts/circular_list_layout.h"
 #include "layouts/merkle_tree_layout.h"
+#include "layouts/btree_layout.h"
 
 #endif // __LAYOUTS_H__

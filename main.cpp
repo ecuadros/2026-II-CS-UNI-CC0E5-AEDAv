@@ -23,5 +23,9 @@ int main() {
     DemoHashTable();
     DemoMerkleTree();
     DemoGotoxy();
+    DemoBTree();
+    DemoBStarTree();
+    DemoBTreeComparison();
+    DemoBTreeConcurrency();
     return 0;
 }

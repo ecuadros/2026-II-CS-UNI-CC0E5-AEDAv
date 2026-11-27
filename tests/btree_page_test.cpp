@@ -68,7 +68,7 @@ typename Page::PageOwner makeLeaf(Size capacity, const std::vector<typename Page
 template <typename Traits>
 void runSuite(const std::string& name, const std::vector<TX>& expectedOrder) {
     using Compare = typename Traits::Compare;
-    using Page    = typename Traits::template PageFor<Compare>;
+    using Page    = typename Traits::Page;
     std::cout << "== BTreePage " << name << " ==\n";
 
     // --- Orden de claves y búsqueda binaria

@@ -32,6 +32,9 @@ TEST_DIR   := tests
 TEST_BIN   := build/tests
 TEST_SRCS  := $(wildcard $(TEST_DIR)/*.cpp)
 TEST_FLAGS := $(CXXFLAGS) -Wall -Wextra -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
+# Concurrencia: binario aparte con ThreadSanitizer (incompatible con ASan); falla si TSan reporta algo.
+TSAN_SRCS  := $(TEST_DIR)/btree_concurrency_test.cpp
+TSAN_FLAGS := $(CXXFLAGS) -Wall -Wextra -g -O1 -fsanitize=thread -fno-omit-frame-pointer
 
 .PHONY: test
 
@@ -43,6 +46,13 @@ test:
 		$(CXX) $(TEST_FLAGS) $$src -o $$bin; \
 		echo "==> Ejecutando $$bin"; \
 		./$$bin; \
+	done; \
+	for src in $(TSAN_SRCS); do \
+		bin=$(TEST_BIN)/$$(basename $$src .cpp)_tsan; \
+		echo "==> Compilando $$src (TSan)"; \
+		$(CXX) $(TSAN_FLAGS) $$src -o $$bin; \
+		echo "==> Ejecutando $$bin"; \
+		TSAN_OPTIONS="halt_on_error=1 exitcode=66" ./$$bin; \
 	done; \
 	echo "==> Todas las pruebas pasaron"
 

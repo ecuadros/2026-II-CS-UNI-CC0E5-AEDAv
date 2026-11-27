@@ -10,6 +10,7 @@
 #include "../core/general_iterator.h"
 #include "../core/general_container.h"
 #include "../core/mixins.h"
+#include "../core/direction.h"
 #include "../../types.h"
 #include "../../utilities/render.h"
 #include <iostream>
@@ -63,14 +64,10 @@ namespace detail {
         InPostOrder     =              Phase::In + Phase::Post,
         PreInPostOrder  = Phase::Pre + Phase::In + Phase::Post,
     };
-
-    /** @brief Dirección del recorrido: `Asc` (izq→der) o `Desc` (der→izq). */
-    enum Direction : TX {Asc = 0, Desc = 1 };
 }
 
 using detail::Phase;
 using detail::Order;
-using detail::Direction;
 
 /**
  * @class BinaryTreeIterator

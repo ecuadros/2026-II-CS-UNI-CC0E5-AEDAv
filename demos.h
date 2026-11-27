@@ -28,4 +28,13 @@ void DemoMerkleTree();
 /** @brief Demostración de posicionamiento directo en consola con `gotoxy`. */
 void DemoGotoxy();
 
+/** @brief Demostración de árboles B clásicos (`BTree`): construcción, búsqueda, mixins, persistencia y balanceo verificado. */
+void DemoBTree();
+/** @brief Demostración de árboles B* (`BStarTree`): redistribución, división 2→3 y 1→3, fusión 3→2 y MergeRoot. */
+void DemoBStarTree();
+/** @brief Comparación polimórfica `BTree` vs `BStarTree` y tabla de ocupación con 10 000 claves. */
+void DemoBTreeComparison();
+/** @brief Demostración de inserciones concurrentes en un `BStarTree` con verificación de invariantes. */
+void DemoBTreeConcurrency();
+
 #endif // __DEMOS_H__
