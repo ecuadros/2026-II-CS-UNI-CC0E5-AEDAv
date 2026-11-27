@@ -12,6 +12,23 @@ using TXX = long long;   /**< Tipo entero extendido de 64 bits. */
 using Ref = long long;   /**< Tipo utilizado para referencias o identificadores de nodo. */
 
 /**
+ * @brief Tipo sin signo para cantidades (número de elementos, capacidades).
+ *
+ * Se deduce de `sizeof` para coincidir exactamente con el tipo que retornan
+ * los contenedores (`BaseVector::size()`, `std::vector::size()`), evitando
+ * conversiones entre tipos con y sin signo.
+ */
+using Size = decltype(sizeof(0));
+
+/**
+ * @brief Tipo para posiciones dentro de un contenedor (índices base 0).
+ *
+ * Comparte representación con `Size` para que comparar una posición con una
+ * cantidad (`pos < v.size()`) no requiera conversiones.
+ */
+using Index = Size;
+
+/**
  * @typedef CW
  * @brief Tipo de carácter ancho dependiente de la arquitectura.
  *

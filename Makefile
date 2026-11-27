@@ -27,6 +27,25 @@ docs:
 	@echo "Presiona Ctrl+C para detener el servidor."
 	@python3 -m http.server $(DOCS_PORT) -d build/docs/html
 
+# Pruebas unitarias: compila y ejecuta cada tests/*.cpp con sanitizadores; falla al primer error.
+TEST_DIR   := tests
+TEST_BIN   := build/tests
+TEST_SRCS  := $(wildcard $(TEST_DIR)/*.cpp)
+TEST_FLAGS := $(CXXFLAGS) -Wall -Wextra -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
+
+.PHONY: test
+
+test:
+	@mkdir -p $(TEST_BIN)
+	@set -e; for src in $(TEST_SRCS); do \
+		bin=$(TEST_BIN)/$$(basename $$src .cpp); \
+		echo "==> Compilando $$src"; \
+		$(CXX) $(TEST_FLAGS) $$src -o $$bin; \
+		echo "==> Ejecutando $$bin"; \
+		./$$bin; \
+	done; \
+	echo "==> Todas las pruebas pasaron"
+
 clean:
 	rm -rf $(TARGET) tmp build/docs
 	@clear 2>/dev/null || printf "\033c"
