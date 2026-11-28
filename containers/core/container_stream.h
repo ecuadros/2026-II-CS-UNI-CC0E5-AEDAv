@@ -7,7 +7,7 @@
 #include <istream>
 #include <ostream>
 #include <utility>
-#include <vector>
+#include "../lists/array.h"
 
 /** Lectura y escritura de contenedores en formato de texto `[(valor,ref),...]`. */
 namespace container_stream {
@@ -112,7 +112,7 @@ Bool read_nodes(std::istream& is, Nodes& nodes) {
 /** Reemplaza el contenido de @p destination por @p nodes. Construye primero un contenedor temporal, así que si falla el destino no cambia. */
 template <ReadableContainer Container>
 void insert_nodes(Container& destination,
-                  const std::vector<GeneralNode<typename Container::value_type, ref_of_t<Container>>>& nodes) {
+                  const Array<ArrayTraits<GeneralNode<typename Container::value_type, ref_of_t<Container>>>>& nodes) {
     Container temp;
     for (const auto& node : nodes)
         temp.push_back(node.getValue(), node.getRef());
@@ -122,7 +122,7 @@ void insert_nodes(Container& destination,
 /** Lee un contenedor completo desde el stream. Si el texto es inválido, el contenedor no se modifica. */
 template <ReadableContainer Container>
 std::istream& read(std::istream& is, Container& container) {
-    std::vector<GeneralNode<typename Container::value_type, ref_of_t<Container>>> nodes;
+    Array<ArrayTraits<GeneralNode<typename Container::value_type, ref_of_t<Container>>>> nodes;
     if (read_nodes<typename Container::value_type, ref_of_t<Container>>(is, nodes))
         insert_nodes(container, nodes);
     return is;

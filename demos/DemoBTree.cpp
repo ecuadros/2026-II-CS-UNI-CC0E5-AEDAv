@@ -5,10 +5,10 @@
 #include "utils/generic_tests.h"
 
 /** Pares (valor, ref) del árbol en orden. */
-template <typename Tree> std::vector<std::pair<typename Tree::value_type, Ref>> Dump(const Tree& tree) {
-    std::vector<std::pair<typename Tree::value_type, Ref>> out;
+template <typename Tree> ArrayOf<std::pair<typename Tree::value_type, Ref>> Dump(const Tree& tree) {
+    ArrayOf<std::pair<typename Tree::value_type, Ref>> out;
     for (auto&& node : tree.InOrder())
-        out.emplace_back(node.getValue(), node.getRef());
+        out.push_back({node.getValue(), node.getRef()});
     return out;
 }
 
@@ -38,7 +38,7 @@ static_assert(BTreePageConcept<BTreePage<BTreeTraits<TX>>>, "BTree: la pagina no
 template <RangeQueryable Tree> void TestRange() {
     PrintColor("TestBTreeRange");
     std::mt19937 rng(777);
-    std::vector<TX> keys;
+    ArrayOf<TX> keys;
     for (TX i = 0; i < 2000; ++i)
         keys.push_back(i / 2 * 3);
     std::shuffle(keys.begin(), keys.end(), rng);
@@ -60,8 +60,8 @@ template <RangeQueryable Tree> void TestRange() {
             (lo != keys.end() && (*tl).getValue() != *lo) || (hi != keys.end() && (*tu).getValue() != *hi))
             throw std::runtime_error("BTree range: lower/upper_bound incorrecto en " + std::to_string(probe));
     }
-    for (auto [low, high] : std::vector<std::pair<TX, TX>>{{0, 0}, {-10, 5}, {10, 9}, {100, 400}, {2990, 5000}, {-5, 5000}, {4, 5}}) {
-        std::vector<TX> got, expected;
+    for (auto [low, high] : std::initializer_list<std::pair<TX, TX>>{{0, 0}, {-10, 5}, {10, 9}, {100, 400}, {2990, 5000}, {-5, 5000}, {4, 5}}) {
+        ArrayOf<TX> got, expected;
         tree.range(low, high, [&](const auto& node) { got.push_back(node.getValue()); });
         for (TX k : keys)
             if (k >= low && k <= high) expected.push_back(k);
@@ -94,7 +94,7 @@ void TestBTreePersistence() {
     RoundTrip(extremes, "negativos y extremos", file);
 
     std::mt19937 rng(12345);
-    std::vector<TX> keys(5000);
+    ArrayOf<TX> keys(5000);
     std::iota(keys.begin(), keys.end(), -2500);
     std::shuffle(keys.begin(), keys.end(), rng);
     BTreeOf<TX, std::less<TX>, 3> o3;
@@ -165,9 +165,9 @@ void TestBTreeRace() {
         mixed.insert(i, i);
     std::atomic<Bool> stop{false};
     std::atomic<std::size_t> reads{0};
-    std::vector<std::thread> readers;
+    ArrayOf<std::thread> readers;
     for (int r = 0; r < 2; ++r)
-        readers.emplace_back([&] {
+        readers.push_back(std::thread([&] {
             while (!stop) {
                 std::size_t count = 0;
                 TX previous = std::numeric_limits<TX>::min();
@@ -179,7 +179,7 @@ void TestBTreeRace() {
                 (void)mixed.contains(static_cast<TX>(count % M));
                 ++reads;
             }
-        });
+        }));
     RunThreads(NThreads, [&](Int t) {
         for (TX i = t; i < M; i += NThreads)
             if (i % 2 == 0) mixed.remove(i);

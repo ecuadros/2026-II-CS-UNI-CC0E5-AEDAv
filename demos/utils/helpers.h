@@ -165,9 +165,9 @@ static void Expect(Bool condition, const std::string& what) {
 }
 
 /** Pares (valor, ref) del contenedor ordenados, para comparar contenidos sin depender del orden interno. */
-template <typename Container> std::vector<std::pair<typename Container::value_type, Ref>> Sorted(const Container& c) {
-    std::vector<std::pair<typename Container::value_type, Ref>> items;
-    c.call([&](const auto& node) { items.emplace_back(node.getValue(), node.getRef()); });
+template <typename Container> ArrayOf<std::pair<typename Container::value_type, Ref>> Sorted(const Container& c) {
+    ArrayOf<std::pair<typename Container::value_type, Ref>> items;
+    c.call([&](const auto& node) { items.push_back({node.getValue(), node.getRef()}); });
     std::sort(items.begin(), items.end());
     return items;
 }

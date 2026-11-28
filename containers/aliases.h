@@ -12,9 +12,6 @@
 #include "lists/linkedlist.h"
 #include "trees/merkletree.h"
 #include "trees/BTree.h"
-#include "trees/BPlusTree.h"
-#include "trees/RTree.h"
-#include "graphs/Graph.h"
 #include "spreadsheet/exprtree.h"
 #include "spreadsheet/spreadsheet.h"
 #include <functional>
@@ -70,18 +67,6 @@ using MerkleOf = MerkleTree<MerkleTreeTraits<T, Hasher>>;
 /** Árbol B* ordenado según @p Compare, con páginas de @p Order claves. */
 template <typename T, typename Compare = std::less<T>, std::size_t Order = 3>
 using BTreeOf = BTree<BTreeTraits<T, Compare, Order>>;
-
-/** Árbol B+ ordenado según @p Compare, con nodos de @p Order claves. */
-template <typename T, typename Compare = std::less<T>, std::size_t Order = 4>
-using BPlusTreeOf = BPlusTree<BPlusTreeTraits<T, Compare, Order>>;
-
-/** Grafo ponderado con vértices identificados por claves de tipo @p V y pesos de tipo @p W. */
-template <typename V, typename W = Real, typename Compare = std::less<V>>
-using GraphOf = Graph<GraphTraits<V, W, Compare>>;
-
-/** Árbol R de rectángulos con coordenadas de tipo @p Coordinate y nodos de @p Order entradas. */
-template <typename Coordinate = Real, std::size_t Order = 4>
-using RTreeOf = RTree<RTreeTraits<Coordinate, Order>>;
 
 /** Árbol de sintaxis de una fórmula con resultados de tipo @p Number. */
 template <typename Number = Real>

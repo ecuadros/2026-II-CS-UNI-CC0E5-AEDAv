@@ -19,7 +19,7 @@
 #include <tuple>
 #include <unordered_set>
 #include <utility>
-#include <vector>
+#include "../lists/array.h"
 
 /** Error de una celda; es el mismo error que lanza ExprTree. */
 using SheetError = ExprError;
@@ -149,7 +149,7 @@ private:
                 std::string name;
                 const std::string* source;
             };
-            std::vector<Match> matches;
+            Array<ArrayTraits<Match>> matches;
             for (const auto& [name, source] : m_cells) {
                 auto [col, row] = split(name);
                 if (col >= min_col && col <= max_col && row >= min_row && row <= max_row)
@@ -323,7 +323,7 @@ public:
             std::string text;
         };
 
-        std::vector<Entry> m_entries;
+        Array<ArrayTraits<Entry>> m_entries;
         Int m_cols = 0;
         Int m_rows = 0;
 

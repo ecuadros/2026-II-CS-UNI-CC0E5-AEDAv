@@ -75,7 +75,7 @@ void DemoFiles() {
     AVLSearchTree<TX> tree;
     WriteText(path, "30 3\n10 1\n20 2\n");
     tree.load_records(path);
-    Expect(Sorted(tree) == std::vector<std::pair<TX, Ref>>{{1, 10}, {2, 20}, {3, 30}}, "Files: arbol desde registros");
+    Expect(Sorted(tree) == ArrayOf<std::pair<TX, Ref>>{{1, 10}, {2, 20}, {3, 30}}, "Files: arbol desde registros");
 
     const auto before = Sorted(tree);
     for (const char* bad : {"30 3\nxx 5\n", "30\n", "30 abc\n", "30 3 extra\n40\n"}) {

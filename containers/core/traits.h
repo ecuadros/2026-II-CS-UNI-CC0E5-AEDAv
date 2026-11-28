@@ -6,6 +6,7 @@
 #include "GeneralNode.h"
 #include "../trees/binarytreeiterator.h"
 #include "traversalops.h"
+#include "../lists/array.h"
 #include <concepts>
 #include <functional>
 #include <optional>
@@ -90,38 +91,6 @@ concept RangeQueryable = requires(const C& c, const typename C::value_type& key)
 template <typename T>
 concept NothrowMovable = std::is_nothrow_move_constructible_v<T> && std::is_nothrow_swappable_v<T>;
 
-/** Rasgos válidos para BPlusTree: orden >= 3, página, índice y comparador. */
-template <typename Traits>
-concept BPlusTreeTraitsConcept = BidirectionalContainerTraits<Traits> && OrderedTraits<Traits> && requires {
-    typename Traits::ref_type;
-    typename Traits::Index;
-    typename Traits::Page;
-    requires Traits::order >= 3;
-};
-
-/** Rasgos válidos para Graph: vértice, peso, nodo y almacenamiento de vértices y aristas. */
-template <typename Traits>
-concept GraphTraitsConcept = requires {
-    typename Traits::vertex_type;
-    typename Traits::weight_type;
-    typename Traits::Vertices;
-    typename Traits::Edges;
-    typename Traits::Index;
-    requires std::is_arithmetic_v<typename Traits::weight_type>;
-};
-
-/** Rasgos válidos para RTree: tipo de coordenada, valor, rectángulo y máximo de entradas por nodo (al menos 4). */
-template <typename Traits>
-concept RTreeTraitsConcept = requires {
-    typename Traits::value_type;
-    typename Traits::ref_type;
-    typename Traits::coord_type;
-    typename Traits::Node;
-    typename Traits::Index;
-    requires std::is_arithmetic_v<typename Traits::coord_type>;
-    requires Traits::order >= 4;
-};
-
 /** Rasgos válidos para MerkleTree: hasher con Digest, leaf() y combine(). */
 template <typename Traits>
 concept MerkleTraitsConcept = BidirectionalContainerTraits<Traits> &&
@@ -148,18 +117,6 @@ concept SheetTraitsConcept = requires {
     typename Traits::Cache;
 };
 
-/** Rasgos válidos para Array: valor e iteradores, sin nodo. */
-template <typename Traits>
-concept ArrayTraitsConcept = requires {
-    typename Traits::value_type;
-    typename Traits::ForwardIterator;
-    typename Traits::ConstForwardIterator;
-};
-
-template <typename T> class ArrayIterator;
-template <typename Traits>
-    requires ArrayTraitsConcept<Traits>
-class Array;
 template <typename T, Bool Reverse> class VectorIterator;
 template <typename Traits, typename Ops = FullTraversalOps>
     requires BidirectionalContainerTraits<Traits>
@@ -176,16 +133,6 @@ template <typename Traits, typename Ops = ExprTraversalOps>
     requires ExprTreeTraitsConcept<Traits>
 class ExprTree;
 template <typename Number> struct ExprItem;
-
-/**
- * Tipos que configuran un Array: valor e iteradores.
- * @tparam T Tipo del valor.
- */
-template <typename T> struct ArrayTraits {
-    using value_type = T;
-    using ForwardIterator = ArrayIterator<T>;
-    using ConstForwardIterator = ArrayIterator<const T>;
-};
 
 /**
  * Tipos que configuran un Vector: valor, nodo e iteradores.
@@ -321,32 +268,6 @@ struct BTreeTraits {
     static constexpr Index order = Order;
 };
 
-template <typename Traits> class BPlusNode;
-template <typename Node, Bool Reverse> class BPlusIterator;
-
-/**
- * Tipos que configuran un árbol B+: todas las claves viven en las hojas, que están enlazadas entre sí.
- * @tparam T Tipo de la clave.
- * @tparam Comparator Criterio de orden.
- * @tparam Order Máximo de claves por nodo; al menos 3.
- * @tparam R Tipo de la referencia guardada junto a cada clave.
- */
-template <typename T, typename Comparator = std::less<T>, std::size_t Order = 4, typename R = Ref>
-    requires ComparatorFor<Comparator, T> && (Order >= 3)
-struct BPlusTreeTraits {
-    using value_type = T;
-    using ref_type = R;
-    using Compare = Comparator;
-    using Node = GeneralNode<T, R>;
-    using Index = std::ptrdiff_t;
-    using Page = BPlusNode<BPlusTreeTraits>;
-    using ForwardIterator = BPlusIterator<Page, false>;
-    using BackwardIterator = BPlusIterator<Page, true>;
-    using ConstForwardIterator = BPlusIterator<const Page, false>;
-    using ConstBackwardIterator = BPlusIterator<const Page, true>;
-    static constexpr Index order = Order;
-};
-
 template <typename Digest> class MerkleNode;
 template <typename T> struct StdMerkleHasher;
 
@@ -399,60 +320,6 @@ struct SheetTraits {
     using Formula = FormulaType;
     using Cache = CacheType;
     template <typename U> using Sequence = Vector<SequenceType<U>>;
-};
-
-template <typename Coord> struct Rect;
-template <typename Traits> class RTreeNode;
-
-/**
- * Tipos que configuran un Graph: vértices con posición, aristas con peso y un índice clave -> vértice.
- * @tparam V Tipo de la clave que identifica a un vértice.
- * @tparam W Tipo numérico del peso de las aristas.
- * @tparam Comparator Criterio de orden de las claves, que usa el índice.
- */
-template <typename V, typename W = Real, typename Comparator = std::less<V>>
-    requires ComparatorFor<Comparator, V> && std::is_arithmetic_v<W>
-struct GraphTraits {
-    using vertex_type = V;
-    using weight_type = W;
-    using Compare = Comparator;
-    using Index = std::ptrdiff_t;
-    /** Vértice: su clave, su posición en el espacio y la primera y última arista que salen de él. */
-    struct Vertex {
-        V key{};
-        Real x = 0, y = 0, z = 0;
-        Index head = -1, tail = -1;
-    };
-    /** Arista dirigida; las que salen de un mismo vértice forman una lista enlazada por `next`. */
-    struct Edge {
-        Index to = 0;
-        W weight{};
-        Index next = -1;
-        Bool alive = true;
-    };
-    using Vertices = Vector<VectorTraits<Vertex>>;
-    using Edges = Vector<VectorTraits<Edge>>;
-    using Lookup = HashTable<HashTableTraits<V, Index, Comparator>>;
-    template <typename U> using Sequence = Vector<VectorTraits<U>>;
-};
-
-/**
- * Tipos que configuran un RTree de rectángulos en el plano.
- * @tparam Coordinate Tipo numérico de las coordenadas.
- * @tparam Order Máximo de entradas por nodo; al menos 4.
- * @tparam R Tipo de la referencia guardada junto a cada rectángulo.
- */
-template <typename Coordinate = Real, std::size_t Order = 4, typename R = Ref>
-    requires std::is_arithmetic_v<Coordinate> && (Order >= 4)
-struct RTreeTraits {
-    using coord_type = Coordinate;
-    using value_type = Rect<Coordinate>;
-    using ref_type = R;
-    using Node = GeneralNode<value_type, R>;
-    using Index = std::ptrdiff_t;
-    using Page = RTreeNode<RTreeTraits>;
-    template <typename U> using Sequence = Vector<VectorTraits<U>>;
-    static constexpr Index order = Order;
 };
 
 #endif // __CONTAINERS_TRAITS_H__

@@ -1,14 +1,15 @@
 #ifndef __ARRAY_H__
 #define __ARRAY_H__
+#include <algorithm>
 #include <compare>
 #include <concepts>
+#include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include "../core/GeneralIterator.h"
-#include "../core/traits.h"
 #include "../../types.h"
 
 /**
@@ -43,6 +44,24 @@ public:
     /** Elemento a @p n posiciones del actual. */
     T& operator[](Offset n) const { return this->m_ptr[n]; }
     friend std::strong_ordering operator<=>(const MySelf& a, const MySelf& b) { return a.m_ptr <=> b.m_ptr; }
+};
+
+/** Rasgos válidos para Array: valor e iteradores, sin nodo. */
+template <typename Traits>
+concept ArrayTraitsConcept = requires {
+    typename Traits::value_type;
+    typename Traits::ForwardIterator;
+    typename Traits::ConstForwardIterator;
+};
+
+/**
+ * Tipos que configuran un Array: valor e iteradores.
+ * @tparam T Tipo del valor.
+ */
+template <typename T> struct ArrayTraits {
+    using value_type = T;
+    using ForwardIterator = ArrayIterator<T>;
+    using ConstForwardIterator = ArrayIterator<const T>;
 };
 
 /**
@@ -91,6 +110,13 @@ public:
     explicit Array(Count size) {
         resize(size);
         m_size = size;
+    }
+
+    /** Crea un arreglo con los elementos de @p values. */
+    Array(std::initializer_list<value_type> values) {
+        resize(static_cast<Count>(values.size()));
+        for (const value_type& value : values)
+            m_data[m_size++] = value;
     }
 
     /** Libera la memoria. */
@@ -155,6 +181,13 @@ public:
     [[nodiscard]] Count size()  const { return m_size; }
     /** Indica si no hay elementos. */
     [[nodiscard]] Bool  empty() const { return m_size == 0; }
+
+    /** Indica si ambos arreglos tienen los mismos elementos en el mismo orden. */
+    friend Bool operator==(const Array& a, const Array& b)
+        requires std::equality_comparable<value_type>
+    {
+        return a.m_size == b.m_size && std::equal(a.m_data, a.m_data + a.m_size, b.m_data);
+    }
 
     /** Iterador al primer elemento; es constante si el arreglo lo es. */
     template <typename Self> auto begin(this Self& self) { return IteratorFor<Self>(self.m_data); }
