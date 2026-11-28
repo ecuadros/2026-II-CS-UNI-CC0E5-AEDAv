@@ -1002,7 +1002,7 @@ private:
     }
 };
 
-// --- Scenario<Tree> (Command) ---
+// --- Scenario<Tree> 
 
 template <typename Tree>
 class Scenario {
@@ -1082,7 +1082,7 @@ vector<TX> Tens(TX n) {
     return keys;
 }
 
-// --- TreeFamilyDemo<Family> (Template Method) ---
+// --- TreeFamilyDemo<Family>
 
 template <template <typename> typename Family>
 class TreeFamilyDemo : public DemoSection {

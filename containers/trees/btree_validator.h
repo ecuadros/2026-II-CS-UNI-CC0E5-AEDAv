@@ -14,7 +14,7 @@
  * @class BTreeValidator
  * @ingroup trees
  * @brief Verifica orden, separadores, ocupación (`minKeysFor()`/`capacityFor()`), profundidad, enlaces y tamaño.
- * @warning No es seguro si otros hilos modifican el árbol.
+ 
  */
 template <typename Tree>
 class BTreeValidator {
@@ -29,7 +29,7 @@ private:
     Size                 m_counted{};
     std::optional<Size>  m_leafDepth;
 
-    /// Guarda la primera violación; siempre retorna `false`.
+    /// Guarda la primera 
     bool fail(const std::string& message) {
         if (m_error.empty()) m_error = message;
         return false;
@@ -89,11 +89,11 @@ public:
         return true;
     }
 
-    /// Primera violación (vacía si es válido).
+    /// 
     const std::string& error() const { return m_error; }
 };
 
-/// Valida `tree` y retorna el error (vacío si es válido).
+/// Valida `tree` y retorna el error
 template <typename Tree>
 std::string validateBTree(const Tree& tree) {
     BTreeValidator<Tree> validator(tree);

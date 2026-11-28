@@ -21,10 +21,6 @@ using BStarTree = BaseBStarTree<Traits, Callable, Applicable, Searchable, Revers
  * @ingroup trees
  * @brief Árbol B* sobre `BaseBTree` (redefine capacidad, mínimo y balanceo).
  *
- * Con orden `m >= 4`: capacidad `C = m - 1`, mínimo `L = ⌊2C/3⌋`,
- * raíz `R = 2C + 1`.
- *
- * @warning Copie o mueva solo entre árboles del mismo tipo.
  */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBStarTree : public BaseBTree<Traits, Mixins...> {
@@ -34,9 +30,9 @@ public:
     using typename Parent::Page;
     using typename Parent::PagePtr;
 
-    static constexpr Size MinOrder = 4;   ///< Garantiza `L >= 2`.
+    static constexpr Size MinOrder = 4;   // Garantiza `L >= 2`.
 
-    /// @throws std::invalid_argument Si `order < MinOrder`.
+    /// @throws 
     explicit BaseBStarTree(Size order = Parent::DefaultOrder) : Parent(order) {
         if (order < MinOrder) throw std::invalid_argument("El orden del arbol B* debe ser al menos 4");
     }
@@ -59,7 +55,7 @@ protected:
         return 2 * (m_order - 1) / 3;
     }
 
-    /// Overflow: división de raíz 1→3, rotación a un hermano o división 2→3.
+    /// Overflow división de raíz 1→3, rotación a un hermano o división 2→3.
     void handle_overflow(PagePtr page) override {
         PagePtr parent = page->parent();
         // Raíz recién creada con un único hijo.
@@ -82,7 +78,7 @@ protected:
             while (page->keyCount() > right->keyCount() + 1) this->borrow_from_left(parent, pos + 1);
             return;
         }
-        // Dividir 2→3 (preferir hermano derecho).
+        // Dividir 2→3
         this->redistribute_children(parent, right ? pos : pos - 1, 2, 3);
     }
 
@@ -119,13 +115,13 @@ protected:
             }
         }
 
-        // La raíz absorbe a sus hijos (reduce la altura).
+        // La raíz absorbe a sus hijos 
         if (parent->isRoot() && kids <= 3) {
             this->absorb_children(parent);
             return;
         }
 
-        // Fusión 3→2.
+        // Fusión 3→2
         if (kids >= 3) {
             this->redistribute_children(parent, first, 3, 2);
             return;

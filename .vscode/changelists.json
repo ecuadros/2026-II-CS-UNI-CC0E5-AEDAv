@@ -3,10 +3,9 @@
     {
       "name": "Default",
       "files": [
-        ".gitignore",
+        "containers/trees/btree.h",
         ".vscode/changelists.json",
         "containers/trees/bstar_tree.h",
-        "containers/trees/btree.h",
         "containers/trees/btree_validator.h",
         "demos.cpp"
       ]

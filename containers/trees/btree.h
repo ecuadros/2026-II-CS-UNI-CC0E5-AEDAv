@@ -1,11 +1,3 @@
-/**
- * @file btree.h
- * @ingroup trees
- * @brief Árbol B (`BaseBTree` / `BTree`), su página (`BTreePage`), iterador (`BTreeIterator`) y rasgos.
- *
- * La página guarda claves y enlaces; las políticas de balanceo las decide el
- * árbol mediante ganchos virtuales (Template Method), que variantes como B* redefinen.
- */
 
 #ifndef __BTREE_H__
 #define __BTREE_H__
@@ -22,16 +14,13 @@
 #include <utility>
 #include <vector>
 
-/// Rasgos del `BaseVector` que guarda las claves de una página.
+//aseVector que guarda las claves de una página.
 template <typename T, typename Compare>
 struct BTreeKeyTraits : public DefaultTraits<T, Compare>, public VectorTraits<T> {};
 
 /**
  * @class BTreePage
  * @ingroup trees
- * @brief Página con claves ordenadas, hijos propios (`unique_ptr`) y puntero al padre.
- *
- * Estable: una clave menos que hijos. Las primitivas admiten estados intermedios.
  */
 template <typename T, typename Compare>
 class BTreePage {
@@ -40,16 +29,16 @@ public:
     using MySelf     = BTreePage<T, Compare>;
     using KeyTraits  = BTreeKeyTraits<T, Compare>;
     using Keys       = BaseVector<KeyTraits>;
-    using Node       = typename Keys::Node;      ///< Valor + `Ref`.
-    using PagePtr    = MySelf*;                  ///< No propietario.
-    using PageOwner  = std::unique_ptr<MySelf>;  ///< Propietario.
+    using Node       = typename Keys::Node;      //Valor
+    using PagePtr    = MySelf*;                  //
+    using PageOwner  = std::unique_ptr<MySelf>;  //Propietario
     using Children   = std::vector<PageOwner>;
 
 private:
-    Keys     m_keys;               ///< Claves ordenadas.
-    Children m_children;           ///< Hijos (vacío en hojas).
-    PagePtr  m_parent = nullptr;   ///< `nullptr` en la raíz.
-    Size     m_capacity;           ///< Máximo de claves en estado estable.
+    Keys     m_keys;               // Claves ordenadas
+    Children m_children;           // Hijos vacío en hojas
+    PagePtr  m_parent = nullptr;   //`nullptr` en la raíz
+    Size     m_capacity;           // Máximo de claves en estado estable
 
     /// @throws std::out_of_range Si `pos >= limit`.
     static void checkRange(Index pos, Size limit, const char* what) {
@@ -57,7 +46,7 @@ private:
     }
 
 public:
-    /// Página hoja vacía. @throws std::invalid_argument Si `capacity == 0`.
+    /// Página hoja vacía
     explicit BTreePage(Size capacity) : m_capacity(capacity) {
         if (capacity == 0) throw std::invalid_argument("La capacidad de la pagina debe ser positiva");
         m_keys.reserve(capacity + 1);
@@ -69,9 +58,7 @@ public:
     BTreePage& operator=(const BTreePage&) = delete;
     BTreePage(BTreePage&&)                 = delete;
     BTreePage& operator=(BTreePage&&)      = delete;
-
-    // ---------------------------------------------------------------- consultas
-
+//
     Size capacity()   const { return m_capacity; }
     Size keyCount()   const { return m_keys.size(); }
     Size childCount() const { return m_children.size(); }
@@ -83,33 +70,33 @@ public:
 
     PagePtr parent() const { return m_parent; }
 
-    /// Cambia la capacidad sin reorganizar claves. @throws std::invalid_argument Si es 0.
+    /// Cambia la capacidad sin reorganizar claves
     void setCapacity(Size capacity) {
         if (capacity == 0) throw std::invalid_argument("La capacidad de la pagina debe ser positiva");
         m_capacity = capacity;
     }
 
-    /// Clave en `pos`. @throws std::out_of_range
+    /// Clave en `pos`
     const Node& key(Index pos) const {
         checkRange(pos, keyCount(), "Posicion de clave fuera de rango");
         return m_keys[pos];
     }
 
-    /// Clave mutable en `pos`. @throws std::out_of_range
+    /// Clave mutable en `pos`. 
     Node& key(Index pos) {
         checkRange(pos, keyCount(), "Posicion de clave fuera de rango");
         return m_keys[pos];
     }
 
-    /// Hijo en `pos`. @throws std::out_of_range
+    /// Hijo en `pos`.
     PagePtr child(Index pos) const {
         checkRange(pos, childCount(), "Posicion de hijo fuera de rango");
         return m_children[pos].get();
     }
 
-    // ---------------------------------------------------------------- búsqueda
+  
 
-    /// Primera posición cuya clave no precede a `value`; también es el hijo por el que descender.
+    /// Primera posición cuya clave 
     Index lowerBound(const value_type& value) const {
         Index first{};
         Index last = keyCount();
@@ -121,7 +108,7 @@ public:
         return first;
     }
 
-    /// `true` si la clave en `pos` es equivalente a `value`.
+    //verificamos
     bool matchesAt(Index pos, const value_type& value) const {
         return pos < keyCount() && !Compare{}(value, m_keys[pos].getValue())
                                 && !Compare{}(m_keys[pos].getValue(), value);
@@ -134,9 +121,9 @@ public:
         return std::nullopt;
     }
 
-    // ---------------------------------------------------------------- claves
+ 
 
-    /// Inserta `node` en `pos` desplazando el resto. @throws std::out_of_range
+    /// Inserta `node` en `pos` desplazando el resto.
     void insertKey(Index pos, const Node& node) {
         checkRange(pos, keyCount() + 1, "Posicion de insercion de clave fuera de rango");
         m_keys.push_back(node.getValue(), node.getRef());
@@ -154,7 +141,7 @@ public:
         return pos;
     }
 
-    /// Elimina y retorna la clave en `pos`. @throws std::out_of_range
+    /// Elimina y retorna la clave en `pos`.
     Node eraseKey(Index pos) {
         checkRange(pos, keyCount(), "Posicion de eliminacion de clave fuera de rango");
         Node removed = m_keys[pos];
@@ -164,9 +151,9 @@ public:
         return removed;
     }
 
-    // ---------------------------------------------------------------- hijos
+    
 
-    /// Inserta un hijo en `pos` y lo enlaza. @throws std::out_of_range, std::invalid_argument si es nulo.
+    /// Inserta un hijo en `pos` y lo enlaza. 
     PagePtr insertChild(Index pos, PageOwner page) {
         checkRange(pos, childCount() + 1, "Posicion de insercion de hijo fuera de rango");
         if (!page) throw std::invalid_argument("No se puede insertar un hijo nulo");
@@ -176,7 +163,7 @@ public:
         return raw;
     }
 
-    /// Extrae el hijo en `pos` y lo desenlaza. @throws std::out_of_range
+    /// Extrae el hijo en `pos` y lo desenlaza.
     PageOwner removeChild(Index pos) {
         checkRange(pos, childCount(), "Posicion de eliminacion de hijo fuera de rango");
         PageOwner page = std::move(m_children[pos]);
@@ -198,9 +185,9 @@ public:
         return m_parent->indexOfChild(this);
     }
 
-    // ---------------------------------------------------------------- copia y validación
+    
 
-    /// Copia profunda del subárbol (la raíz de la copia no tiene padre).
+    /// Copia profunda del subárbol 
     PageOwner clone() const {
         auto copy = std::make_unique<MySelf>(m_capacity);
         copy->m_keys = m_keys;
@@ -209,7 +196,7 @@ public:
         return copy;
     }
 
-    /// Verifica orden de claves, número de hijos y enlaces al padre (no la ocupación mínima).
+    /// Verifica orden de claves
     bool isWellFormed() const {
         for (Index i = 1; i < keyCount(); ++i)
             if (Compare{}(m_keys[i].getValue(), m_keys[i - 1].getValue())) return false;
@@ -224,9 +211,7 @@ public:
 
 /**
  * @class BTreeIterator
- * @ingroup trees
- * @brief Iterador in-order sin pila (espacio O(1)); sube usando `parent()`.
- * @tparam Dir `Asc` sigue a `Compare`; `Desc` lo invierte.
+ 
  */
 template <typename T, typename Compare, Direction Dir>
 class BTreeIterator : public GeneralIterator<BTreeIterator<T, Compare, Dir>, GeneralNode<T>> {
@@ -241,16 +226,16 @@ public:
 private:
     static constexpr bool Forward = (Dir == Direction::Asc);
 
-    PagePtr m_page = nullptr;   ///< `nullptr` en `end()`.
-    Index   m_pos{};            ///< Posición en `m_page`.
+    PagePtr m_page = nullptr;   
+    Index   m_pos{};            
 
-    /// Actualiza `m_ptr` desde `(m_page, m_pos)`.
+    /// Actualiza `m_ptr` 
     void sync() {
         if (!m_page) m_pos = 0;
         m_ptr = m_page ? &m_page->key(m_pos) : nullptr;
     }
 
-    /// Va a la primera clave (según `Dir`) del subárbol `page`.
+    /// Va a la primera clave 
     void descend(PagePtr page) {
         if constexpr (Forward) {
             while (!page->isLeaf()) page = page->child(0);
@@ -262,7 +247,7 @@ private:
         m_page = page;
     }
 
-    /// Sube hasta un ancestro con clave pendiente; si no hay, queda en `end()`.
+    /// Sube hasta un ancestro con clave pendiente
     void climb() {
         PagePtr page = m_page;
         while (std::optional<Index> slot = page->positionInParent()) {
@@ -277,7 +262,7 @@ private:
     }
 
 public:
-    /// Iterador en la primera clave; `end()` si `root` es nulo o vacío.
+    /// Iterador en la primera clave
     explicit BTreeIterator(PagePtr root = nullptr) : Parent(nullptr) {
         if (root && root->keyCount() > 0) descend(root);
         sync();
@@ -317,12 +302,12 @@ struct BTreeTraits {
     using BackwardIterator = BTreeIterator<T, Cmp, Direction::Desc>;
 };
 
-/// Árbol B ascendente (`std::less<T>`).
+/// Árbol B ascendente 
 template <typename T>
 struct BTreeAscTraits : public AscendingTraits<T>,
                         public BTreeTraits<T, typename AscendingTraits<T>::Compare> {};
 
-/// Árbol B descendente (`std::greater<T>`).
+/// Árbol B descendente 
 template <typename T>
 struct BTreeDescTraits : public DescendingTraits<T>,
                          public BTreeTraits<T, typename DescendingTraits<T>::Compare> {};
@@ -330,23 +315,13 @@ struct BTreeDescTraits : public DescendingTraits<T>,
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBTree;
 
-/// Árbol B estándar con todos los mixins (incluido `Drawable`).
+/// Árbol B estándar con todos los mixins 
 template <typename Traits>
 using BTree = BaseBTree<Traits, Callable, Applicable, Searchable, Reversible, Printable, Readable, Drawable>;
 
 /**
  * @class BaseBTree
- * @ingroup trees
- * @brief Árbol B de claves únicas sobre `GeneralContainer`.
- *
- * Orden `m` (>= 3, por defecto 5): máximo `m - 1` claves, mínimo `⌊(m - 1)/2⌋`.
- * La política se delega a `capacity()`, `min_keys()`, `handle_overflow()` y
- * `handle_underflow()`.
- *
- * @warning Búsqueda y mutación bloquean el mutex; recorridos manuales, vistas
- * inversas y punteros de `find()`/`getRoot()`/`FirstThat()` deben protegerse con `mutex()`.
- * @warning Mutar el árbol invalida iteradores y punteros. Una excepción a
- * mitad de una mutación puede dejar cambios parciales.
+ 
  */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBTree : public GeneralContainer<Traits, Mixins...> {
@@ -368,14 +343,14 @@ public:
 protected:
     using Parent::m_mutex;
     using Buffer = BaseVector<VectorAscTraits<value_type>>;   ///< Búfer de `rebuild()`.
-    PageOwner m_root;                  ///< `nullptr` si está vacío.
-    Size      m_order = DefaultOrder;  ///< Máximo de hijos por página.
-    Size      m_size{};                ///< Cantidad de claves.
+    PageOwner m_root;                  //`nullptr` si está vacío.
+    Size      m_order = DefaultOrder;  // Máximo de hijos por página.
+    Size      m_size{};                // Cantidad de claves.
 
     /// Resultado de `locate()`.
     struct Location {
-        PagePtr page;    ///< Página de la clave o hoja de inserción.
-        Index   pos;     ///< `lowerBound` en `page`.
+        PagePtr page;    // Página de la clave o hoja de inserción.
+        Index   pos;     // `lowerBound` en `page`.
         bool    found;
     };
 
@@ -394,7 +369,7 @@ protected:
     /// Página vacía con `capacity(isRoot)`.
     PageOwner make_page(bool isRoot) const { return std::make_unique<Page>(capacity(isRoot)); }
 
-    // ------------------------------------------------------------ ganchos (Template Method)
+
 
     /// Máximo de claves: `m - 1`.
     virtual Size capacity([[maybe_unused]] bool isRoot) const { return m_order - 1; }
@@ -419,8 +394,6 @@ protected:
         else if (left)                                          merge_children(parent, pos - 1);
         else                                                    merge_children(parent, pos);
     }
-
-    // ------------------------------------------------------------ operaciones reutilizables
 
     /// Divide `page` en dos y sube la mediana al padre.
     void split_in_two(PagePtr page) {
@@ -513,7 +486,6 @@ protected:
             page->insertChild(page->childCount(), pool->removeChild(0));
     }
 
-    // ------------------------------------------------------------ algoritmo común
 
     /// Propaga el overflow hacia la raíz, creciendo el árbol si hace falta.
     void propagate_overflow(PagePtr page) {
@@ -551,11 +523,11 @@ protected:
         PageOwner child = m_root->removeChild(0);
         child->setCapacity(capacity(true));
         m_root = std::move(child);
-        propagate_overflow(m_root.get());   // por si la capacidad de raíz es menor (variantes)
+        propagate_overflow(m_root.get());   // por si la capacidad de raíz es menor 
     }
 
 public:
-    /// @throws std::invalid_argument Si `order < MinOrder`.
+    /// 
     explicit BaseBTree(Size order = DefaultOrder) : Parent(), m_order(order) {
         if (order < MinOrder) throw std::invalid_argument("El orden del arbol B debe ser al menos 3");
     }
@@ -565,11 +537,7 @@ public:
     BaseBTree(BaseBTree&& other) noexcept : Parent() { *this = std::move(other); }
 
     virtual ~BaseBTree() { clear(); }
-
-    /**
-     * @brief Copia profunda (misma forma). Si falla, el destino no cambia.
-     * @warning Solo entre árboles del mismo tipo; conserva las capacidades del origen.
-     */
+//
     BaseBTree& operator=(const BaseBTree& other) {
         if (this == &other) return *this;
         std::scoped_lock lock(this->m_mutex, other.m_mutex);
@@ -590,7 +558,7 @@ public:
         return *this;
     }
 
-    /// Inserta si no existe. @return `false` si era duplicada.
+    /// Inserta si no existe. 
     bool insert(const value_type& value, Ref ref = 0) {
         std::lock_guard lock(m_mutex);
         if (!m_root) m_root = make_page(true);
@@ -602,10 +570,10 @@ public:
         return true;
     }
 
-    /// Igual que `insert()` (ignora duplicados).
+    /// Igual que `insert()` 
     void push_back(const value_type& value, Ref ref = 0) override { insert(value, ref); }
 
-    /// Elimina `value`; en página interna lo reemplaza por su predecesor. @return `true` si existía.
+    /// Elimina `value`; en página interna lo reemplaza por su predecesor. 
     bool remove(const value_type& value) {
         std::lock_guard lock(m_mutex);
         Location loc = locate(value);
@@ -624,7 +592,7 @@ public:
         return true;
     }
 
-    /// Busca `value` en O(h log m). @return Puntero al valor o `nullptr`.
+    /// Busca `value` en O(h log m)
     value_type* find(const value_type& value) {
         std::lock_guard lock(m_mutex);
         Location loc = locate(value);
@@ -661,10 +629,6 @@ public:
         m_size = 0;
     }
 
-    /**
-     * @brief Reinserta todas las claves (p. ej. tras `ApplyFunction()`).
-     * Ante duplicados conserva la primera. Invalida iteradores y punteros.
-     */
     void rebuild() override {
         std::lock_guard lock(m_mutex);
         Buffer items;
@@ -674,7 +638,7 @@ public:
         for (const Node& node : items) insert(node.getValue(), node.getRef());
     }
 
-    /// Raíz de solo lectura (no bloquea).
+    /// Raíz de solo lectura 
     const Page* getRoot() const { return m_root.get(); }
 
     /// Acceso público a `min_keys()`.
@@ -682,7 +646,7 @@ public:
     /// Acceso público a `capacity()`.
     Size capacityFor(bool isRoot) const { return capacity(isRoot); }
 
-    // Recorridos (no bloquean).
+    // Recorridos
     ForwardIterator  begin()  const override { return ForwardIterator(m_root.get()); }
     ForwardIterator  end()    const override { return ForwardIterator(nullptr); }
     BackwardIterator rbegin() const { return BackwardIterator(m_root.get()); }
