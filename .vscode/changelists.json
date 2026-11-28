@@ -3,27 +3,12 @@
     {
       "name": "Default",
       "files": [
-        "Doxyfile",
-        "Makefile",
-        "README.md",
+        ".gitignore",
+        ".vscode/changelists.json",
         "containers/trees/bstar_tree.h",
         "containers/trees/btree.h",
         "containers/trees/btree_validator.h",
-        "demos.cpp",
-        "demos.h",
-        "docs/groups.dox",
-        "docs/mainpage.md",
-        "tests/bstar_btree_test.cpp",
-        "tests/bstar_tree_test.cpp",
-        "tests/btree_concurrency_test.cpp",
-        "tests/btree_layout_test.cpp",
-        "tests/btree_mixins_test.cpp",
-        "tests/btree_suite.h",
-        "tests/btree_test.cpp",
-        "utilities/btree_metrics.h",
-        "utilities/layouts/btree_layout.h",
-        "utilities/side_by_side.h",
-        ".vscode/changelists.json"
+        "demos.cpp"
       ]
     }
   ],

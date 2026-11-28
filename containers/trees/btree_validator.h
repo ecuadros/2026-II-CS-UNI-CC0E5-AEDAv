@@ -1,7 +1,7 @@
 /**
  * @file btree_validator.h
  * @ingroup trees
- * @brief Validador reutilizable de invariantes para cualquier árbol derivado de `BaseBTree`.
+ * @brief Validador de invariantes para árboles derivados de `BaseBTree`.
  */
 
 #ifndef __BTREE_VALIDATOR_H__
@@ -13,11 +13,8 @@
 /**
  * @class BTreeValidator
  * @ingroup trees
- * @brief Verifica orden, separadores, ocupación, profundidad, enlaces y tamaño.
- *
- * Consulta los límites de la política por `minKeysFor()` y `capacityFor()`.
- * @warning Proteja la validación completa si otros hilos modifican el árbol.
- * @tparam Tree Tipo de árbol B.
+ * @brief Verifica orden, separadores, ocupación (`minKeysFor()`/`capacityFor()`), profundidad, enlaces y tamaño.
+ * @warning No es seguro si otros hilos modifican el árbol.
  */
 template <typename Tree>
 class BTreeValidator {
@@ -32,33 +29,16 @@ private:
     Size                 m_counted{};
     std::optional<Size>  m_leafDepth;
 
-    /**
-     * @brief Registra la primera violación encontrada.
-     * @param message Descripción de la violación.
-     * @return Siempre `false` (para encadenar con `return fail(...)`).
-     */
+    /// Guarda la primera violación; siempre retorna `false`.
     bool fail(const std::string& message) {
         if (m_error.empty()) m_error = message;
         return false;
     }
 
-    /**
-     * @brief Orden estricto por `Compare` entre dos nodos.
-     * @param a Primer nodo.
-     * @param b Segundo nodo.
-     * @return `true` si `a` precede a `b`.
-     */
+    /// `true` si `a` precede a `b` según `Compare`.
     bool precedes(const Node& a, const Node& b) const { return Compare{}(a.getValue(), b.getValue()); }
 
-    /**
-     * @brief Verifica recursivamente el subárbol `page`.
-     * @param page Página actual.
-     * @param parent Padre esperado.
-     * @param depth Profundidad de `page` (raíz = 1).
-     * @param low Cota inferior exclusiva (separador izquierdo) o `nullptr`.
-     * @param high Cota superior exclusiva (separador derecho) o `nullptr`.
-     * @return `true` si el subárbol cumple todas las invariantes.
-     */
+    /// Valida el subárbol `page` (raíz = profundidad 1) entre las cotas exclusivas `low` y `high`.
     bool visit(const Page* page, const Page* parent, Size depth, const Node* low, const Node* high) {
         bool root = parent == nullptr;
         if (page->parent() != parent)                    return fail("padre incorrecto");
@@ -90,13 +70,10 @@ private:
     }
 
 public:
-    /** @brief Crea un validador. @param tree Árbol a validar (debe vivir mientras se use el validador). */
+    /// `tree` debe vivir mientras se use el validador.
     explicit BTreeValidator(const Tree& tree) : m_tree(tree) {}
 
-    /**
-     * @brief Ejecuta la validación completa.
-     * @return `true` si todas las invariantes se cumplen; si no, `error()` describe la primera violación.
-     */
+    /// Valida el árbol; si falla, `error()` describe la primera violación.
     bool run() {
         m_error.clear();
         m_counted = 0;
@@ -112,16 +89,11 @@ public:
         return true;
     }
 
-    /** @brief Resultado de la última validación. @return Primera invariante violada (vacía si no hubo error). */
+    /// Primera violación (vacía si es válido).
     const std::string& error() const { return m_error; }
 };
 
-/**
- * @brief Atajo: valida `tree` y retorna el mensaje de error (vacío si es válido).
- * @tparam Tree Tipo de árbol.
- * @param tree Árbol a validar.
- * @return Primera invariante violada, o cadena vacía si el árbol es válido.
- */
+/// Valida `tree` y retorna el error (vacío si es válido).
 template <typename Tree>
 std::string validateBTree(const Tree& tree) {
     BTreeValidator<Tree> validator(tree);

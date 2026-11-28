@@ -1,7 +1,7 @@
 /**
  * @file bstar_tree.h
  * @ingroup trees
- * @brief Árbol B* con redistribución entre hermanos y capacidad especial de raíz.
+ * @brief Árbol B*: redistribución entre hermanos y raíz con mayor capacidad.
  */
 
 #ifndef __BSTAR_TREE_H__
@@ -12,28 +12,19 @@
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBStarTree;
 
-/**
- * @brief Árbol B* estándar con los mismos mixins que `BTree` (incluido `Drawable`); es un `BTree<Traits>`.
- * @tparam Traits `BTreeAscTraits<T>` o `BTreeDescTraits<T>`.
- */
+/// Árbol B* con los mismos mixins que `BTree`.
 template <typename Traits>
 using BStarTree = BaseBStarTree<Traits, Callable, Applicable, Searchable, Reversible, Printable, Readable, Drawable>;
 
 /**
  * @class BaseBStarTree
  * @ingroup trees
- * @brief Especializa la ocupación y el balanceo de `BaseBTree` mediante ganchos virtuales.
+ * @brief Árbol B* sobre `BaseBTree` (redefine capacidad, mínimo y balanceo).
  *
- * Con orden `m >= 4`, la capacidad ordinaria es `C = m - 1`, el mínimo
- * ordinario es `L = ⌊2C/3⌋` y la raíz admite `R = 2C + 1` claves.
- * Una página interna no raíz tiene al menos tres hijos.
+ * Con orden `m >= 4`: capacidad `C = m - 1`, mínimo `L = ⌊2C/3⌋`,
+ * raíz `R = 2C + 1`.
  *
- * @warning Copie o mueva solo entre árboles del mismo tipo dinámico.
- * Las capacidades de las páginas transferidas deben coincidir con la
- * política del destino. Para convertir, reinserte las claves y sus referencias.
- *
- * @tparam Traits Rasgos del árbol.
- * @tparam Mixins Mixins aplicados al contenedor.
+ * @warning Copie o mueva solo entre árboles del mismo tipo.
  */
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBStarTree : public BaseBTree<Traits, Mixins...> {
@@ -43,13 +34,9 @@ public:
     using typename Parent::Page;
     using typename Parent::PagePtr;
 
-    static constexpr Size MinOrder = 4;   /**< Orden mínimo admitido para B* (garantiza `L >= 2`). */
+    static constexpr Size MinOrder = 4;   ///< Garantiza `L >= 2`.
 
-    /**
-     * @brief Construye un árbol B* vacío.
-     * @param order Máximo de hijos por página (`>= MinOrder`).
-     * @throws std::invalid_argument Si `order < MinOrder`.
-     */
+    /// @throws std::invalid_argument Si `order < MinOrder`.
     explicit BaseBStarTree(Size order = Parent::DefaultOrder) : Parent(order) {
         if (order < MinOrder) throw std::invalid_argument("El orden del arbol B* debe ser al menos 4");
     }
@@ -57,47 +44,25 @@ public:
 protected:
     using Parent::m_order;
 
-    /**
-     * @brief Espacio libre de una página no raíz.
-     * @param page Página consultada.
-     * @return `capacity() - keyCount()`.
-     */
+    /// Espacio libre de una página.
     static Size free_cells(const Page& page) { return page.capacity() - page.keyCount(); }
 
-    /**
-     * @brief Capacidad: `C = m - 1` en páginas no raíz y `R = 2C + 1 = 2m - 1` en la raíz.
-     *
-     * `R` se elige para que, al desbordarse (`R + 1` claves) y dividirse en 3
-     * con 2 separadores, cada página reciba `2C / 3 >= L` claves.
-     * @param isRoot `true` si la página es (o será) la raíz.
-     * @return `R` para la raíz, `C` para las demás.
-     */
+    /// `R = 2C + 1` en la raíz (al dividirse en 3, cada página recibe `>= L`); `C` en las demás.
     Size capacity(bool isRoot) const override {
         Size pageCapacity = m_order - 1;
         return isRoot ? 2 * pageCapacity + 1 : pageCapacity;
     }
 
-    /**
-     * @brief Mínimo de claves: `L = ⌊2(m - 1)/3⌋` en páginas no raíz; 1 en la raíz.
-     * @param page Página consultada.
-     * @return Mínimo de claves de `page`.
-     */
+    /// `L` en páginas no raíz; 1 en la raíz.
     Size min_keys(const Page& page) const override {
         if (page.isRoot()) return 1;
         return 2 * (m_order - 1) / 3;
     }
 
-    /**
-     * @brief Overflow B*: división de la raíz 1→3, redistribución con un hermano o división 2→3.
-     *
-     * En las divisiones 1→3 (raíz) y 2→3 (hermanos), hay `2C + 2`
-     * claves contando los separadores. Dos quedan en el padre y cada
-     * página recibe `⌊2C/3⌋` o `⌈2C/3⌉`.
-     * @param page Página desbordada con padre.
-     */
+    /// Overflow: división de raíz 1→3, rotación a un hermano o división 2→3.
     void handle_overflow(PagePtr page) override {
         PagePtr parent = page->parent();
-        // La raíz recién creada tiene un único hijo.
+        // Raíz recién creada con un único hijo.
         if (parent->keyCount() == 0 && parent->childCount() == 1) {
             this->redistribute_children(parent, 0, 1, 3);
             return;
@@ -117,20 +82,11 @@ protected:
             while (page->keyCount() > right->keyCount() + 1) this->borrow_from_left(parent, pos + 1);
             return;
         }
-        // Dividir con el hermano derecho si existe.
+        // Dividir 2→3 (preferir hermano derecho).
         this->redistribute_children(parent, right ? pos : pos - 1, 2, 3);
     }
 
-    /**
-     * @brief Underflow B*: préstamo, reparto entre 3 hermanos, absorción por la raíz o fusión 3→2.
-     *
-     * El reparto 3→3 requiere al menos `3L` claves entre los hermanos.
-     * En la fusión 3→2 se reparten `3L` claves y cada página recibe a lo
-     * sumo `⌈3L/2⌉ <= C`. Si el padre es una raíz con dos o tres hijos y
-     * falla el reparto, los absorbe. El total con separadores es a lo
-     * sumo `2L` o `3L + 1`, respectivamente, y cabe en `R`.
-     * @param page Página no raíz por debajo del mínimo (puede ser destruida).
-     */
+    /// Underflow: préstamo, reparto 3→3, absorción por la raíz o fusión 3→2.
     void handle_underflow(PagePtr page) override {
         PagePtr parent = page->parent();
         Index   pos    = *page->positionInParent();
@@ -151,7 +107,7 @@ protected:
             return;
         }
 
-        // Ajustar la ventana de tres hermanos en los extremos.
+        // Reparto 3→3 si hay al menos 3L claves.
         Index first{};
         if (kids >= 3) {
             first = pos == 0 ? Index{} : (pos + 1 == kids ? pos - 2 : pos - 1);
@@ -163,12 +119,13 @@ protected:
             }
         }
 
-        // La absorción reduce la altura del árbol.
+        // La raíz absorbe a sus hijos (reduce la altura).
         if (parent->isRoot() && kids <= 3) {
             this->absorb_children(parent);
             return;
         }
 
+        // Fusión 3→2.
         if (kids >= 3) {
             this->redistribute_children(parent, first, 3, 2);
             return;

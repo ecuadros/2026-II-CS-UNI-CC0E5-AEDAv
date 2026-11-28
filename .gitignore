@@ -74,3 +74,6 @@ main
 *.txt
 tmp/
 output/
+
+#test
+/tests/

@@ -816,37 +816,25 @@ void DemoMerkleTree() {
 
 namespace {
 
-/** @brief Claves de ejemplo (~15) usadas por la construcción y la persistencia. */
 const vector<pair<TX, Ref>> BTreeSample = {
     {50, 1}, {20, 2}, {80, 3}, {10, 4}, {30, 5}, {70, 6}, {90, 7}, {5, 8},
     {15, 9}, {25, 10}, {35, 11}, {60, 12}, {75, 13}, {85, 14}, {95, 15}
 };
 
-/** @brief Claves pequeñas (10) para los dibujos lado a lado (dos niveles también en el B*). */
 const vector<TX> BTreeSmall = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 
-/** @brief Niega el valor del nodo (invierte el orden; `rebuild()` lo restaura). @param node Nodo a modificar. */
 void Negate(GeneralNode<TX>& node) { node.value() = -node.value(); }
 
-/** @brief Subtítulo con el mismo estilo que las demos existentes. @param text Texto del subtítulo. */
 void Subtitle(const string& text) {
     cout << styled(" ◉ " + text + " ").pure_black().bg_bright_cyan() << "\n";
 }
 
-// ----------------------------------------------------------------------------
-// DemoSection (Template Method)
-// ----------------------------------------------------------------------------
+// --- Demo ---
 
-/**
- * @class DemoSection
- * @ingroup demos
- * @brief Sección cuyo `execute()` presenta el título y delega el contenido a `run()`.
- */
 class DemoSection {
 public:
     virtual ~DemoSection() = default;
 
-    /** @brief Ejecuta la sección completa: título, contenido y separación. */
     void execute() const {
         cout << styled(" █ " + string(title()) + " ").pure_black().bg_bright_yellow() << "\n\n";
         run();
@@ -854,65 +842,30 @@ public:
     }
 
 protected:
-    /** @brief Título de la sección. @return Texto del título. */
     virtual string_view title() const = 0;
-    /** @brief Contenido de la sección. */
     virtual void run() const = 0;
 };
 
-// ----------------------------------------------------------------------------
-// TreeView (Strategy)
-// ----------------------------------------------------------------------------
 
-/**
- * @class TreeView
- * @ingroup demos
- * @brief Estrategia de visualización sobre `VisualGraph`.
- * `project()` permite proyectar cualquier árbol compatible con `BTreeLayout`.
- */
 class TreeView {
 public:
     virtual ~TreeView() = default;
 
-    /** @brief Muestra un grafo con un título. @param graph Grafo a mostrar. @param caption Título. */
     virtual void show(const VisualGraph& graph, const string& caption) const = 0;
-    /**
-     * @brief Muestra dos grafos para compararlos ("Antes" / "Después").
-     * @param left Grafo izquierdo.
-     * @param leftCaption Título del izquierdo.
-     * @param right Grafo derecho.
-     * @param rightCaption Título del derecho.
-     */
     virtual void compare(const VisualGraph& left, const string& leftCaption,
                          const VisualGraph& right, const string& rightCaption) const = 0;
 
-    /**
-     * @brief Proyecta un árbol con `BTreeLayout`, resaltando `pages` con el formatter por defecto.
-     * @tparam Tree Cualquier `BTree<...>` o `BStarTree<...>` (o una referencia a la base).
-     */
     template <typename Tree>
     static VisualGraph project(const Tree& tree, const BTreePageSet<typename Tree::Page>& pages = {}) {
         return BTreeLayout{highlight_pages(pages)}(tree);
     }
 
-    /**
-     * @brief Proyecta y muestra un árbol (plantilla de método sobre `show`).
-     * @tparam Tree Cualquier árbol B.
-     * @param tree Árbol a dibujar.
-     * @param caption Título.
-     * @param pages Páginas a resaltar.
-     */
     template <typename Tree>
     void draw(const Tree& tree, const string& caption, const BTreePageSet<typename Tree::Page>& pages = {}) const {
         show(project(tree, pages), caption);
     }
 };
 
-/**
- * @class GraphView
- * @ingroup demos
- * @brief Dibuja un grafo por vez mediante `ConsoleGraphRenderer`.
- */
 class GraphView : public TreeView {
 public:
     void show(const VisualGraph& graph, const string& caption) const override {
@@ -929,11 +882,6 @@ public:
     }
 };
 
-/**
- * @class SideBySideView
- * @ingroup demos
- * @brief Compone los dibujos Antes y Después según el ancho visible.
- */
 class SideBySideView final : public GraphView {
 public:
     void compare(const VisualGraph& left, const string& leftCaption,
@@ -942,18 +890,14 @@ public:
     }
 };
 
-// ----------------------------------------------------------------------------
-// Instrumented<Tree> (decorador por herencia)
-// ----------------------------------------------------------------------------
+// --- Instrumented<Tree> ---
 
-/** @brief Operaciones de balanceo que distingue `Instrumented`. */
 enum class BalanceOp {
     RootGrowth, RootSplit13, Split12, Split23,
     RedistributeLeft, RedistributeRight, BorrowLeft, BorrowRight, Redistribute3,
     Merge21, Merge32, RootContraction, RootAbsorb, Unknown
 };
 
-/** @brief Descripción en español de una operación de balanceo. @param op Operación. @return Texto descriptivo. */
 string_view describe(BalanceOp op) {
     switch (op) {
         case BalanceOp::RootGrowth:        return "crecimiento de raíz (división 1→2 de la raíz)";
@@ -974,14 +918,6 @@ string_view describe(BalanceOp op) {
     return "operación no reconocida";
 }
 
-/**
- * @class Instrumented
- * @ingroup demos
- * @brief Registra el balanceo al sobrescribir y delegar los ganchos del árbol.
- * Compara la altura y las claves de los hijos del padre antes y después
- * para distinguir divisiones, redistribuciones, préstamos y fusiones.
- * @tparam Tree Tipo de árbol instrumentado.
- */
 template <typename Tree>
 class Instrumented final : public Tree {
 public:
@@ -990,11 +926,8 @@ public:
     using typename Tree::PagePtr;
     using Keys = vector<typename Tree::value_type>;
 
-    /** @brief Operaciones registradas desde el último `clearEvents()`. @return Lista en orden de ocurrencia. */
     const vector<BalanceOp>& events() const { return m_events; }
-    /** @brief Olvida las operaciones registradas. */
     void clearEvents() { m_events.clear(); }
-    /** @brief Consulta si ocurrió una operación. @param op Operación buscada. @return `true` si `op` ocurrió desde el último `clearEvents()`. */
     bool happened(BalanceOp op) const { return std::find(m_events.begin(), m_events.end(), op) != m_events.end(); }
 
 protected:
@@ -1009,17 +942,16 @@ protected:
         Tree::handle_underflow(page);
         m_events.push_back(classify(before, false));
         if (m_events.back() == BalanceOp::Merge21 && before.parent->isRoot() && before.parent->keyCount() == 0)
-            m_events.push_back(BalanceOp::RootContraction);   // shrink_root de la base la contraerá
+            m_events.push_back(BalanceOp::RootContraction);   // shrink_root la contrae
     }
 
 private:
-    /** @brief Estado del padre antes de aplicar el gancho. */
     struct Snapshot {
-        PagePtr      parent;       /**< Padre de la página afectada (sobrevive al gancho). */
-        Index        pos;          /**< Posición de la página en el padre. */
-        Size         parentKeys;   /**< Claves del padre. */
-        Size         height;       /**< Altura del árbol. */
-        vector<Keys> children;     /**< Claves de cada hijo del padre. */
+        PagePtr      parent;
+        Index        pos;
+        Size         parentKeys;
+        Size         height;
+        vector<Keys> children;
     };
 
     vector<BalanceOp> m_events;
@@ -1070,43 +1002,19 @@ private:
     }
 };
 
-// ----------------------------------------------------------------------------
-// Scenario<Tree> (Command)
-// ----------------------------------------------------------------------------
+// --- Scenario<Tree> (Command) ---
 
-/**
- * @class Scenario
- * @ingroup demos
- * @brief Escenario de balanceo que prepara, ejecuta y verifica una mutación.
- * `play()` muestra el árbol antes y después y coteja la operación registrada.
- * @tparam Tree Tipo de árbol.
- */
 template <typename Tree>
 class Scenario {
 public:
-    /**
-     * @param name Nombre del caso.
-     * @param why Por qué la secuencia dispara el caso.
-     * @param order Orden del árbol.
-     * @param setup Claves que `prepare()` inserta en ese orden.
-     * @param key Clave que `apply()` inserta o elimina.
-     * @param expected Operación que debe registrarse.
-     */
     Scenario(string name, string why, Size order, vector<TX> setup, TX key, BalanceOp expected)
         : m_name(std::move(name)), m_why(std::move(why)), m_order(order),
           m_setup(std::move(setup)), m_key(key), m_expected(expected) {}
     virtual ~Scenario() = default;
 
-    /** @brief Nombre del caso. @return Nombre. */
     const string& name() const { return m_name; }
-    /** @brief Operación de balanceo esperada. @return Operación que `play()` verifica. */
     BalanceOp expected() const { return m_expected; }
 
-    /**
-     * @brief Ejecuta el caso completo y lo verifica.
-     * @param view Estrategia de visualización.
-     * @throws std::logic_error Si no ocurrió la operación esperada.
-     */
     void play(const TreeView& view) const {
         Instrumented<Tree> tree(m_order);
         prepare(tree);
@@ -1125,16 +1033,12 @@ public:
     }
 
 protected:
-    /** @brief Construye el estado inicial (por defecto inserta `setup` con `Ref` pequeños). @param tree Árbol instrumentado vacío. */
     virtual void prepare(Instrumented<Tree>& tree) const {
         Ref ref = 1;
         for (TX value : m_setup) tree.insert(value, ref++);
     }
-    /** @brief Operación que dispara el caso. @param tree Árbol preparado. */
     virtual void apply(Instrumented<Tree>& tree) const = 0;
-    /** @brief Texto de la operación. @return P. ej. `insert(45)`. */
     virtual string action() const = 0;
-    /** @brief Páginas a resaltar en el dibujo "Después". @param tree Árbol tras `apply()`. @return Conjunto de páginas. */
     virtual BTreePageSet<typename Tree::Page> affected(const Instrumented<Tree>& tree) const = 0;
 
     TX key() const { return m_key; }
@@ -1148,7 +1052,6 @@ private:
     BalanceOp  m_expected;
 };
 
-/** @brief Comando concreto: insertar una clave (resalta la página donde quedó). @ingroup demos @tparam Tree Tipo de árbol. */
 template <typename Tree>
 class InsertScenario final : public Scenario<Tree> {
 public:
@@ -1161,7 +1064,6 @@ protected:
     }
 };
 
-/** @brief Comando concreto: eliminar una clave (resalta el camino por donde estaba). @ingroup demos @tparam Tree Tipo de árbol. */
 template <typename Tree>
 class RemoveScenario final : public Scenario<Tree> {
 public:
@@ -1174,24 +1076,14 @@ protected:
     }
 };
 
-/** @brief Claves 10, 20, ..., 10·n. @param n Cantidad de claves. @return Vector `{10, 20, ..., 10·n}`. */
 vector<TX> Tens(TX n) {
     vector<TX> keys;
     for (TX i = 1; i <= n; ++i) keys.push_back(10 * i);
     return keys;
 }
 
-// ----------------------------------------------------------------------------
-// TreeFamilyDemo<Family> (Template Method)
-// ----------------------------------------------------------------------------
+// --- TreeFamilyDemo<Family> (Template Method) ---
 
-/**
- * @class TreeFamilyDemo
- * @ingroup demos
- * @brief Guion común de construcción, recorrido, mutación y persistencia.
- * `run()` fija el guion y `scenarios()` aporta los casos de balanceo de la familia.
- * @tparam Family Plantilla `BTree` o `BStarTree`.
- */
 template <template <typename> typename Family>
 class TreeFamilyDemo : public DemoSection {
 protected:
@@ -1199,9 +1091,8 @@ protected:
     using DescTree  = Family<BTreeDescTraits<TX>>;
     using Scenarios = vector<unique_ptr<Scenario<Tree>>>;
 
-    static constexpr Size Order = Tree::MinOrder;   /**< Orden de los árboles de la demo. */
+    static constexpr Size Order = Tree::MinOrder;
 
-    /** @brief Casos de balanceo propios de la familia. @return Comandos a ejecutar en el paso h. */
     virtual Scenarios scenarios() const = 0;
 
     void run() const final {
@@ -1221,7 +1112,6 @@ private:
 
     static string stem() { return "btree_orden" + std::to_string(Order); }
 
-    /** @brief Árbol con las claves de `BTreeSmall` (Ref = posición). @tparam T Tipo de árbol. @return Árbol de orden `Order`. */
     template <typename T>
     static T smallTree() {
         T tree(Order);
@@ -1317,11 +1207,6 @@ private:
     }
 };
 
-/**
- * @class BTreeDemo
- * @ingroup demos
- * @brief Demuestra el árbol B clásico y sus casos de balanceo de orden 3.
- */
 class BTreeDemo final : public TreeFamilyDemo<BTree> {
 protected:
     string_view title() const override { return "Pruebas para BTree (arbol B clasico)"; }
@@ -1346,11 +1231,6 @@ protected:
     }
 };
 
-/**
- * @class BStarTreeDemo
- * @ingroup demos
- * @brief Demuestra el árbol B* y sus casos de balanceo de orden 4.
- */
 class BStarTreeDemo final : public TreeFamilyDemo<BStarTree> {
 protected:
     string_view title() const override { return "Pruebas para BStarTree (arbol B*)"; }
@@ -1375,15 +1255,8 @@ protected:
     }
 };
 
-// ----------------------------------------------------------------------------
-// ComparisonDemo
-// ----------------------------------------------------------------------------
+// --- ComparisonDemo ---
 
-/**
- * @class ComparisonDemo
- * @ingroup demos
- * @brief Compara ocupación y despacho virtual a través de `BTree`.
- */
 class ComparisonDemo final : public DemoSection {
 protected:
     string_view title() const override { return "Comparacion BTree vs BStarTree"; }
@@ -1400,7 +1273,6 @@ private:
 
     SideBySideView m_view;
 
-    /** @brief Barra de ocupación `████░░` de 20 celdas. @param tenths Ocupación en décimas de %. @param star Verde (B*) o amarillo (clásico). @return Barra con ANSI. */
     static string bar(Size tenths, bool star) {
         Size filled = tenths * 20 / 1000;
         string full, empty;
@@ -1409,7 +1281,7 @@ private:
     }
 
     void polymorphism() const {
-        Subtitle("Polimorfismo: la misma secuencia via unique_ptr<BTree<...>>");
+        Subtitle("La misma secuencia via unique_ptr<BTree<...>>");
         vector<unique_ptr<Base>> trees;
         trees.push_back(make_unique<Base>(5));
         trees.push_back(make_unique<Star>(5));
@@ -1470,15 +1342,8 @@ private:
     }
 };
 
-// ----------------------------------------------------------------------------
-// ConcurrencyDemo
-// ----------------------------------------------------------------------------
+// --- ConcurrencyDemo ---
 
-/**
- * @class ConcurrencyDemo
- * @ingroup demos
- * @brief Inserta rangos disjuntos en paralelo y valida el B* resultante.
- */
 class ConcurrencyDemo final : public DemoSection {
 protected:
     string_view title() const override { return "Concurrencia en BStarTree"; }
@@ -1502,7 +1367,7 @@ protected:
         cout << "DemoBTreeConcurrency: " << NThreads << " hilos, se esperaban " << expected
              << " claves, el BStarTree quedo con " << tree.size() << "; suma esperada = " << expectedSum
              << ", obtenida = " << actualSum << "; "
-             << (error.empty() ? styled("invariantes OK").bright_green().str() : styled("invariantes ROTAS: " + error).bright_red().str())
+             << (error.empty() ? styled("").bright_green().str() : styled("invariantes ROTAS: " + error).bright_red().str())
              << "\n";
     }
 };
