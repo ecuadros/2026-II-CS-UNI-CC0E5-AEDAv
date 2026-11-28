@@ -7,7 +7,7 @@ SRCS     := main.cpp Demos.cpp containers/visual/Tui.cpp
 
 all: $(TARGET)
 
-$(TARGET): $(SRCS) $(shell find . -name "*.h")
+$(TARGET): $(SRCS) $(wildcard demos/*.cpp) $(shell find . -name "*.h")
 	$(CXX) $(CXXFLAGS) $(SRCS) -o $(TARGET)
 
 run: all

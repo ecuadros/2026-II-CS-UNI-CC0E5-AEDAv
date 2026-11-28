@@ -33,12 +33,6 @@ void DemoMerkleBitcoin();
 void DemoMerkleTreeStepByStep();
 /** Demo del árbol B*: pruebas genéricas e inserción, búsqueda y eliminación de caracteres. */
 void DemoBTree();
-/** Demo del árbol B+: pruebas genéricas, rangos, operaciones aleatorias, persistencia y concurrencia. */
-void DemoBPlusTree();
-/** Demo del grafo: recorridos, A*, persistencia, concurrencia y exportación VTK. */
-void DemoGraph();
-/** Demo del árbol R: inserción, búsqueda, eliminación, persistencia, concurrencia y exportación VTK. */
-void DemoRTree();
 /** Demo de lectura y escritura de archivos en todos los contenedores, con el formato `id valor`. */
 void DemoFiles();
 /** Comprobaciones de regresión: reentrada en `call`, iteradores inversos de un Vector vacío y liberación en `pop_back`. */
