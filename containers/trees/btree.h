@@ -44,19 +44,15 @@ struct BTreeKeyTraits : public DefaultTraits<T, Compare>, public VectorTraits<T>
 
 /**
  * @class BTreePage
- * @brief Página (nodo) de un árbol B con claves ordenadas, hijos propios y enlace al padre.
+ * @ingroup trees
+ * @brief Página con claves ordenadas, hijos propios y enlace no propietario al padre.
  *
- * Invariantes que garantizan las primitivas:
- * - Las claves quedan ordenadas según `Compare` si se insertan en la posición
- *   que retorna `lowerBound()`.
- * - Todo hijo insertado tiene `parent() == this`; todo hijo extraído queda con
- *   `parent() == nullptr`.
- * - En una página interna bien formada `childCount() == keyCount() + 1`
- *   (se verifica con `isWellFormed()`, no se impone en cada primitiva para
- *   permitir estados intermedios durante divisiones y fusiones).
+ * Cada hijo pertenece a un `std::unique_ptr`. Al insertar o extraer un hijo se
+ * actualiza su enlace al padre. Una página interna estable tiene una clave
+ * menos que hijos. Las primitivas permiten estados intermedios de balanceo.
  *
- * @tparam T Tipo de la clave almacenada.
- * @tparam Compare Comparador estricto (`std::less<T>`, `std::greater<T>`, ...).
+ * @tparam T Tipo de la clave.
+ * @tparam Compare Comparador estricto de claves.
  */
 template <typename T, typename Compare>
 class BTreePage {
@@ -76,7 +72,13 @@ private:
     PagePtr  m_parent = nullptr;   /**< Padre no propietario (`nullptr` en la raíz). */
     Size     m_capacity;           /**< Máximo de claves permitido en estado estable. */
 
-    /** @brief Lanza `std::out_of_range` si `pos >= limit`. */
+    /**
+     * @brief Verifica que una posición esté dentro del rango válido.
+     * @param pos Posición a verificar.
+     * @param limit Límite exclusivo.
+     * @param what Mensaje de la excepción.
+     * @throws std::out_of_range Si `pos >= limit`.
+     */
     static void checkRange(Index pos, Size limit, const char* what) {
         if (pos >= limit) throw std::out_of_range(what);
     }
@@ -92,9 +94,9 @@ public:
         m_keys.reserve(capacity + 1);
     }
 
+    /** @brief Destructor virtual; los hijos se liberan por `unique_ptr`. */
     virtual ~BTreePage() = default;
 
-    // La propiedad es única: las páginas se duplican con clone() y se mueven como PageOwner.
     BTreePage(const BTreePage&)            = delete;
     BTreePage& operator=(const BTreePage&) = delete;
     BTreePage(BTreePage&&)                 = delete;
@@ -108,13 +110,13 @@ public:
     Size keyCount()   const { return m_keys.size(); }
     /** @brief Cantidad de hijos. */
     Size childCount() const { return m_children.size(); }
-    /** @brief `true` si la página no tiene hijos. */
+    /** @brief Indica si la página no tiene hijos. @return `true` si es hoja. */
     bool isLeaf()     const { return m_children.empty(); }
-    /** @brief `true` si la página no tiene padre. */
+    /** @brief Indica si la página no tiene padre. @return `true` si es raíz. */
     bool isRoot()     const { return m_parent == nullptr; }
-    /** @brief `true` si la página alcanzó su capacidad. */
+    /** @brief Indica si la página alcanzó su capacidad. @return `keyCount() >= capacity()`. */
     bool isFull()     const { return keyCount() >= m_capacity; }
-    /** @brief `true` si la página excede su capacidad (estado transitorio de inserción). */
+    /** @brief Indica si la página excede su capacidad (estado transitorio de inserción). @return `keyCount() > capacity()`. */
     bool isOverflow() const { return keyCount() > m_capacity; }
 
     /** @brief Padre no propietario (`nullptr` en la raíz). */
@@ -225,7 +227,14 @@ public:
         m_keys[pos] = node;
     }
 
-    /** @brief Inserta `(value, ref)` en la posición `pos`. @see insertKey(Index, const Node&) */
+    /**
+     * @brief Inserta `(value, ref)` en la posición `pos`.
+     * @param pos Posición destino en `[0, keyCount()]`.
+     * @param value Valor de la clave.
+     * @param ref Referencia asociada.
+     * @throws std::out_of_range Si `pos > keyCount()`.
+     * @see insertKey(Index, const Node&)
+     */
     void insertKey(Index pos, const value_type& value, Ref ref) { insertKey(pos, Node(value, ref)); }
 
     /**
@@ -346,21 +355,16 @@ public:
 
 /**
  * @class BTreeIterator
- * @brief Iterador in-order sobre las claves de un árbol B sin pila, cola ni recursión.
+ * @ingroup trees
+ * @brief Iterador in-order con espacio auxiliar O(1), basado en `GeneralIterator` (CRTP).
  *
- * El estado es solo `(página, posición de clave)`. Para avanzar en la
- * dirección `Dir`:
- * - en una página interna, baja al extremo del subárbol siguiente
- *   (el más a la izquierda en `Asc`, el más a la derecha en `Desc`);
- * - en una hoja, mueve la posición si quedan claves;
- * - si no quedan, sube por `parent()` usando `positionInParent()` hasta
- *   encontrar un ancestro con una clave pendiente.
- *
- * `end()` se representa con página nula y posición 0.
+ * Guarda la página y la posición actuales. Avanza dentro de la hoja, baja
+ * al subárbol siguiente o sube por `parent()` y `positionInParent()` hasta
+ * encontrar un separador pendiente. Una página nula representa el fin.
  *
  * @tparam T Tipo de la clave.
- * @tparam Compare Comparador del árbol (define el orden almacenado).
- * @tparam Dir `Direction::Asc` (orden de `Compare`) o `Direction::Desc` (inverso).
+ * @tparam Compare Comparador del árbol.
+ * @tparam Dir `Direction::Asc` sigue a `Compare` y `Direction::Desc` invierte el recorrido.
  */
 template <typename T, typename Compare, Direction Dir>
 class BTreeIterator : public GeneralIterator<BTreeIterator<T, Compare, Dir>, GeneralNode<T>> {
@@ -384,7 +388,10 @@ private:
         m_ptr = m_page ? &m_page->key(m_pos) : nullptr;
     }
 
-    /** @brief Se posiciona en la primera clave (según `Dir`) del subárbol con raíz `page`. */
+    /**
+     * @brief Se posiciona en la primera clave (según `Dir`) del subárbol con raíz `page`.
+     * @param page Raíz del subárbol (no nula y con claves).
+     */
     void descend(PagePtr page) {
         if constexpr (Forward) {
             while (!page->isLeaf()) page = page->child(0);
@@ -420,7 +427,7 @@ public:
         sync();
     }
 
-    /** @brief Avanza a la siguiente clave en la dirección `Dir`. */
+    /** @brief Avanza a la siguiente clave en la dirección `Dir`. @return `*this`. */
     MySelf& operator++() {
         if (!m_page) return *this;
         if constexpr (Forward) {
@@ -436,26 +443,33 @@ public:
         return *this;
     }
 
-    /** @brief Página actual (`nullptr` en `end()`); útil para inspección y pruebas. */
+    /** @brief Página actual; útil para inspección y pruebas. @return Página (`nullptr` en `end()`). */
     PagePtr page()     const { return m_page; }
-    /** @brief Posición de la clave actual dentro de `page()`. */
+    /** @brief Posición de la clave actual. @return Índice dentro de `page()`. */
     Index   position() const { return m_pos; }
 
+    /**
+     * @brief Igualdad coherente con `end()`: misma página y misma posición.
+     * @param a Primer iterador.
+     * @param b Segundo iterador.
+     * @return `true` si apuntan a la misma clave (o ambos son `end()`).
+     */
     friend bool operator==(const MySelf& a, const MySelf& b) {
         return a.m_page == b.m_page && a.m_pos == b.m_pos;
     }
+    /**
+     * @brief Desigualdad.
+     * @param a Primer iterador.
+     * @param b Segundo iterador.
+     * @return `!(a == b)`.
+     */
     friend bool operator!=(const MySelf& a, const MySelf& b) { return !(a == b); }
 };
 
 /**
  * @struct BTreeTraits
- * @brief Rasgos estructurales del árbol B: nodo de clave, página e iteradores.
- *
- * Recibe el comparador como parámetro (en lugar del `PageFor<C>` de la
- * Fase 1) porque los iteradores, que `IterableCore` exige como tipos
- * concretos, dependen de él. `Compare` sigue definiéndose una sola vez, en
- * `AscendingTraits`/`DescendingTraits`; aquí solo se usa.
- *
+ * @ingroup trees
+ * @brief Define el nodo de clave, la página y los iteradores del árbol B.
  * @tparam T Tipo de la clave.
  * @tparam Cmp Comparador aportado por los rasgos de orden.
  */
@@ -467,12 +481,12 @@ struct BTreeTraits {
     using BackwardIterator = BTreeIterator<T, Cmp, Direction::Desc>;
 };
 
-/** @brief Rasgos de árbol B con orden ascendente (`std::less<T>`). */
+/** @brief Rasgos de árbol B con orden ascendente (`std::less<T>`). @tparam T Tipo de la clave. */
 template <typename T>
 struct BTreeAscTraits : public AscendingTraits<T>,
                         public BTreeTraits<T, typename AscendingTraits<T>::Compare> {};
 
-/** @brief Rasgos de árbol B con orden descendente (`std::greater<T>`). */
+/** @brief Rasgos de árbol B con orden descendente (`std::greater<T>`). @tparam T Tipo de la clave. */
 template <typename T>
 struct BTreeDescTraits : public DescendingTraits<T>,
                          public BTreeTraits<T, typename DescendingTraits<T>::Compare> {};
@@ -480,48 +494,38 @@ struct BTreeDescTraits : public DescendingTraits<T>,
 template <typename Traits, template <typename> typename... Mixins>
 class BaseBTree;
 
-/** @brief Árbol B estándar con mixins de consulta, mutación, reversa, serialización y dibujo (`BTreeLayout`). */
+/**
+ * @brief Árbol B estándar con mixins de consulta, mutación, reversa, serialización y dibujo (`BTreeLayout`).
+ * @tparam Traits `BTreeAscTraits<T>` o `BTreeDescTraits<T>`.
+ */
 template <typename Traits>
 using BTree = BaseBTree<Traits, Callable, Applicable, Searchable, Reversible, Printable, Readable, Drawable>;
 
 /**
  * @class BaseBTree
- * @brief Árbol B clásico, genérico y thread-safe, integrado con `GeneralContainer`.
+ * @ingroup trees
+ * @brief Árbol B de claves únicas integrado con `GeneralContainer`.
  *
- * **Orden.** El orden `m` es el número máximo de hijos por página
- * (definición de Knuth): cada página guarda a lo sumo `m - 1` claves y toda
- * página que no es raíz guarda al menos `⌈m/2⌉ - 1`. El orden mínimo
- * admitido es 3 (árbol 2-3) y el valor por defecto es 5.
+ * El orden `m` es el máximo ordinario de hijos. En el árbol clásico el
+ * máximo es `m - 1` claves por página y el mínimo ordinario es
+ * `⌊(m - 1)/2⌋`. Admite órdenes desde 3 y usa 5 por defecto.
  *
- * **Claves únicas.** Insertar una clave equivalente (según `Compare`) a una
- * existente no modifica el árbol y `insert()` retorna `false`.
+ * `insert()` y `remove()` comparten el descenso y la propagación por el
+ * padre. La política se delega a `capacity()`, `min_keys()`,
+ * `handle_overflow()` y `handle_underflow()` (Template Method).
  *
- * **Template Method.** `insert()` y `remove()` contienen el algoritmo común
- * (descenso con `lowerBound`, inserción en hoja, propagación hacia arriba por
- * `parent()`, crecimiento y contracción de la raíz, reemplazo por el
- * predecesor al borrar en una página interna). La política local se delega en
- * ganchos virtuales protegidos:
- * - `handle_overflow(page)`  — clásico: división 1→2 subiendo la mediana;
- * - `handle_underflow(page)` — clásico: préstamo del hermano izq/der o fusión 2→1;
- * - `min_keys(page)`         — mínimo de claves de una página;
- * - `capacity(es_raiz)`      — capacidad con la que se crea una página.
+ * @warning Las operaciones de búsqueda y mutación bloquean el mutex del árbol
+ * durante la llamada. Proteja con `mutex()` cualquier recorrido manual, la
+ * creación y el uso de vistas inversas (también `rcall()`) y el acceso a
+ * punteros o referencias devueltos por `find()`, `getRoot()` o `FirstThat()`
+ * si hay otros hilos que mutan el árbol. `call()` y la serialización
+ * mantienen el bloqueo durante el recorrido.
+ * @warning Una mutación estructural puede invalidar iteradores, punteros y
+ * referencias. Vuelva a obtenerlos después de modificar el árbol.
+ * @warning El balanceo modifica páginas por etapas. Una excepción durante
+ * una mutación o reinserción puede dejar cambios parciales.
  *
- * Una variante (p. ej. B*) solo sobrescribe esos ganchos y puede reutilizar las
- * operaciones protegidas `split_in_two`, `borrow_from_left`, `borrow_from_right`
- * y `merge_children`.
- *
- * **Concurrencia.** Todas las operaciones públicas que leen o modifican el
- * árbol (`insert`, `push_back`, `remove`, `find`, `size`, `height`, `order`,
- * `clear`, `rebuild`) toman `std::lock_guard` sobre el `recursive_mutex` del
- * contenedor; la copia y el movimiento bloquean ambos árboles con
- * `std::scoped_lock` (sin interbloqueo). Como en el resto del repositorio,
- * `begin()`/`end()`/`rbegin()`/`rend()` y `getRoot()` NO bloquean: un
- * recorrido manual con iteradores solo es seguro si ningún otro hilo modifica
- * el árbol. El recorrido seguro en presencia de otros hilos es mediante los
- * mixins, que sí bloquean durante todo el recorrido: `call()`, `FirstThat()`,
- * `rcall()`, `reversed()`, `ApplyFunction()` y `operator<<` / `operator>>`.
- *
- * @tparam Traits Rasgos del árbol (`BTreeAscTraits` o `BTreeDescTraits`).
+ * @tparam Traits Rasgos del árbol.
  * @tparam Mixins Mixins aplicados al contenedor.
  */
 template <typename Traits, template <typename> typename... Mixins>
@@ -571,7 +575,11 @@ protected:
         }
     }
 
-    /** @brief Crea una página vacía con la capacidad que indica `capacity(isRoot)`. */
+    /**
+     * @brief Crea una página vacía con la capacidad que indica `capacity(isRoot)`.
+     * @param isRoot `true` si la página será la raíz.
+     * @return Página propia sin claves ni hijos.
+     */
     PageOwner make_page(bool isRoot) const { return std::make_unique<Page>(capacity(isRoot)); }
 
     // ------------------------------------------------------------ ganchos (Template Method)
@@ -646,7 +654,7 @@ protected:
 
     /**
      * @brief Rotación a la derecha: el hijo `pos` recibe el separador `pos - 1` y el
-     *        hermano izquierdo cede su última clave (y su último hijo) al padre.
+     *        hermano izquierdo aporta la nueva clave separadora y, si es interno, cede su último hijo al receptor.
      * @param parent Página padre.
      * @param pos Posición del hijo receptor (`pos > 0`).
      */
@@ -661,7 +669,7 @@ protected:
 
     /**
      * @brief Rotación a la izquierda: el hijo `pos` recibe el separador `pos` y el
-     *        hermano derecho cede su primera clave (y su primer hijo) al padre.
+     *        hermano derecho aporta la nueva clave separadora y, si es interno, cede su primer hijo al receptor.
      * @param parent Página padre.
      * @param pos Posición del hijo receptor (`pos + 1 < parent->childCount()`).
      */
@@ -718,15 +726,9 @@ protected:
     /**
      * @brief Reparte equitativamente `count` hijos consecutivos (con sus separadores) en `outCount` páginas nuevas.
      *
-     * Primitiva genérica de redistribución/división/fusión entre hermanos:
-     * con `K` claves reunidas (hijos + separadores), `outCount - 1` suben al
-     * padre como separadores y las `K - outCount + 1` restantes se reparten
-     * en partes que difieren a lo sumo en 1 (las primeras páginas reciben el
-     * sobrante). Casos de uso: 1→3 (raíz B*), 2→3 (división B*), 3→3
-     * (redistribución), 3→2 (fusión B*), 2→2 o 2→1.
-     *
-     * No verifica capacidades ni mínimos: el gancho que la invoca garantiza
-     * que el reparto los respeta. Las páginas nuevas se crean con `capacity(false)`.
+     * De las `K` claves reunidas, `outCount - 1` quedan como separadores
+     * en el padre. Las demás se reparten con diferencia máxima de una
+     * clave. El llamador debe comprobar mínimos y capacidades.
      * @param parent Página padre.
      * @param first Posición del primer hijo.
      * @param count Cantidad de hijos de entrada (`>= 1`).
@@ -770,7 +772,10 @@ protected:
 
     // ------------------------------------------------------------ algoritmo común
 
-    /** @brief Propaga el overflow desde `page` hacia la raíz, haciendo crecer el árbol si hace falta. */
+    /**
+     * @brief Propaga el overflow desde `page` hacia la raíz, haciendo crecer el árbol si hace falta.
+     * @param page Página donde se insertó (o que recibió un separador).
+     */
     void propagate_overflow(PagePtr page) {
         while (page && page->isOverflow()) {
             if (page->isRoot()) grow_root();
@@ -789,7 +794,10 @@ protected:
         m_root = std::move(newRoot);
     }
 
-    /** @brief Propaga el underflow desde `page` hacia la raíz y luego contrae la raíz si quedó vacía. */
+    /**
+     * @brief Propaga el underflow desde `page` hacia la raíz y luego contrae la raíz si quedó vacía.
+     * @param page Hoja de la que se eliminó una clave.
+     */
     void propagate_underflow(PagePtr page) {
         while (!page->isRoot() && page->keyCount() < min_keys(*page)) {
             PagePtr parent = page->parent();
@@ -819,9 +827,16 @@ public:
         if (order < MinOrder) throw std::invalid_argument("El orden del arbol B debe ser al menos 3");
     }
 
-    /** @brief Constructor de copia estructural profunda. @see operator=(const BaseBTree&) */
+    /**
+     * @brief Constructor de copia estructural profunda.
+     * @param other Árbol origen del mismo tipo dinámico.
+     * @see operator=(const BaseBTree&)
+     */
     BaseBTree(const BaseBTree& other) : Parent::Core(), Parent() { *this = other; }
-    /** @brief Constructor de movimiento: el origen queda vacío y reutilizable. */
+    /**
+     * @brief Constructor de movimiento: el origen queda vacío y reutilizable.
+     * @param other Árbol origen.
+     */
     BaseBTree(BaseBTree&& other) noexcept : Parent() { *this = std::move(other); }
 
     /** @brief Destructor seguro: `clear()` bajo bloqueo; las páginas se liberan por `unique_ptr`. */
@@ -830,19 +845,13 @@ public:
     /**
      * @brief Asignación por copia estructural (misma forma) con `BTreePage::clone()`.
      *
-     * No usa `copy_from()` porque este reinsertaría cada clave (O(n log n) y
-     * con divisiones que pueden producir una forma distinta). La clonación es
-     * O(n), conserva exactamente la misma estructura, orden y tamaño, y se
-     * construye antes de reemplazar la raíz (garantía fuerte ante excepciones).
+     * Clona las páginas antes de sustituir la raíz. Si la clonación falla,
+     * el destino conserva su estado. La copia recorre las claves de cada página.
      *
-     * @warning Object slicing: la copia (y el movimiento) son de `BaseBTree`,
-     * así que asignar entre tipos distintos a través de `BaseBTree&` (p. ej.
-     * un `BStarTree` a un `BTree`) copia las páginas con las capacidades del
-     * tipo ORIGEN (`R = 2m-1` del B*), mientras los ganchos del destino
-     * esperan otras (`m-1`): el árbol resultante viola las invariantes del
-     * destino. Copie y mueva solo entre árboles del mismo tipo dinámico; para
-     * convertir entre tipos, reinserte las claves (p. ej. con `operator<<` /
-     * `operator>>` o recorriendo el origen).
+     * @warning Copie o mueva solo entre árboles del mismo tipo dinámico.
+     * La operación conserva las capacidades del origen, que pueden ser
+     * incompatibles con la política del destino. Para convertir entre
+     * variantes, reinserte los pares de clave y referencia.
      * @param other Árbol origen.
      * @return `*this`.
      */
@@ -860,7 +869,7 @@ public:
      * @brief Asignación por movimiento: transfiere raíz, orden y tamaño.
      *
      * El origen conserva su orden, queda vacío (`size() == 0`) y puede seguir usándose.
-     * @param other Árbol origen.
+     * @param other Árbol origen del mismo tipo dinámico.
      * @return `*this`.
      */
     BaseBTree& operator=(BaseBTree&& other) noexcept {
@@ -889,7 +898,11 @@ public:
         return true;
     }
 
-    /** @brief Inserta delegando en `insert()` (los duplicados se ignoran). */
+    /**
+     * @brief Inserta delegando en `insert()` (los duplicados se ignoran).
+     * @param value Clave a insertar.
+     * @param ref Referencia asociada.
+     */
     void push_back(const value_type& value, Ref ref = 0) override { insert(value, ref); }
 
     /**
@@ -920,7 +933,8 @@ public:
     }
 
     /**
-     * @brief Busca una clave equivalente a `value`.
+     * @brief Busca una clave equivalente a `value` mediante búsqueda binaria por página.
+     * @note Para altura `h`, realiza O(h log m) comparaciones.
      * @param value Clave buscada.
      * @return Puntero mutable al valor almacenado o `nullptr` si no existe.
      */
@@ -930,26 +944,30 @@ public:
         return loc.found ? &loc.page->key(loc.pos).value() : nullptr;
     }
 
-    /** @brief Igual que `find()` pero de solo lectura. */
+    /**
+     * @brief Igual que `find()` pero de solo lectura.
+     * @param value Clave buscada.
+     * @return Puntero constante al valor o `nullptr` si no existe.
+     */
     const value_type* find(const value_type& value) const {
         std::lock_guard lock(m_mutex);
         Location loc = locate(value);
         return loc.found ? &loc.page->key(loc.pos).value() : nullptr;
     }
 
-    /** @brief Cantidad de claves almacenadas. */
+    /** @brief Cantidad de claves almacenadas. @return Cantidad, leída bajo bloqueo. */
     Size size() const {
         std::lock_guard lock(m_mutex);
         return m_size;
     }
 
-    /** @brief Orden del árbol (máximo de hijos por página). */
+    /** @brief Orden del árbol. @return Máximo de hijos por página. */
     Size order() const {
         std::lock_guard lock(m_mutex);
         return m_order;
     }
 
-    /** @brief Altura en páginas (0 si está vacío, 1 si solo hay raíz). */
+    /** @brief Altura en páginas. @return 0 si está vacío, 1 si solo hay raíz. */
     Size height() const {
         std::lock_guard lock(m_mutex);
         Size h{};
@@ -967,18 +985,11 @@ public:
     /**
      * @brief Reconstruye el árbol reinsertando sus pares `(valor, ref)`.
      *
-     * Lo invoca `Applicable::ApplyFunction()` después de aplicar una función a
-     * las claves, porque el orden por `Compare` pudo romperse (p. ej. al negar
-     * los valores). Bajo el mutex del árbol: recolecta los pares con el
-     * iterador (orden estructural actual) en un `BaseVector` temporal, vacía
-     * el árbol y los reinserta.
-     *
-     * **Colisiones.** Si la función volvió equivalentes dos o más claves, se
-     * conserva la PRIMERA en el recorrido previo (con su `Ref`) y las demás se
-     * descartan, porque el árbol admite claves únicas; `size()` disminuye en
-     * consecuencia.
-     *
-     * **Costo.** O(n) para recolectar más O(n log n) para reinsertar: O(n log n).
+     * Tras `ApplyFunction()` recupera el orden por `Compare`. Si hay claves
+     * equivalentes, conserva la primera del recorrido previo con su `Ref`.
+     * @note La reinserción ocurre después de vaciar el árbol e invalida
+     * los iteradores, punteros y referencias a sus elementos. Una excepción
+     * puede dejar la reconstrucción incompleta.
      */
     void rebuild() override {
         std::lock_guard lock(m_mutex);
@@ -989,17 +1000,29 @@ public:
         for (const Node& node : items) insert(node.getValue(), node.getRef());
     }
 
-    /** @brief Raíz de solo lectura (para validación e inspección; no bloquea, ver contrato de concurrencia). */
+    /** @brief Raíz de solo lectura (no bloquea, ver contrato de concurrencia). @return Raíz o `nullptr` si está vacío. */
     const Page* getRoot() const { return m_root.get(); }
 
-    /** @brief Consulta pública (NVI) del gancho `min_keys()`. */
+    /**
+     * @brief Consulta pública (NVI) del gancho virtual `min_keys()`.
+     * @param page Página consultada.
+     * @return Mínimo de claves que la política del árbol exige a `page`.
+     */
     Size minKeysFor(const Page& page) const { return min_keys(page); }
-    /** @brief Consulta pública (NVI) del gancho `capacity()`. */
+    /**
+     * @brief Consulta pública (NVI) del gancho virtual `capacity()`.
+     * @param isRoot `true` para la raíz.
+     * @return Capacidad de una página raíz o no raíz.
+     */
     Size capacityFor(bool isRoot) const { return capacity(isRoot); }
 
+    /** @brief Inicio del recorrido in-order (no bloquea). @return Iterador a la primera clave. */
     ForwardIterator  begin()  const override { return ForwardIterator(m_root.get()); }
+    /** @brief Fin del recorrido in-order. @return Iterador `end()` (página nula). */
     ForwardIterator  end()    const override { return ForwardIterator(nullptr); }
+    /** @brief Inicio del recorrido inverso (no bloquea). @return Iterador a la última clave. */
     BackwardIterator rbegin() const { return BackwardIterator(m_root.get()); }
+    /** @brief Fin del recorrido inverso. @return Iterador `end()` (página nula). */
     BackwardIterator rend()   const { return BackwardIterator(nullptr); }
 };
 

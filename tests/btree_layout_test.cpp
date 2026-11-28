@@ -12,7 +12,7 @@
 #include "../utilities/layouts.h"
 #include "../utilities/side_by_side.h"
 #include "../types.h"
-#include "btree_validator.h"
+#include "../containers/trees/btree_validator.h"
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -56,7 +56,7 @@ TX widthOf(const std::string& text) {
     return width;
 }
 
-/** @brief Cantidad (`Size`) como coordenada o id (`TX`), sin cast. */
+/** @brief Convierte una cantidad en coordenada o id. */
 TX toCoord(Size n) {
     TX value = n;
     return value;

@@ -1,24 +1,15 @@
 /**
  * @file btree_concurrency_test.cpp
  * @ingroup trees
- * @brief Prueba de concurrencia de `BTree`: inserciones, borrados, búsquedas, copias e impresión en paralelo.
+ * @brief Inserción, borrado, búsqueda, copia e impresión concurrentes en árboles B y B*.
  *
- * Hilos simultáneos:
- * - 8 insertores de rangos disjuntos `[1 + t*Block, (t+1)*Block]`;
- * - 2 borradores de una carga previa disjunta (`Preload`);
- * - 2 buscadores de claves que se están insertando y borrando;
- * - 1 copiador que copia el árbol, valida la copia (instantánea tomada bajo
- *   bloqueo) e imprime el árbol original con `operator<<`.
- *
- * Al final: `size()` exacto, recorrido ordenado y `BTreeValidator` sin errores.
- * Se compila con ASan+UBSan y, aparte, con TSan (`make test`).
- * Retorna 0 si todo pasa; 1 si no.
+ * Comprueba el tamaño, el orden de recorrido y las invariantes al reunir los hilos.
  */
 
 #include "../containers/trees/btree.h"
 #include "../containers/trees/bstar_tree.h"
 #include "../types.h"
-#include "btree_validator.h"
+#include "../containers/trees/btree_validator.h"
 #include <atomic>
 #include <iostream>
 #include <sstream>

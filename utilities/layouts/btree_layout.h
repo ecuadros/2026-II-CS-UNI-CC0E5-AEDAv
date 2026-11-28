@@ -1,22 +1,7 @@
 /**
  * @file btree_layout.h
  * @ingroup layouts
- * @brief Layout n-ario (`BTreeLayout`) para `BTree` / `BStarTree`: un nodo visual por página, con roles y resaltado.
- *
- * Uso típico:
- * @code
- * tree.draw(BTreeLayout{}, ConsoleGraphRenderer(cout));                         // colores por defecto
- * tree.draw(BTreeLayout{[](const auto& page, BTreeRole role) { ... }}, r);      // formatter propio
- * tree.draw(BTreeLayout{highlight_pages(btree_search_path(tree, 42))}, r);      // camino de búsqueda
- * tree.draw(BTreeLayout{highlight_pages(btree_page_of(tree, 42), miLambda)}, r);
- * @endcode
- *
- * El resaltado se expresa como un formatter que envuelve a otro
- * (`BTreeHighlight`): si la página está en el conjunto, el rol pasa a
- * `BTreeRole::Highlight` y se delega en el formatter interno. Así
- * `BTreeLayout` conserva un único parámetro (`Formatter`) y cualquier
- * formatter (por defecto o lambda del cliente) puede combinarse con
- * cualquier conjunto de páginas.
+ * @brief Layout n-ario para árboles B y B*, con etiquetado y resaltado por página.
  */
 
 #ifndef __LAYOUTS_BTREE_LAYOUT_H__
@@ -37,18 +22,11 @@
 enum class BTreeRole { Root, Internal, Leaf, Highlight };
 
 /**
- * @brief Forma de dibujar las conexiones padre→hijos.
+ * @brief Conexiones entre páginas: bus de consola o aristas del grafo.
  *
- * `ConsoleGraphRenderer` decide en qué extremo de una arista va el tramo
- * horizontal con una regla pensada para árboles binarios: cuando un padre
- * tiene 2 o más hijos a su derecha, el tramo va en la fila del HIJO y queda
- * tapado por las etiquetas de los hermanos. Para árboles n-arios:
- * - `Bus` (por defecto): el layout agrega nodos conectores cuya etiqueta es
- *   el bus `╭──┬──┴──┬──╮` bajo el padre y las barras `│` sobre cada hijo; no
- *   emite aristas, así que el dibujo no depende de esa regla.
- * - `Edges`: topología pura, un nodo por página y una arista padre→hijo por
- *   cada hijo (nodos = páginas, aristas = páginas − 1), dibujada con las
- *   reglas del renderizador.
+ * `Bus` añade conectores para que las etiquetas de los hermanos no oculten
+ * el tramo horizontal del renderizador. `Edges` genera un nodo por página
+ * y una arista por enlace padre-hijo.
  */
 enum class BTreeLinks { Bus, Edges };
 
@@ -56,6 +34,7 @@ enum class BTreeLinks { Bus, Edges };
  * @brief Etiqueta de una página con SOLO los valores de sus claves: `[ 20 │ 40 ]`.
  * @tparam Page Tipo de página (`BTreePage<T, Compare>`).
  * @param page Página a etiquetar.
+ * @return Texto plano `[ k0 │ k1 │ ... ]`.
  */
 template <typename Page>
 std::string btree_page_label(const Page& page) {
@@ -71,6 +50,13 @@ std::string btree_page_label(const Page& page) {
 
 /** @brief Formatter por defecto: raíz magenta negrita subrayada, interna cian, hoja amarillo, resaltada con fondo rojo. */
 struct DefaultBTreeFormatter {
+    /**
+     * @brief Etiqueta coloreada según el rol.
+     * @tparam Page Tipo de página.
+     * @param page Página a etiquetar.
+     * @param role Rol semántico.
+     * @return Etiqueta con secuencias ANSI.
+     */
     template <typename Page>
     std::string operator()(const Page& page, BTreeRole role) const {
         std::string text = btree_page_label(page);
@@ -86,13 +72,22 @@ struct DefaultBTreeFormatter {
 
 /** @brief Formatter sin códigos ANSI (útil para pruebas, archivos y terminales sin color). */
 struct PlainBTreeFormatter {
+    /**
+     * @brief Etiqueta sin color.
+     * @tparam Page Tipo de página.
+     * @param page Página a etiquetar.
+     * @param role Rol semántico (ignorado).
+     * @return Etiqueta plana.
+     */
     template <typename Page>
     std::string operator()(const Page& page, [[maybe_unused]] BTreeRole role) const { return btree_page_label(page); }
 };
 
 /**
  * @class BTreePageSet
- * @brief Conjunto (por identidad) de páginas a resaltar.
+ * @brief Conjunto de punteros no propietarios a páginas para resaltar.
+ * @warning Use el conjunto mientras las páginas sigan vigentes y proteja
+ * con el mutex del árbol cualquier secuencia concurrente de búsqueda y dibujo.
  * @tparam Page Tipo de página.
  */
 template <typename Page>
@@ -100,13 +95,13 @@ class BTreePageSet {
     std::vector<const Page*> m_pages;
 public:
     BTreePageSet() = default;
-    /** @brief Construye el conjunto a partir de una lista de páginas. */
+    /** @brief Construye el conjunto a partir de una lista de páginas. @param pages Páginas iniciales. */
     BTreePageSet(std::initializer_list<const Page*> pages) : m_pages(pages) {}
-    /** @brief Agrega una página (se ignora `nullptr`). */
+    /** @brief Agrega una página (se ignora `nullptr`). @param page Página a agregar. */
     void add(const Page* page) { if (page) m_pages.push_back(page); }
-    /** @brief `true` si `page` pertenece al conjunto. */
+    /** @brief Pertenencia por identidad. @param page Página consultada. @return `true` si `page` está en el conjunto. */
     bool contains(const Page& page) const { return std::find(m_pages.begin(), m_pages.end(), &page) != m_pages.end(); }
-    /** @brief Cantidad de páginas del conjunto. */
+    /** @brief Cantidad de páginas del conjunto. @return Tamaño del conjunto. */
     Size size() const { return m_pages.size(); }
 };
 
@@ -121,8 +116,19 @@ class BTreeHighlight {
     BTreePageSet<Page> m_pages;
     Inner              m_inner;
 public:
+    /**
+     * @brief Construye el decorador.
+     * @param pages Páginas a resaltar.
+     * @param inner Formatter interno.
+     */
     BTreeHighlight(BTreePageSet<Page> pages, Inner inner) : m_pages(std::move(pages)), m_inner(std::move(inner)) {}
 
+    /**
+     * @brief Formatea `page`, con rol `Highlight` si pertenece al conjunto.
+     * @param page Página a etiquetar.
+     * @param role Rol calculado por el layout.
+     * @return Etiqueta producida por el formatter interno.
+     */
     std::string operator()(const Page& page, BTreeRole role) const {
         return m_inner(page, m_pages.contains(page) ? BTreeRole::Highlight : role);
     }
@@ -130,8 +136,11 @@ public:
 
 /**
  * @brief Crea un formatter que resalta `pages` y formatea el resto con `inner`.
+ * @tparam Page Tipo de página.
+ * @tparam Inner Tipo del formatter interno.
  * @param pages Páginas a resaltar.
  * @param inner Formatter interno (por defecto `DefaultBTreeFormatter`).
+ * @return Formatter `BTreeHighlight` listo para `BTreeLayout`.
  */
 template <typename Page, typename Inner = DefaultBTreeFormatter>
 BTreeHighlight<Page, Inner> highlight_pages(BTreePageSet<Page> pages, Inner inner = {}) {
@@ -140,8 +149,10 @@ BTreeHighlight<Page, Inner> highlight_pages(BTreePageSet<Page> pages, Inner inne
 
 /**
  * @brief Páginas visitadas al buscar `value` (desde la raíz hasta la página que la contiene o la hoja donde terminaría).
+ * @tparam Tree Tipo de árbol (`BTree` / `BStarTree` / derivado).
  * @param tree Árbol B (bloquea su mutex durante el descenso).
  * @param value Clave buscada.
+ * @return Una página por nivel recorrido.
  */
 template <typename Tree>
 BTreePageSet<typename Tree::Page> btree_search_path(const Tree& tree, const typename Tree::value_type& value) {
@@ -158,8 +169,10 @@ BTreePageSet<typename Tree::Page> btree_search_path(const Tree& tree, const type
 
 /**
  * @brief Página que contiene `value` (conjunto vacío si no existe).
+ * @tparam Tree Tipo de árbol (`BTree` / `BStarTree` / derivado).
  * @param tree Árbol B (bloquea su mutex durante el descenso).
  * @param value Clave buscada.
+ * @return Conjunto con 0 o 1 página.
  */
 template <typename Tree>
 BTreePageSet<typename Tree::Page> btree_page_of(const Tree& tree, const typename Tree::value_type& value) {
@@ -174,7 +187,7 @@ BTreePageSet<typename Tree::Page> btree_page_of(const Tree& tree, const typename
     return found;
 }
 
-/** @brief Nodo del borrador: una página con su profundidad y los ids de sus hijos. */
+/** @brief Nodo del borrador: una página con su profundidad y los ids de sus hijos. @tparam Page Tipo de página. */
 template <typename Page>
 struct BTreeDraftNode : DraftNode<const Page*, BTreeRole> {   // `payload == nullptr` en nodos conectores (modo `Bus`)
     TX depth = 0;                 /**< Profundidad (raíz = 0). */
@@ -183,22 +196,15 @@ struct BTreeDraftNode : DraftNode<const Page*, BTreeRole> {   // `payload == nul
 
 /**
  * @class BTreeLayout
- * @brief Proyecta un árbol B como grafo n-ario de arriba hacia abajo (un nodo visual por página).
+ * @ingroup layouts
+ * @brief Proyecta las páginas de un árbol B de arriba hacia abajo.
  *
- * - Topología: recorrido por niveles desde `getRoot()` (el propio vector de
- *   nodos del borrador actúa como cola); una arista padre→hijo por cada hijo.
- * - Coordenadas: `y = profundidad × vgap`; las hojas se colocan de izquierda
- *   a derecha con un cursor (`x += ancho visible + hgap`) y cada página
- *   interna se centra entre el centro de su primer y de su último hijo
- *   (post-orden). Si una etiqueta interna es más ancha que su subárbol y
- *   tocaría al nodo previo de su nivel, el subárbol completo se desplaza a
- *   la derecha (conserva el centrado).
- * - Conexiones: según `BTreeLinks` (por defecto `Bus`; ver `with_links()`).
- *   En modo `Bus` los nodos de página tienen ids `0 .. páginas-1` (orden por
- *   niveles) y los conectores ids posteriores.
- * - Árbol vacío: grafo vacío.
+ * Usa el pipeline CRTP de `BaseLayout`. Visita las páginas por niveles,
+ * separa las hojas según el ancho visible de sus etiquetas y centra cada
+ * padre entre sus hijos extremos. Desplaza subárboles al detectar
+ * solapamientos y genera conectores según `BTreeLinks`.
  *
- * @tparam Formatter `(const Page&, BTreeRole) -> std::string`; por defecto `DefaultBTreeFormatter`.
+ * @tparam Formatter Formateador `(const Page&, BTreeRole) -> std::string`.
  */
 template <typename Formatter = DefaultBTreeFormatter>
 class BTreeLayout : public BaseLayout<BTreeLayout<Formatter>, Formatter> {
@@ -212,7 +218,7 @@ private:
     TX         m_hgap  = 2;                 /**< Columnas mínimas entre páginas vecinas del mismo nivel. */
     BTreeLinks m_links = BTreeLinks::Bus;   /**< Forma de dibujar las conexiones. */
 
-    /** @brief Lanza `std::invalid_argument` si las separaciones no permiten dibujar el bus. */
+    /** @brief Valida las separaciones. @throws std::invalid_argument Si `vgap < 2` o `hgap < 1`. */
     void validate() const {
         if (m_vgap < 2 || m_hgap < 1) throw std::invalid_argument("BTreeLayout: vgap >= 2 y hgap >= 1");
     }
@@ -222,6 +228,8 @@ private:
      *
      * Punto único de conversión `Size`→`TX` (entero a entero, sin cast): las
      * etiquetas de una página nunca se acercan al límite de `TX`.
+     * @param label Etiqueta (puede contener ANSI).
+     * @return Columnas visibles.
      */
     static TX width_of(const std::string& label) {
         TX width = visible_length(label);
@@ -247,6 +255,7 @@ public:
     /**
      * @brief Copia del layout con otra forma de conexión (`BTreeLayout{}.with_links(BTreeLinks::Edges)`).
      * @param links Forma de dibujar las conexiones.
+     * @return Layout con la misma configuración y `links`.
      */
     BTreeLayout with_links(BTreeLinks links) const {
         BTreeLayout copy = *this;
@@ -254,17 +263,32 @@ public:
         return copy;
     }
 
-    /** @brief Forma de conexión configurada. */
+    /** @brief Forma de conexión configurada. @return `Bus` o `Edges`. */
     BTreeLinks links() const { return m_links; }
 
 private:
+    /**
+     * @brief Etapa 1 del pipeline: un nodo por página (por niveles) y, en modo `Edges`, una arista por hijo.
+     * @tparam Tree Tipo de árbol.
+     * @param tree Árbol a proyectar.
+     * @return Borrador con nodos, aristas y profundidad máxima.
+     */
     template <typename Tree>
     auto extract_topology_impl(const Tree& tree) const;
 
+    /**
+     * @brief Etapa 3 del pipeline: coordenadas (hojas con cursor, internas centradas en post-orden).
+     * @tparam Draft Tipo del borrador.
+     * @param draft Borrador con etiquetas ya formateadas.
+     */
     template <typename Draft>
     void compute_coordinates_impl(Draft& draft) const;
 
-    /** @brief Modo `Bus`: agrega, por cada página interna, el nodo del bus y los de las barras verticales. */
+    /**
+     * @brief Modo `Bus`: agrega, por cada página interna, el nodo del bus y los de las barras verticales.
+     * @tparam Draft Tipo del borrador.
+     * @param draft Borrador con coordenadas de página ya calculadas.
+     */
     template <typename Draft>
     void add_bus_connectors(Draft& draft) const;
 };

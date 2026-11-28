@@ -38,3 +38,27 @@
  * @defgroup demos Demostraciones y Punto de Entrada
  * @brief Suites de prueba, concurrencia y ejemplos interactivos en `main.cpp` y `demos.cpp`.
  */
+
+/**
+ * @addtogroup trees
+ * @details @ref BaseBTree comparte las operaciones de árboles multipágina.
+ * @ref BaseBStarTree especializa la ocupación y el balanceo mediante ganchos virtuales.
+ */
+
+/**
+ * @addtogroup layouts
+ * @details @ref BTreeLayout proyecta las páginas de árboles B y B* con roles
+ * semánticos, resaltado y conexiones por bus o aristas.
+ */
+
+/**
+ * @addtogroup visualization
+ * @details `side_by_side.h` compone dos dibujos de consola por ancho visible.
+ */
+
+/**
+ * @addtogroup demos
+ * @details `DemoBTree` y `DemoBStarTree` comparten un guion y verifican
+ * escenarios con árboles instrumentados. Las demos de comparación y
+ * concurrencia muestran el despacho virtual y las inserciones paralelas.
+ */

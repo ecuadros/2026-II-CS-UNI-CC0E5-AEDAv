@@ -11,7 +11,7 @@
 #include "../containers/trees/btree.h"
 #include "../containers/trees/bstar_tree.h"
 #include "../types.h"
-#include "btree_validator.h"
+#include "../containers/trees/btree_validator.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -176,7 +176,7 @@ void runApply(const std::string& name) {
     checkValid(halved, tag + "invariantes tras colisiones");
 }
 
-/** @brief Persistencia con `<<` / `>>` a archivo, leyendo en un árbol de OTRO orden. */
+/** @brief Persistencia con `<<` / `>>` a archivo, leyendo en un árbol de otro orden. */
 template <typename Tree>
 void runPersistence(const std::string& name, const std::filesystem::path& dir) {
     const std::string tag = name + " persistencia: ";

@@ -27,6 +27,18 @@
 #include "utilities/render.h"
 #include "utilities/layouts.h"
 #include "demos.h"
+#include <algorithm>
+#include <iomanip>
+#include <memory>
+#include <numeric>
+#include <random>
+#include <stdexcept>
+#include <string_view>
+#include "containers/trees/btree.h"
+#include "containers/trees/bstar_tree.h"
+#include "utilities/btree_metrics.h"
+#include "utilities/side_by_side.h"
+#include "containers/trees/btree_validator.h"
 using namespace std;
 
 filesystem::path OUTPUT_DIR_PATH = "output";
@@ -799,30 +811,8 @@ void DemoMerkleTree() {
          << endl;
 }
 
-// ============================================================================
-// Demos de BTree y BStarTree (Fase 6)
-// ============================================================================
-//
-// Jerarquía (todo en un espacio de nombres anónimo):
-// - DemoSection       (Template Method): execute() fija título → run() → línea en blanco.
-// - TreeView          (Strategy): cómo mostrar uno o dos árboles; GraphView / SideBySideView.
-// - Instrumented<T>   (Decorador por herencia): registra la operación de balanceo de cada gancho.
-// - Scenario<T>       (Command): prepare → "Antes" → apply → "Después" → verificación.
-// - TreeFamilyDemo<F> (Template Method): guion común (a..h); BTreeDemo / BStarTreeDemo.
-// - ComparisonDemo, ConcurrencyDemo: secciones finales.
 
-#include <algorithm>
-#include <iomanip>
-#include <memory>
-#include <numeric>
-#include <random>
-#include <stdexcept>
-#include <string_view>
-#include "containers/trees/btree.h"
-#include "containers/trees/bstar_tree.h"
-#include "utilities/btree_metrics.h"
-#include "utilities/side_by_side.h"
-#include "tests/btree_validator.h"
+// Demos de BTree y BStarTree
 
 namespace {
 
@@ -835,10 +825,10 @@ const vector<pair<TX, Ref>> BTreeSample = {
 /** @brief Claves pequeñas (10) para los dibujos lado a lado (dos niveles también en el B*). */
 const vector<TX> BTreeSmall = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 
-/** @brief Niega el valor del nodo (invierte el orden; `rebuild()` lo restaura). */
+/** @brief Niega el valor del nodo (invierte el orden; `rebuild()` lo restaura). @param node Nodo a modificar. */
 void Negate(GeneralNode<TX>& node) { node.value() = -node.value(); }
 
-/** @brief Subtítulo con el mismo estilo que las demos existentes. */
+/** @brief Subtítulo con el mismo estilo que las demos existentes. @param text Texto del subtítulo. */
 void Subtitle(const string& text) {
     cout << styled(" ◉ " + text + " ").pure_black().bg_bright_cyan() << "\n";
 }
@@ -849,11 +839,8 @@ void Subtitle(const string& text) {
 
 /**
  * @class DemoSection
- * @brief Sección de demostración (patrón Template Method).
- *
- * `execute()` es el algoritmo fijo: imprime el título con el estilo del
- * repositorio, ejecuta `run()` y deja una línea en blanco. Las subclases
- * solo definen `title()` y `run()`.
+ * @ingroup demos
+ * @brief Sección cuyo `execute()` presenta el título y delega el contenido a `run()`.
  */
 class DemoSection {
 public:
@@ -867,7 +854,7 @@ public:
     }
 
 protected:
-    /** @brief Título de la sección. */
+    /** @brief Título de la sección. @return Texto del título. */
     virtual string_view title() const = 0;
     /** @brief Contenido de la sección. */
     virtual void run() const = 0;
@@ -879,22 +866,23 @@ protected:
 
 /**
  * @class TreeView
- * @brief Estrategia de visualización de árboles B (patrón Strategy).
- *
- * La interfaz virtual recibe `VisualGraph`, que ya es independiente del tipo
- * de árbol: así funciona igual con `BTree` y `BStarTree` (y con cualquier
- * `Traits`). La proyección árbol→grafo es una plantilla de método NO
- * virtual (`project` / `draw`), porque C++ no admite plantillas de funciones
- * virtuales; la parte que varía (cómo se muestran uno o dos grafos) sí es
- * virtual.
+ * @ingroup demos
+ * @brief Estrategia de visualización sobre `VisualGraph`.
+ * `project()` permite proyectar cualquier árbol compatible con `BTreeLayout`.
  */
 class TreeView {
 public:
     virtual ~TreeView() = default;
 
-    /** @brief Muestra un grafo con un título. */
+    /** @brief Muestra un grafo con un título. @param graph Grafo a mostrar. @param caption Título. */
     virtual void show(const VisualGraph& graph, const string& caption) const = 0;
-    /** @brief Muestra dos grafos para compararlos ("Antes" / "Después"). */
+    /**
+     * @brief Muestra dos grafos para compararlos ("Antes" / "Después").
+     * @param left Grafo izquierdo.
+     * @param leftCaption Título del izquierdo.
+     * @param right Grafo derecho.
+     * @param rightCaption Título del derecho.
+     */
     virtual void compare(const VisualGraph& left, const string& leftCaption,
                          const VisualGraph& right, const string& rightCaption) const = 0;
 
@@ -907,7 +895,13 @@ public:
         return BTreeLayout{highlight_pages(pages)}(tree);
     }
 
-    /** @brief Proyecta y muestra un árbol (plantilla de método sobre `show`). */
+    /**
+     * @brief Proyecta y muestra un árbol (plantilla de método sobre `show`).
+     * @tparam Tree Cualquier árbol B.
+     * @param tree Árbol a dibujar.
+     * @param caption Título.
+     * @param pages Páginas a resaltar.
+     */
     template <typename Tree>
     void draw(const Tree& tree, const string& caption, const BTreePageSet<typename Tree::Page>& pages = {}) const {
         show(project(tree, pages), caption);
@@ -916,10 +910,8 @@ public:
 
 /**
  * @class GraphView
- * @brief Estrategia básica: `BTreeLayout` + `ConsoleGraphRenderer`, un dibujo debajo del otro.
- *
- * Renderiza en memoria y emite las líneas rasterizadas (`console_lines`),
- * de modo que la salida también se lee bien al redirigirla a un archivo.
+ * @ingroup demos
+ * @brief Dibuja un grafo por vez mediante `ConsoleGraphRenderer`.
  */
 class GraphView : public TreeView {
 public:
@@ -939,7 +931,8 @@ public:
 
 /**
  * @class SideBySideView
- * @brief Estrategia "Antes ┃ Después": compara lado a lado con `side_by_side` (apila si supera 120 columnas).
+ * @ingroup demos
+ * @brief Compone los dibujos Antes y Después según el ancho visible.
  */
 class SideBySideView final : public GraphView {
 public:
@@ -960,7 +953,7 @@ enum class BalanceOp {
     Merge21, Merge32, RootContraction, RootAbsorb, Unknown
 };
 
-/** @brief Descripción en español de una operación de balanceo. */
+/** @brief Descripción en español de una operación de balanceo. @param op Operación. @return Texto descriptivo. */
 string_view describe(BalanceOp op) {
     switch (op) {
         case BalanceOp::RootGrowth:        return "crecimiento de raíz (división 1→2 de la raíz)";
@@ -983,24 +976,11 @@ string_view describe(BalanceOp op) {
 
 /**
  * @class Instrumented
- * @brief Decorador por herencia: sobrescribe `handle_overflow` / `handle_underflow`,
- *        delega en la base y registra QUÉ operación de balanceo ocurrió.
- *
- * La operación se deduce comparando, en el padre de la página afectada,
- * las claves de cada hijo antes y después (una lista de claves que no
- * cambió es una página no tocada), la cantidad de hijos y la altura:
- * - overflow con padre recién creado por `grow_root` (0 claves, 1 hijo):
- *   2 hijos después → crecimiento de raíz; 3 → división de raíz 1→3;
- * - overflow con un hijo más: 1 página cambiada → 1→2; 2 → 2→3;
- * - overflow con los mismos hijos: redistribución hacia el hermano cambiado;
- * - underflow en la raíz con altura menor → absorción (MergeRoot);
- * - underflow con un hijo menos: 2 cambiadas → fusión 2→1 (y contracción de
- *   raíz si la raíz quedó sin claves); 3 → fusión 3→2;
- * - underflow con los mismos hijos: 2 adyacentes → préstamo; 3 → reparto entre 3.
- *
- * No requiere cambios en `btree.h` ni `bstar_tree.h`: los ganchos son
- * protegidos y virtuales, y la lectura usa solo la interfaz pública de la página.
- * @tparam Tree `BTree<...>` o `BStarTree<...>`.
+ * @ingroup demos
+ * @brief Registra el balanceo al sobrescribir y delegar los ganchos del árbol.
+ * Compara la altura y las claves de los hijos del padre antes y después
+ * para distinguir divisiones, redistribuciones, préstamos y fusiones.
+ * @tparam Tree Tipo de árbol instrumentado.
  */
 template <typename Tree>
 class Instrumented final : public Tree {
@@ -1010,11 +990,11 @@ public:
     using typename Tree::PagePtr;
     using Keys = vector<typename Tree::value_type>;
 
-    /** @brief Operaciones registradas desde el último `clearEvents()`. */
+    /** @brief Operaciones registradas desde el último `clearEvents()`. @return Lista en orden de ocurrencia. */
     const vector<BalanceOp>& events() const { return m_events; }
     /** @brief Olvida las operaciones registradas. */
     void clearEvents() { m_events.clear(); }
-    /** @brief `true` si `op` ocurrió desde el último `clearEvents()`. */
+    /** @brief Consulta si ocurrió una operación. @param op Operación buscada. @return `true` si `op` ocurrió desde el último `clearEvents()`. */
     bool happened(BalanceOp op) const { return std::find(m_events.begin(), m_events.end(), op) != m_events.end(); }
 
 protected:
@@ -1096,14 +1076,10 @@ private:
 
 /**
  * @class Scenario
- * @brief Caso de balanceo reproducible (patrón Command) que además se verifica a sí mismo.
- *
- * `play()` es el algoritmo fijo y no es virtual (el especificador `final`
- * solo aplica a funciones virtuales; no serlo tiene el mismo efecto):
- * `prepare` → dibujo "Antes" con el camino de la clave resaltado → `apply`
- * → "Después" con la página afectada resaltada → verificación con
- * `Instrumented` de que ocurrió `expected()`; si no, lanza `std::logic_error`.
- * @tparam Tree `BTree<...>` o `BStarTree<...>`.
+ * @ingroup demos
+ * @brief Escenario de balanceo que prepara, ejecuta y verifica una mutación.
+ * `play()` muestra el árbol antes y después y coteja la operación registrada.
+ * @tparam Tree Tipo de árbol.
  */
 template <typename Tree>
 class Scenario {
@@ -1121,9 +1097,9 @@ public:
           m_setup(std::move(setup)), m_key(key), m_expected(expected) {}
     virtual ~Scenario() = default;
 
-    /** @brief Nombre del caso. */
+    /** @brief Nombre del caso. @return Nombre. */
     const string& name() const { return m_name; }
-    /** @brief Operación de balanceo esperada. */
+    /** @brief Operación de balanceo esperada. @return Operación que `play()` verifica. */
     BalanceOp expected() const { return m_expected; }
 
     /**
@@ -1149,16 +1125,16 @@ public:
     }
 
 protected:
-    /** @brief Construye el estado inicial (por defecto inserta `setup` con `Ref` pequeños). */
+    /** @brief Construye el estado inicial (por defecto inserta `setup` con `Ref` pequeños). @param tree Árbol instrumentado vacío. */
     virtual void prepare(Instrumented<Tree>& tree) const {
         Ref ref = 1;
         for (TX value : m_setup) tree.insert(value, ref++);
     }
-    /** @brief Operación que dispara el caso. */
+    /** @brief Operación que dispara el caso. @param tree Árbol preparado. */
     virtual void apply(Instrumented<Tree>& tree) const = 0;
-    /** @brief Texto de la operación (p. ej. `insert(45)`). */
+    /** @brief Texto de la operación. @return P. ej. `insert(45)`. */
     virtual string action() const = 0;
-    /** @brief Páginas a resaltar en el dibujo "Después". */
+    /** @brief Páginas a resaltar en el dibujo "Después". @param tree Árbol tras `apply()`. @return Conjunto de páginas. */
     virtual BTreePageSet<typename Tree::Page> affected(const Instrumented<Tree>& tree) const = 0;
 
     TX key() const { return m_key; }
@@ -1172,7 +1148,7 @@ private:
     BalanceOp  m_expected;
 };
 
-/** @brief Comando concreto: insertar una clave (resalta la página donde quedó). */
+/** @brief Comando concreto: insertar una clave (resalta la página donde quedó). @ingroup demos @tparam Tree Tipo de árbol. */
 template <typename Tree>
 class InsertScenario final : public Scenario<Tree> {
 public:
@@ -1185,7 +1161,7 @@ protected:
     }
 };
 
-/** @brief Comando concreto: eliminar una clave (resalta el camino por donde estaba). */
+/** @brief Comando concreto: eliminar una clave (resalta el camino por donde estaba). @ingroup demos @tparam Tree Tipo de árbol. */
 template <typename Tree>
 class RemoveScenario final : public Scenario<Tree> {
 public:
@@ -1198,7 +1174,7 @@ protected:
     }
 };
 
-/** @brief Claves 10, 20, ..., 10·n. */
+/** @brief Claves 10, 20, ..., 10·n. @param n Cantidad de claves. @return Vector `{10, 20, ..., 10·n}`. */
 vector<TX> Tens(TX n) {
     vector<TX> keys;
     for (TX i = 1; i <= n; ++i) keys.push_back(10 * i);
@@ -1211,14 +1187,10 @@ vector<TX> Tens(TX n) {
 
 /**
  * @class TreeFamilyDemo
- * @brief Guion común de demostración para una familia de árboles B (patrón Template Method).
- *
- * `run()` fija los pasos a..h (construcción, búsqueda, recorridos,
- * ApplyFunction, copia/movimiento, persistencia, traits y escenarios); lo
- * propio de cada familia es `scenarios()` (y `title()`). El orden usado es el
- * mínimo admitido por la familia (`MinOrder`: 3 en B, 4 en B*), que es el que
- * produce más balanceos con pocas claves.
- * @tparam Family Plantilla de alias `BTree` o `BStarTree`.
+ * @ingroup demos
+ * @brief Guion común de construcción, recorrido, mutación y persistencia.
+ * `run()` fija el guion y `scenarios()` aporta los casos de balanceo de la familia.
+ * @tparam Family Plantilla `BTree` o `BStarTree`.
  */
 template <template <typename> typename Family>
 class TreeFamilyDemo : public DemoSection {
@@ -1229,7 +1201,7 @@ protected:
 
     static constexpr Size Order = Tree::MinOrder;   /**< Orden de los árboles de la demo. */
 
-    /** @brief Casos de balanceo propios de la familia. */
+    /** @brief Casos de balanceo propios de la familia. @return Comandos a ejecutar en el paso h. */
     virtual Scenarios scenarios() const = 0;
 
     void run() const final {
@@ -1249,7 +1221,7 @@ private:
 
     static string stem() { return "btree_orden" + std::to_string(Order); }
 
-    /** @brief Árbol con las claves de `BTreeSmall` (Ref = posición). */
+    /** @brief Árbol con las claves de `BTreeSmall` (Ref = posición). @tparam T Tipo de árbol. @return Árbol de orden `Order`. */
     template <typename T>
     static T smallTree() {
         T tree(Order);
@@ -1258,7 +1230,6 @@ private:
         return tree;
     }
 
-    // a) Construcción reutilizando TestContainer
     void construction(Tree& tree) const {
         Subtitle("Construccion con TestContainer (orden " + std::to_string(Order) + ")");
         init_directories();
@@ -1268,7 +1239,6 @@ private:
         cout << "\n";
     }
 
-    // b) Búsqueda con el camino resaltado
     void search(const Tree& tree) const {
         Subtitle("Busqueda (camino resaltado)");
         auto present = btree_search_path(tree, 25);
@@ -1283,14 +1253,12 @@ private:
         cout << "\n";
     }
 
-    // c) Recorridos reutilizando TestTraversal (call / rcall / reversed / FirstThat)
     void traversal(Tree& tree) const {
         Subtitle("Recorridos con TestTraversal");
         TestTraversal(tree, 50);
         cout << "\n";
     }
 
-    // d) ApplyFunction: AddOne / AddX conservan el orden; la negación lo invierte y rebuild reorganiza
     void apply(Tree& tree) const {
         Subtitle("ApplyFunction (AddOne, AddX y negacion con rebuild)");
         tree.ApplyFunction(AddOne);
@@ -1304,7 +1272,6 @@ private:
         cout << "\n";
     }
 
-    // e) Copia y movimiento
     void copyAndMove() const {
         Subtitle("Copia estructural y movimiento");
         Tree original = smallTree<Tree>();
@@ -1318,7 +1285,6 @@ private:
              << copy.size() << " claves (vacio: " << (copy.empty() ? "si" : "no") << ")\n\n";
     }
 
-    // f) Persistencia: escribir con << y leer con >> en un árbol de OTRO orden
     void persistence(const Tree& tree) const {
         Subtitle("Persistencia (<< / >>) leyendo en otro orden");
         filesystem::path path = OUTPUT_DIR_PATH / (stem() + "_persistencia.txt");
@@ -1337,7 +1303,6 @@ private:
         cout << "\n";
     }
 
-    // g) Traits: el mismo conjunto en orden ascendente y descendente
     void traits() const {
         Subtitle("Traits: BTreeAscTraits vs BTreeDescTraits");
         Tree asc = smallTree<Tree>();
@@ -1346,7 +1311,6 @@ private:
         cout << "\n";
     }
 
-    // h) Escenarios de balanceo
     void balancing() const {
         Subtitle("Escenarios de balanceo (verificados con Instrumented)");
         for (const auto& scenario : scenarios()) scenario->play(m_view);
@@ -1355,7 +1319,8 @@ private:
 
 /**
  * @class BTreeDemo
- * @brief Demo del árbol B clásico (orden 3: páginas de 1 a 2 claves).
+ * @ingroup demos
+ * @brief Demuestra el árbol B clásico y sus casos de balanceo de orden 3.
  */
 class BTreeDemo final : public TreeFamilyDemo<BTree> {
 protected:
@@ -1365,27 +1330,16 @@ protected:
         using Insert = InsertScenario<Tree>;
         using Remove = RemoveScenario<Tree>;
         Scenarios list;
-        // {10..80} ascendente deja la hoja [70 │ 80] llena (capacidad m-1 = 2) bajo un padre con espacio:
-        // insertar 65 la desborda, se divide 1→2 y la mediana sube sin propagar.
         list.push_back(make_unique<Insert>("Division 1->2", "hoja llena con padre con espacio",
             Order, Tens(8), 65, BalanceOp::Split12));
-        // {10..60} deja la raíz [20 │ 40] y la hoja [50 │ 60] llenas: insertar 45 desborda la hoja,
-        // su mediana (50) sube a la raíz, que también se desborda y crece (altura 2→3).
         list.push_back(make_unique<Insert>("Crecimiento de raiz", "la division se propaga hasta una raiz llena",
             Order, Tens(6), 45, BalanceOp::RootGrowth));
-        // Al borrar 60 su hoja queda vacía (mínimo 1) y el hermano izquierdo [40 │ 50] tiene 2 claves:
-        // rota una clave a través del separador.
         list.push_back(make_unique<Remove>("Prestamo del hermano izquierdo", "el hermano izquierdo tiene una clave de sobra",
             Order, vector<TX>{10, 20, 50, 30, 60, 40}, 60, BalanceOp::BorrowLeft));
-        // Al borrar 30 su hoja queda vacía; el hermano izquierdo tiene el mínimo pero el derecho [50 │ 60] no.
         list.push_back(make_unique<Remove>("Prestamo del hermano derecho", "solo el hermano derecho puede prestar",
             Order, Tens(6), 30, BalanceOp::BorrowRight));
-        // Al borrar 10 su hoja queda vacía y su único hermano [30] está en el mínimo: se fusionan 2→1
-        // bajando el separador, y el padre conserva una clave.
         list.push_back(make_unique<Remove>("Fusion 2->1", "ningun hermano adyacente puede prestar",
             Order, Tens(6), 10, BalanceOp::Merge21));
-        // Con {10..70} todo está en el mínimo: borrar 10 fusiona la hoja, el padre queda vacío y se
-        // fusiona otra vez; la raíz queda sin claves y su único hijo pasa a ser raíz (altura 3→2).
         list.push_back(make_unique<Remove>("Contraccion de raiz", "las fusiones en cascada vacian la raiz",
             Order, Tens(7), 10, BalanceOp::RootContraction));
         return list;
@@ -1394,7 +1348,8 @@ protected:
 
 /**
  * @class BStarTreeDemo
- * @brief Demo del árbol B* (orden 4: páginas no raíz de 2 a 3 claves, raíz hasta 7).
+ * @ingroup demos
+ * @brief Demuestra el árbol B* y sus casos de balanceo de orden 4.
  */
 class BStarTreeDemo final : public TreeFamilyDemo<BStarTree> {
 protected:
@@ -1404,28 +1359,16 @@ protected:
         using Insert = InsertScenario<Tree>;
         using Remove = RemoveScenario<Tree>;
         Scenarios list;
-        // {10..90}: insertar 65 desborda una hoja llena (3 claves) cuyo hermano izquierdo tiene espacio:
-        // en vez de dividir, rota claves hacia él a través del separador (Redistribute1).
         list.push_back(make_unique<Insert>("Redistribucion hacia un hermano", "hoja llena con un hermano con espacio",
             Order, Tens(9), 65, BalanceOp::RedistributeLeft));
-        // {10..100}: la hoja destino de 75 y sus hermanos adyacentes están llenos: página + hermano
-        // lleno + separador (8 claves) se reparten en 3 páginas de 2 con 2 separadores.
         list.push_back(make_unique<Insert>("Division 2->3", "la hoja y sus hermanos estan llenos",
             Order, Tens(10), 75, BalanceOp::Split23));
-        // {10..70} llena la raíz hoja (R = 2m-1 = 7 claves): la clave 8 la divide en 3 páginas
-        // de 2 claves y la raíz nueva queda con 2 separadores.
         list.push_back(make_unique<Insert>("Division de raiz 1->3", "la raiz hoja supera R = 7 claves",
             Order, Tens(7), 5, BalanceOp::RootSplit13));
-        // {10..90}: borrar 10 deja su hoja bajo el mínimo (2) y el hermano adyacente está en el mínimo,
-        // pero la ventana de 3 hermanos tiene claves suficientes: se reparten entre los 3 (Redistribute2).
         list.push_back(make_unique<Remove>("Redistribucion entre 3 hermanos", "la ventana de 3 hermanos tiene >= 3L claves",
             Order, Tens(9), 10, BalanceOp::Redistribute3));
-        // {10..110}: tras borrar 10 los 3 hermanos suman 3L-1 claves: no alcanza para repartir y se
-        // fusionan 3→2 (cada página resultante queda con ⌈3L/2⌉ <= C claves).
         list.push_back(make_unique<Remove>("Fusion 3->2", "3 hermanos sin claves suficientes para repartir",
             Order, Tens(11), 10, BalanceOp::Merge32));
-        // {10..80}: la raíz tiene 2-3 hijos al mínimo; tras borrar 10 ninguno puede prestar y la raíz
-        // absorbe a sus hijos (MergeRoot): la altura baja de 2 a 1.
         list.push_back(make_unique<Remove>("Absorcion de la raiz (MergeRoot)", "la raiz con pocos hijos al minimo los absorbe",
             Order, Tens(8), 10, BalanceOp::RootAbsorb));
         return list;
@@ -1438,7 +1381,8 @@ protected:
 
 /**
  * @class ComparisonDemo
- * @brief Polimorfismo (`unique_ptr<BTree>` con un B y un B*) y comparación de ocupación.
+ * @ingroup demos
+ * @brief Compara ocupación y despacho virtual a través de `BTree`.
  */
 class ComparisonDemo final : public DemoSection {
 protected:
@@ -1456,7 +1400,7 @@ private:
 
     SideBySideView m_view;
 
-    /** @brief Barra de ocupación `████░░` de 20 celdas. */
+    /** @brief Barra de ocupación `████░░` de 20 celdas. @param tenths Ocupación en décimas de %. @param star Verde (B*) o amarillo (clásico). @return Barra con ANSI. */
     static string bar(Size tenths, bool star) {
         Size filled = tenths * 20 / 1000;
         string full, empty;
@@ -1532,7 +1476,8 @@ private:
 
 /**
  * @class ConcurrencyDemo
- * @brief `NThreads` hilos insertando rangos disjuntos en un `BStarTree` (al estilo de `DemoRaceCondition`).
+ * @ingroup demos
+ * @brief Inserta rangos disjuntos en paralelo y valida el B* resultante.
  */
 class ConcurrencyDemo final : public DemoSection {
 protected:

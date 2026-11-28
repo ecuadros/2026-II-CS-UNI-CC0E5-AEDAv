@@ -8,6 +8,7 @@
   - [4. Sistema de Traits, Políticas de Orden y Desacoplamiento de Vistas](#4-sistema-de-traits-políticas-de-orden-y-desacoplamiento-de-vistas)
   - [5. Patrón Template Method en Árboles (BinaryTree / AVLTree), Invariante Rebuild y Renderizado](#5-patrón-template-method-en-árboles-binarytree--avltree-invariante-rebuild-y-renderizado)
   - [6. Arquitectura del Motor Modular de Layouts 2D y Roles Semánticos](#6-arquitectura-del-motor-modular-de-layouts-2d-y-roles-semánticos)
+  - [7. Arquitectura de Árboles Multipágina](#7-arquitectura-de-árboles-multipágina)
 - [⚙️ II. Detalle de Aspectos Específicos](#️-ii-detalle-de-aspectos-específicos)
   - [1. Máquina de Estados del Recorrido de Euler por Fases](#1-máquina-de-estados-del-recorrido-de-euler-por-fases)
   - [2. Desacoplamiento Estructural: Separación de Contenedor y Recorrido mediante Vistas (BaseView)](#2-desacoplamiento-estructural-separación-de-contenedor-y-recorrido-mediante-vistas-baseview)
@@ -17,6 +18,7 @@
   - [6. Contenedor Asociativo HashTable y Protocolo de Serialización en Capas](#6-contenedor-asociativo-hashtable-y-protocolo-de-serialización-en-capas)
   - [7. Contenedor Criptográfico MerkleTree y Pruebas de Auditoría](#7-contenedor-criptográfico-merkletree-y-pruebas-de-auditoría)
   - [8. Subsistema Modular de Layouts 2D y Roles Semánticos](#8-subsistema-modular-de-layouts-2d-y-roles-semánticos)
+  - [9. Políticas de Balanceo de Árboles Multipágina](#9-políticas-de-balanceo-de-árboles-multipágina)
 - [🚀 III. Guía de Uso y Demostración Práctica de la API](#-iii-guía-de-uso-y-demostración-práctica-de-la-api)
   - [1. Árboles Binarios y Recorridos Dinámicos en O(1)](#1-árboles-binarios-y-recorridos-dinámicos-en-o1)
   - [2. Contenedores Reversibles (Vistas Invertidas)](#2-contenedores-reversibles-vistas-invertidas)
@@ -24,6 +26,7 @@
   - [4. Diccionario Asociativo (HashTable) y Persistencia](#4-diccionario-asociativo-hashtable-y-persistencia)
   - [5. Árbol de Merkle: Construcción, Mutación y Verificación de Pruebas](#5-árbol-de-merkle-construcción-mutación-y-verificación-de-pruebas)
   - [6. Personalización Visual de Contenedores con Layouts y Estilos ANSI](#6-personalización-visual-de-contenedores-con-layouts-y-estilos-ansi)
+  - [7. Árboles B y B*](#7-árboles-b-y-b)
 
 
 
@@ -37,10 +40,10 @@
 flowchart LR
     TRAITS["<b>1. TRAITS</b><br/>Orden (Asc/Desc) +<br/>Estructura (Node, Iter) +<br/>Vistas (ViewTraits)"]
     MIXINS["<b>2. MIXINS & VISTAS</b><br/>Consulta (Callable, Printable,...)<br/>Contenedor (Applicable, Reversible,...)<br/>BaseView + FilterViewMixin"]
-    CONT["<b>3. CONTENEDORES</b><br/>IterableCore y ContainerCore<br/>Vector, Heap, BinaryTree, AVL, Listas,<br/>HashTable y MerkleTree"]
+    CONT["<b>3. CONTENEDORES</b><br/>IterableCore y ContainerCore<br/>Vector, Heap, BinaryTree, AVL, Listas,<br/>HashTable, MerkleTree, BTree y BStarTree"]
     ITER["<b>4. ITERADORES</b><br/>CRTP GeneralIterator<br/>(Forward / Backward / Euler)"]
     NODOS["<b>5. NODOS</b><br/>GeneralNode, LinkedListNode,<br/>BinaryTreeNode (m_height)"]
-    LIBRES["<b>6. LAYOUTS & UTILS</b><br/>BaseLayout, Tree/Circular/MerkleLayout<br/>ConsoleGraphRenderer, ansi_style.h"]
+    LIBRES["<b>6. LAYOUTS & UTILS</b><br/>BaseLayout, Tree/Circular/MerkleLayout,<br/>BTreeLayout<br/>ConsoleGraphRenderer, ansi_style.h"]
 
     TRAITS ==>|"Inyecta tipos, Compare y View"| CONT
     MIXINS ==>|"Ensambla capacidades y vistas"| CONT
@@ -124,6 +127,10 @@ flowchart TB
         HT["<b>HashTable#lt;Traits#gt;</b><br/><i>BaseHashTable (Asociativo)<br/>m_data: BaseAVLTree<br/>Mixins: Callable, Printable, Readable</i>"]
         MT["<b>MerkleTree#lt;Traits#gt;</b><br/><i>BaseMerkleTree (Criptográfico)<br/>Hashes SHA-256 + Propagación ascendente<br/>.getAuditProof(), .verify(), .traverse()</i>"]
 
+        MB["<b>BTree#lt;Traits#gt;</b><br/><i>BaseBTree</i>"]
+        MS["<b>BStarTree#lt;Traits#gt;</b><br/><i>BaseBStarTree</i>"]
+
+        GC --> MB --> MS
         GC --> V
         GC --> H
         GC --> LL
@@ -163,7 +170,7 @@ flowchart TB
     class BV view
     class V,H,MH vec
     class LL,LC,LDE,LDEC lista
-    class BT,AVL arbol
+    class BT,AVL,MB,MS arbol
     class HT hash
     class MT merkle
 
@@ -413,7 +420,7 @@ El subsistema de proyección geométrica en [`utilities/layouts/`](utilities/lay
 flowchart TB
     subgraph INPUT["Entradas al Pipeline"]
         direction TB
-        CONT["<b>Contenedor Concreto</b><br/>(BinaryTree, CircularList, MerkleTree)"]
+        CONT["<b>Contenedor Concreto</b><br/>(BinaryTree, CircularList, MerkleTree, BTree, BStarTree)"]
         FMT["<b>Formateador Inyectado por el Cliente</b><br/>Lambda: (const Node&, Role role) ➔ string<br/>(Estilizado tipográfico y color con ansi_style.h)"]
     end
 
@@ -448,6 +455,13 @@ flowchart TB
             MR -. "asigna rol" .-> MTL
         end
 
+        subgraph BTREE_MOD["layouts/btree_layout.h"]
+            BTL["<b>BTreeLayout#lt;Formatter#gt;</b><br/>Proyección n-aria por páginas"]
+            BTR["<b>BTreeRole</b><br/>Root, Internal, Leaf, Highlight"]
+            BTR -. "asigna rol" .-> BTL
+        end
+
+        BL --> BTL
         BL --> TL
         BL --> CLL
         BL --> MTL
@@ -473,10 +487,66 @@ flowchart TB
 
     class CONT,FMT input
     class BL,DF base
-    class TL,VTL,HTL,CLL,MTL layout
-    class TR,CLR,MR role
+    class TL,VTL,HTL,CLL,MTL,BTL layout
+    class TR,CLR,MR,BTR role
     class VG,C2D,REND render
 ```
+
+### 7. Arquitectura de Árboles Multipágina
+
+`BaseBTree<Traits, Mixins...>` deriva de `GeneralContainer`, que integra `ContainerCore` y su mutex recursivo. Los alias `BTree` y `BStarTree` componen los mixins `Callable`, `Applicable`, `Searchable`, `Reversible`, `Printable`, `Readable` y `Drawable`.
+
+`BTreeTraits` define la página, el nodo de clave y los iteradores. `BTreeAscTraits` y `BTreeDescTraits` combinan esos tipos con el comparador correspondiente. `BaseBStarTree` hereda de `BaseBTree` con los mismos traits y mixins. Una llamada a `insert()` o `remove()` mediante una referencia `BTree<Traits>&` a un `BStarTree<Traits>` usa los ganchos virtuales de B*.
+
+```mermaid
+flowchart TB
+    CC["<b>ContainerCore</b><br/>Mutex recursivo"]
+    GC["<b>GeneralContainer</b><br/>Traits y Mixins"]
+    BT["<b>BaseBTree</b><br/>Inserción, búsqueda y eliminación"]
+    BS["<b>BaseBStarTree</b><br/>Políticas virtuales de ocupación y balanceo"]
+    TR["<b>BTreeTraits</b><br/>Node, Page, ForwardIterator, BackwardIterator"]
+    PG["<b>BTreePage</b><br/>Claves e hijos"]
+    ND["<b>GeneralNode</b><br/>Valor y Ref"]
+    GI["<b>GeneralIterator</b><br/>Base CRTP"]
+    BI["<b>BTreeIterator</b><br/>Recorrido directo e inverso"]
+    LY["<b>BTreeLayout</b><br/>Proyección hacia VisualGraph"]
+
+    CC --> GC --> BT --> BS
+    TR -. "define tipos" .-> BT
+    BT -- "posee la raíz" --> PG
+    PG -- "almacena claves" --> ND
+    GI --> BI
+    BI -. "recorre" .-> PG
+    LY -. "proyecta páginas" .-> PG
+
+    classDef core fill:#E8EAF6,stroke:#3949AB,color:#111,stroke-width:1.5px;
+    classDef tree fill:#E8F5E9,stroke:#2E7D32,color:#111,stroke-width:1.5px;
+    classDef layout fill:#E1F5FE,stroke:#0288D1,color:#111,stroke-width:1.5px;
+    class CC,GC,GI core
+    class TR,BT,BS,PG,ND,BI tree
+    class LY layout
+```
+
+`Drawable::draw()` usa `BTreeLayout` para proyectar las páginas a un `VisualGraph` y delega el dibujo en `ConsoleGraphRenderer`. El layout admite formateadores de página y resaltado del camino de búsqueda.
+
+**Demostraciones.** En [`demos.cpp`](demos.cpp), `DemoSection::execute()` fija la presentación y delega la ejecución. `TreeFamilyDemo` comparte el guion entre `BTreeDemo` y `BStarTreeDemo` y reutiliza `TestContainer` y `TestTraversal`. Cada familia aporta sus escenarios de balanceo. `Scenario::play()` prepara y muestra el árbol antes y después de la mutación. `InsertScenario` y `RemoveScenario` especializan esa operación. `Instrumented<Tree>` hereda del árbol elegido, intercepta sus ganchos virtuales y registra el balanceo que el escenario verifica.
+
+```mermaid
+classDiagram
+    direction TB
+    DemoSection <|-- TreeFamilyDemo
+    DemoSection <|-- ComparisonDemo
+    DemoSection <|-- ConcurrencyDemo
+    TreeFamilyDemo <|-- BTreeDemo
+    TreeFamilyDemo <|-- BStarTreeDemo
+    TreeFamilyDemo ..> Scenario : ejecuta
+    Scenario <|-- InsertScenario
+    Scenario <|-- RemoveScenario
+    Scenario ..> Instrumented : verifica el balanceo
+    Tree <|-- Instrumented : parámetro de plantilla
+```
+
+`ComparisonDemo` compara altura, páginas y ocupación con las mismas claves y muestra el despacho mediante la interfaz `BTree`. `ConcurrencyDemo` inserta rangos disjuntos en paralelo y verifica el resultado al reunir los hilos.
 
 ---
 
@@ -1123,6 +1193,40 @@ auto painter = [](const std::string& text, MerkleRole role) {
 
 ---
 
+### 9. Políticas de Balanceo de Árboles Multipágina
+
+#### A. Páginas e Iteradores
+
+Cada [`BTreePage`](containers/trees/btree.h) almacena claves `GeneralNode` (valor y `Ref`) en un `BaseVector`. La raíz y los hijos tienen propietario único mediante `std::unique_ptr`. El puntero al padre es un enlace no propietario. Una página interna estable con `k` claves tiene `k + 1` hijos y todas las hojas están a la misma profundidad.
+
+`BTreeIterator` usa CRTP sobre `GeneralIterator` y avanza a partir de la página y la posición actuales. Recorre las claves de cada página, baja a los hijos y vuelve al padre mediante `parent()` y `positionInParent()`. El recorrido directo sigue el comparador y el inverso recorre el mismo orden al revés. Ambos usan espacio auxiliar **O(1)**.
+
+#### B. Árbol B clásico
+
+El orden `m` es el máximo ordinario de hijos. Con `C = m − 1`, las políticas de ocupación son:
+
+| Aspecto | `BTree` | `BStarTree` |
+| :--- | :--- | :--- |
+| Orden mínimo | 3 | 4 |
+| Capacidad ordinaria | `C` | `C` |
+| Mínimo ordinario | `⌊C/2⌋` | `⌊2C/3⌋` |
+| Capacidad de raíz | `C` | `2C + 1 = 2m − 1` |
+
+`BaseBTree` desciende por búsqueda binaria en cada página. Una inserción duplicada según el comparador devuelve `false` y conserva el `Ref` existente. Al desbordarse una página, una división 1→2 promueve la mediana al padre. Si se desborda la raíz, se crea una nueva y aumenta la altura.
+
+Al eliminar una clave interna, su predecesora ocupa su lugar y se retira de la hoja. Una página por debajo del mínimo recibe una clave de un hermano adyacente a través del separador o se fusiona con él (2→1). El déficit puede propagarse hacia arriba. Una raíz interna vacía cede su posición a su único hijo y una raíz hoja vacía deja el árbol vacío.
+
+#### C. Especialización del Árbol B*
+
+[`BaseBStarTree`](containers/trees/bstar_tree.h) sobrescribe `capacity()`, `min_keys()`, `handle_overflow()` y `handle_underflow()`. El descenso, la propagación y las primitivas de balanceo se comparten con `BaseBTree`.
+
+- **Desbordamiento.** Se redistribuyen claves con un hermano adyacente que tenga espacio. Si ninguno tiene espacio, la página, un hermano lleno y el separador se dividen 2→3. Dos separadores quedan en el padre y se reparten `2C` claves. Al desbordarse la raíz, la división 1→3 deja dos separadores en la nueva raíz y distribuye también `2C` claves.
+- **Déficit.** Se intenta un préstamo de un hermano adyacente. Si falla, una ventana de tres hermanos con al menos `3L` claves, donde `L = ⌊2C/3⌋`, puede redistribuirse 3→3. Si ese reparto no procede y el padre es la raíz con dos o tres hijos, la raíz los absorbe. En los demás casos se fusionan tres páginas en dos y el padre pierde un separador.
+
+`redistribute_children()` reúne las claves de páginas consecutivas y sus separadores, reserva los separadores de salida y reparte el resto entre páginas nuevas. Las cantidades resultantes difieren como máximo en una clave.
+
+---
+
 ## 🚀 III. Guía de Uso y Demostración Práctica de la API
 
 Demostración concisa de los casos de uso más frecuentes de los contenedores y vistas del repositorio.
@@ -1313,3 +1417,57 @@ mtree.draw(
     ConsoleGraphRenderer(std::cout)
 );
 ```
+
+### 7. Árboles B y B*
+
+```cpp
+#include <iostream>
+#include <sstream>
+#include <utility>
+#include "containers/trees/bstar_tree.h"
+#include "utilities/layouts.h"
+
+int main() {
+    // 1. Construcción e inserción de pares (clave, Ref)
+    using Classic = BTree<BTreeAscTraits<TX>>;
+    using Star = BStarTree<BTreeDescTraits<TX>>;
+    Classic tree(3);
+    Star star(4);
+    for (TX key : {20, 10, 30, 40}) {
+        tree.insert(key, key / 10);
+        star.insert(key, key / 10);
+    }
+
+    // 2. Búsqueda y eliminación
+    if (const auto* key = tree.find(30)) std::cout << *key << '\n';
+    tree.remove(20);
+
+    // 3. Recorridos y búsqueda por predicado
+    for (const auto& node : tree) std::cout << node.getValue() << ' ';
+    for (const auto& node : star.reversed()) std::cout << node.getValue() << ' ';
+    std::cout << '\n';
+    const auto& match = tree.FirstThat([](const auto& node) {
+        return node.getValue() >= 30;
+    });
+    std::cout << match.getRef() << '\n';
+
+    // 4. Copia, movimiento y reconstrucción tras modificar las claves
+    Classic copy = tree;
+    Classic moved = std::move(copy);
+    moved.ApplyFunction([](auto& node) { node.value() = -node.getValue(); });
+
+    // 5. Persistencia de pares lógicos mediante Printable y Readable
+    std::stringstream data;
+    data << moved;
+    Classic restored(5);
+    data >> restored;
+
+    // 6. Visualización con el camino de búsqueda resaltado
+    star.draw(BTreeLayout{highlight_pages(btree_search_path(star, 30))},
+              ConsoleGraphRenderer(std::cout));
+}
+```
+
+`FirstThat()` retorna el primer nodo que satisface el predicado y lanza `std::runtime_error` si no encuentra ninguno. `ApplyFunction()` vuelve a ordenar el árbol por reinserción. Ante claves equivalentes, conserva la primera del recorrido previo y su `Ref`. La persistencia almacena pares `[(valor,ref),...]` sin color. La lectura vacía el destino y reinserta los pares con su orden, comparador y política. Un flujo incompleto puede dejar una carga parcial.
+
+`make` compila y ejecuta las demostraciones. `make test` ejecuta las pruebas con sanitizadores. `make docs` genera la documentación en `build/docs/html` y la sirve por HTTP.

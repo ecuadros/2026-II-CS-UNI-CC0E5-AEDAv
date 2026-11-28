@@ -2,12 +2,14 @@ PROJECT_NAME           = "AEDAv"
 OUTPUT_DIRECTORY       = build/docs
 HTML_OUTPUT            = html
 
-INPUT                  = docs/mainpage.md docs/groups.dox containers utilities foreach.h types.h demos.h main.cpp
+INPUT                  = docs/mainpage.md docs/groups.dox containers utilities foreach.h types.h demos.h demos.cpp main.cpp
 USE_MDFILE_AS_MAINPAGE = docs/mainpage.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hpp *.cpp *.md *.dox
 
 EXTRACT_ALL            = YES
+# Documenta la jerarquía de demos de BTree/B*, que vive en un namespace anónimo de demos.cpp
+EXTRACT_ANON_NSPACES   = YES
 JAVADOC_AUTOBRIEF      = YES
 GENERATE_LATEX         = NO
 

@@ -1,12 +1,9 @@
 /**
  * @file btree_metrics.h
  * @ingroup trees
- * @brief Métricas estructurales de solo lectura para `BTree` / `BStarTree`: altura, páginas y ocupación.
- *
- * Compartido por `tests/bstar_tree_test.cpp` y la demo comparativa
- * (`DemoBTreeComparison`). Solo usa la interfaz pública de lectura del árbol
- * (`getRoot()`, `minKeysFor()`) y de la página. Los porcentajes se calculan
- * en décimas con aritmética entera (sin `double`).
+ * @brief Altura, número de páginas y ocupación de árboles B y B*.
+ * @note Los porcentajes se calculan en décimas con aritmética entera.
+ * @warning Proteja la lectura completa si otros hilos modifican el árbol.
  */
 
 #ifndef __BTREE_METRICS_H__
@@ -27,6 +24,8 @@ struct BTreeShape {
 
 /**
  * @brief Recorre recursivamente las páginas acumulando métricas.
+ * @tparam Page Tipo de página.
+ * @tparam Reference Tipo del árbol de referencia.
  * @param page Página actual.
  * @param depth Profundidad (raíz = 1).
  * @param reference Árbol cuyo `minKeysFor()` define el mínimo de referencia.
@@ -46,8 +45,11 @@ void btree_measure(const Page* page, Size depth, const Reference& reference, BTr
 
 /**
  * @brief Métricas de `tree` usando el mínimo de `reference` (p. ej. el 2/3 de un B* sobre un árbol clásico).
+ * @tparam Tree Tipo del árbol medido.
+ * @tparam Reference Tipo del árbol de referencia.
  * @param tree Árbol a medir.
  * @param reference Árbol que define el mínimo de claves (puede ser el mismo).
+ * @return Métricas acumuladas.
  */
 template <typename Tree, typename Reference>
 BTreeShape btree_shape(const Tree& tree, const Reference& reference) {
@@ -56,7 +58,12 @@ BTreeShape btree_shape(const Tree& tree, const Reference& reference) {
     return shape;
 }
 
-/** @brief Métricas de `tree` usando su propio mínimo. */
+/**
+ * @brief Métricas de `tree` usando su propio mínimo.
+ * @tparam Tree Tipo del árbol.
+ * @param tree Árbol a medir.
+ * @return Métricas acumuladas.
+ */
 template <typename Tree>
 BTreeShape btree_shape(const Tree& tree) { return btree_shape(tree, tree); }
 
@@ -71,7 +78,7 @@ inline Size btree_occupancy_tenths(const BTreeShape& shape, Size pageCapacity) {
     return slots == 0 ? Size{} : Size{1000} * shape.nonRootKeys / slots;
 }
 
-/** @brief Formatea décimas de porcentaje como `NN.N%`. */
+/** @brief Formatea décimas de porcentaje como `NN.N%`. @param tenths Décimas de porcentaje. @return Texto `NN.N%`. */
 inline std::string btree_percent(Size tenths) {
     return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + "%";
 }

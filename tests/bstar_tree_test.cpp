@@ -13,7 +13,7 @@
 #include "../containers/trees/btree.h"
 #include "../containers/trees/bstar_tree.h"
 #include "../types.h"
-#include "btree_validator.h"
+#include "../containers/trees/btree_validator.h"
 #include "../utilities/btree_metrics.h"
 #include <algorithm>
 #include <iomanip>
@@ -93,7 +93,7 @@ void runStructure(const std::string& name) {
               tag + "minimo L = 2(m-1)/3 para m=" + std::to_string(m));
     }
 
-    // Raíz hoja hasta R = 7 claves (m = 4); la clave 8 la divide en 3 páginas con 2 separadores.
+    // Raíz hoja hasta R = 7 claves (m = 4); la octava inserción la divide en 3 páginas con 2 separadores.
     Star tree(4);
     for (TX v = 1; v <= 7; ++v) tree.insert(v, v);
     check(tree.height() == Size{1} && tree.getRoot()->keyCount() == Size{7}, tag + "la raiz hoja admite R = 7 claves");
@@ -150,7 +150,7 @@ void runPolymorphism(const std::string& name) {
     check(classicShape.belowMin > Size{}, tag + "el clasico si tiene paginas no raiz bajo 2/3");
     check(starShape.pages < classicShape.pages, tag + "el B* usa menos paginas");
 
-    // Destrucción polimórfica a través de un puntero a la base (destructor virtual).
+    // Destrucción polimórfica a través de la base.
     std::unique_ptr<BTree<Traits>> owned = std::make_unique<Star>(5);
     for (TX v = 1; v <= 200; ++v) owned->insert(v, v);
     check(owned->capacityFor(true) == Size{9} && checkValid(*owned, tag + "B* via unique_ptr<BTree> valido"),

@@ -13,6 +13,7 @@ La biblioteca está diseñada en **C++23** alrededor de un núcleo componible ba
 - **Vistas no propietarias $O(1)$:** `BaseView` y `FilterViewMixin` filtran en tiempo de compilación únicamente los mixins de consulta compatibles con vistas de solo lectura.
 - **Iteradores CRTP y Recorrido de Euler:** `GeneralIterator` provee la base para iteradores lineales, mientras que `BinaryTreeIterator` unifica los 14 recorridos de árboles binarios (7 órdenes × 2 direcciones) mediante una máquina de estados por máscara de bits (`Phase`, `Order`, `Direction`).
 - **Visualización 2D desacoplada:** `Drawable` proyecta cualquier contenedor mediante un layout (`BaseLayout`, `TreeLayout`, `VerticalTreeLayout`, `HorizontalTreeLayout`, `CircularListLayout`, `MerkleTreeLayout`) hacia un `VisualGraph` agnóstico, que `ConsoleGraphRenderer` dibuja en consola sobre `Canvas2D`.
+- **Árboles multipágina:** `BaseBTree` comparte inserción, búsqueda y eliminación. `BaseBStarTree` especializa la ocupación y el balanceo. `BTreeIterator` recorre las páginas en espacio auxiliar constante y `BTreeLayout` las proyecta hacia `VisualGraph`.
 
 ---
 
@@ -81,6 +82,9 @@ digraph ArchitectureMap {
         BaseHeap           [label="BaseHeap", fillcolor="#fef3c7", color="#d97706", URL="\ref BaseHeap"];
         BaseMerkleTree     [label="BaseMerkleTree", fillcolor="#fde68a", color="#b45309", URL="\ref BaseMerkleTree"];
 
+        BaseBTree          [label="BaseBTree", fillcolor="#fde68a", color="#b45309", URL="\ref BaseBTree"];
+        BaseBStarTree      [label="BaseBStarTree", fillcolor="#fde68a", color="#b45309", URL="\ref BaseBStarTree"];
+        BaseBTree -> BaseBStarTree;
         BaseBinaryTree -> BaseAVLTree;
         BaseBinaryTree -> BaseMerkleTree;
         BaseBinaryTree -> BinaryTreeIterator [style=dotted, label="itera"];
@@ -105,6 +109,8 @@ digraph ArchitectureMap {
 
         BaseLayout -> TreeLayout;
         BaseLayout -> CircularListLayout;
+        BTreeLayout         [label="BTreeLayout", fillcolor="#ddd6fe", color="#6d28d9", URL="\ref BTreeLayout"];
+        BaseLayout -> BTreeLayout;
         BaseLayout -> MerkleTreeLayout;
         TreeLayout -> VerticalTreeLayout;
         TreeLayout -> HorizontalTreeLayout;
@@ -119,6 +125,7 @@ digraph ArchitectureMap {
     GeneralContainer -> BaseHeap;
     GeneralContainer -> BaseHashTable;
 
+    GeneralContainer -> BaseBTree;
     BaseHashTable -> BaseAVLTree [style=dashed, label="usa m_data"];
     BaseHeap -> BaseVector [style=dashed, label="usa m_data"];
     Drawable -> BaseLayout [style=dashed, label="proyecta"];
@@ -135,6 +142,7 @@ digraph ArchitectureMap {
 | **Secuenciales** | `BaseVector`, `VectorForwardIterator`, `VectorBackwardIterator` | `vector.h` |
 | **Listas enlazadas** | `BaseLinkedList`, `BaseDoubleLinkedList`, `BaseCircularLinkedList`, `BaseCircularDoubleLinkedList` | `linked_list.h`, `double_linked_list.h`, `circular_linked_list.h`, `circular_double_linked_list.h` |
 | **Árboles y montículos** | `BaseBinaryTree`, `BinaryTreeIterator`, `BaseAVLTree`, `BaseHeap`, `MinHeap`, `MaxHeap` | `binary_tree.h`, `avl_tree.h`, `heap.h` |
+| **Árboles multipágina** | `BaseBTree`, `BaseBStarTree`, `BTreePage`, `BTreeIterator`, `BTreeTraits`, `BTreeLayout` | `btree.h`, `bstar_tree.h`, `btree_layout.h` |
 | **Criptografía y diccionarios** | `BaseMerkleTree`, `DefaultMerkleHasher`, `MerkleProofStep`, `BaseHashTable`, `HashEntry` | `merkle_tree.h`, `hash_table.h` |
 | **Renderizado y layouts** | `GraphRenderer`, `ConsoleGraphRenderer`, `Canvas2D`, `VisualGraph`, `BaseLayout` | `render.h`, `layouts.h`, `ansi_style.h` |
 

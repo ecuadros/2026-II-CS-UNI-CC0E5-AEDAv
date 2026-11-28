@@ -1,15 +1,10 @@
 /**
  * @file side_by_side.h
  * @ingroup visualization
- * @brief Composición de dos `VisualGraph` lado a lado ("Antes" ┃ "Después") reutilizando `ConsoleGraphRenderer`.
+ * @brief Compone dos dibujos reutilizando `ConsoleGraphRenderer`.
  *
- * `ConsoleGraphRenderer` no emite líneas de texto: posiciona el cursor con
- * secuencias ANSI (`gotoxy`: `\033[s`, `\033[u`, `\033[nA`, `\033[nB`,
- * `\033[nG`). Para unir dos dibujos línea por línea, `console_lines()`
- * interpreta ese subconjunto de secuencias sobre una grilla de celdas
- * (cada celda conserva el estilo SGR activo y lo cierra con `\033[0m`), y
- * `side_by_side()` rellena cada columna según `visible_length()` para que los
- * códigos de color no descuadren el resultado.
+ * Interpreta los movimientos del cursor y conserva el estilo de cada celda.
+ * Alinea los dibujos por ancho visible mediante `visible_length()`.
  */
 
 #ifndef __SIDE_BY_SIDE_H__
@@ -102,6 +97,7 @@ inline std::vector<std::string> rasterize_console(const std::string& stream) {
  * @brief Renderiza `graph` con `ConsoleGraphRenderer` en memoria y lo devuelve como líneas.
  * @param graph Grafo a dibujar (vacío → sin líneas).
  * @param style Estilo de trazo del renderizador.
+ * @return Líneas del dibujo (con SGR por celda).
  */
 inline std::vector<std::string> console_lines(const VisualGraph& graph, ConsoleLineStyle style = ConsoleLineStyle::Rounded) {
     std::ostringstream os;
@@ -109,14 +105,19 @@ inline std::vector<std::string> console_lines(const VisualGraph& graph, ConsoleL
     return rasterize_console(os.str());
 }
 
-/** @brief Ancho visible máximo de un bloque de líneas. */
+/** @brief Ancho visible máximo de un bloque de líneas. @param lines Bloque. @return Columnas visibles de la línea más ancha. */
 inline Size block_width(const std::vector<std::string>& lines) {
     Size width{};
     for (const auto& line : lines) width = std::max(width, visible_length(line));
     return width;
 }
 
-/** @brief Rellena `text` con espacios hasta `width` columnas visibles. */
+/**
+ * @brief Rellena `text` con espacios hasta `width` columnas visibles.
+ * @param text Texto (puede contener ANSI).
+ * @param width Ancho visible deseado.
+ * @return `text` rellenado (sin truncar si ya es más ancho).
+ */
 inline std::string pad_visible(const std::string& text, Size width) {
     Size len = visible_length(text);
     return len >= width ? text : text + std::string(width - len, ' ');
